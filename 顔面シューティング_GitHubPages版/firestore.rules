@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validProfile(uid) {
+      return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[A-Za-z0-9_-]{2,24}$')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 96
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    function validScore(uid) {
+      let profile = get(/databases/$(database)/documents/profiles/$(uid)).data;
+      return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.username == profile.username
+        && request.resource.data.displayName == profile.displayName
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 100000000
+        && request.resource.data.wave is int
+        && request.resource.data.wave >= 1
+        && request.resource.data.wave <= 999
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Private account profile: a user can create and read only their own profile.
+    match /profiles/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid && validProfile(uid);
+      allow update, delete: if false;
+    }
+
+    // Public scores, one best-score document per authenticated user.
+    match /leaderboard/{uid} {
+      allow read: if true;
+      allow create: if signedIn() && request.auth.uid == uid && validScore(uid);
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && validScore(uid)
+        && (request.resource.data.score > resource.data.score
+          || (request.resource.data.score == resource.data.score
+            && request.resource.data.wave > resource.data.wave));
+      allow delete: if false;
+    }
+  }
+}

@@ -6,14 +6,14 @@
   <meta name="color-scheme" content="dark">
   <title>ログイン | 顔面シューティング</title>
   <link rel="stylesheet" href="./css/auth.css">
-  <script src="./js/login.js" defer></script>
+  <script type="module" src="./js/login.js"></script>
 </head>
 <body>
   <main class="auth-shell">
     <section class="auth-card">
       <div class="brand-mark">🎮</div>
       <h1>顔面シューティング</h1>
-      <p class="subtitle">GitHub Pages版・ログイン</p>
+      <p class="subtitle">ログイン・新規登録 / 共有ランキング</p>
       <div id="globalMessage" class="message" role="status" aria-live="polite"></div>
 
       <section id="standardAuth">
@@ -47,6 +47,10 @@
         </form>
       </section>
 
+      <div class="divider"><span>または</span></div>
+      <button id="xLoginBtn" class="x-button" type="button"><span class="x-logo">𝕏</span> Xでログイン / 新規登録</button>
+      <p id="xHelp" class="hint">Xログインを使うには、FirebaseとX Developerの設定が必要です。</p>
+
       <section id="xCompleteSection" hidden>
         <h2>𝕏 アカウントで新規登録</h2>
         <p class="hint">Xの認証は完了しました。利用を開始するため、新規登録用パスワードを入力してください。</p>
@@ -58,13 +62,12 @@
         </form>
       </section>
 
-      <div class="divider"><span>GitHub Pages 静的版</span></div>
       <div class="static-note">
-        <strong>ログインとランキングについて</strong>
-        <p>アカウントとランキングは、このブラウザ内に保存されます。別の端末や別のブラウザとは共有されません。</p>
-        <p>GitHub Pagesだけではサーバー側の認証・共通データベース・Xログインを動かせないため、この版ではXログインを無効にしています。</p>
+        <strong>共有アカウント・ランキング</strong>
+        <p>Firebaseの認証とデータベースを使い、同じIDでログインすれば別の端末からも利用できます。ランキングは全員共通です。</p>
+        <p>設定前は利用できません。管理者がREADMEのFirebase設定を行う必要があります。</p>
       </div>
-      <p class="small-note">これは学習・試作用の簡易ログインです。公開サイトに本物のパスワードを使わないでください。</p>
+      <p class="small-note">IDログインはメールアドレスを集めないため、パスワード再発行機能はありません。IDとパスワードを忘れないようにしてください。登録用コードは公開JSに含まれるため、秘密の招待制にはなりません。</p>
     </section>
     <footer>顔面シューティング オンライン版</footer>
   </main>

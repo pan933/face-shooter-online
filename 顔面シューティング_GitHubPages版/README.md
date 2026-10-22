@@ -1,40 +1,94 @@
-# 顔面シューティング — GitHub Pages 静的版
+# 顔面シューティング — Firebase共有版（GitHub Pages / Node.js不要）
 
-Node.jsサーバーなしで動かすための、GitHub Pages向け静的サイト一式です。HTML・CSS・ブラウザー内JavaScriptだけで動きます。
+この版は、ゲーム画面をGitHub Pagesで公開し、アカウント認証と共通ランキングをFirebase Authentication / Cloud Firestoreで管理します。Node.jsサーバーを自分で起動する必要はありません。
 
-## 重要な制限
+## できること
 
-GitHub Pagesは静的ファイルのホスティングなので、サーバー側の認証や共有データベースはありません。
+- ID＋パスワードで新規登録・ログイン
+- 同じIDとパスワードなら別のPC・スマホでも同じアカウントにログイン
+- ランキングを全プレイヤーで共有（各ユーザーの自己ベストをTOP 10表示）
+- Xログイン（FirebaseのTwitterプロバイダとX Developerアプリの設定が完了した場合）
+- ランキングデータはFirestoreへ保存
 
-- ログインIDとパスワードのハッシュは、登録したブラウザーの `localStorage` に保存します。
-- ランキングも同じブラウザーの `localStorage` に保存します。別端末や別ブラウザーとは共有されません。
-- 「komakikouka」はブラウザー側JavaScriptで照合する登録コードです。公開コードから確認できるため、秘密のアクセス制限としては使えません。
-- Xログインはこの静的版では無効です。X OAuthを安全に行うためのサーバー側処理がないためです。
-- このログインは学習・試作用です。個人で普段使っているパスワードを登録しないでください。
+## 重要な仕様と限界
 
-本当に複数人でランキングを共有し、他人に見えない認証を行うには、Node.jsサーバーを自分で運用しなくても、Supabase/Firebaseのような外部バックエンドを使う必要があります。GitHub Pages単独では実現できません。
+- IDは半角英字・数字・`_`・`-` の2〜24文字です。
+- IDログインをメールアドレスなしで実現するため、Firebase Authentication内部では `ID@face-shooter.invalid` という受信できない形式のアドレスを使います。メールを集めませんが、パスワード再設定メールも送れません。IDとパスワードは忘れないようにしてください。
+- 新規登録用コード `komakikouka` はフロントエンドJavaScriptに入っています。ソースを見れば分かるため、秘密の招待制にはなりません。登録コードを本当に秘密にするにはサーバー側機能が必要です。
+- ブラウザーだけで送信するスコアのため、改造したクライアントからの不正スコアを完全には防げません。Firestoreルールで、本人のレコード以外を書き換えられないようにし、自己ベストを下げる更新と極端な値を拒否します。
+- 以前のlocalStorage版のアカウントやランキングはクラウドへ自動移行されません。Firebase共有版で新規アカウントを作成してください。
+- Xログインは任意機能です。X Developerアプリの認証情報がない間は利用できません。
 
-## GitHub Pagesで無料公開する手順
+## 1. Firebaseプロジェクトを作る（無料枠）
 
-1. ZIPを展開し、中のファイルとフォルダーをリポジトリの**直下**にアップロードします。`index.html`、`game.html`、`login.html`、`face.png` が直下にあることを確認してください。
-2. GitHubで公開リポジトリを作成し、ファイルを `main` ブランチへコミットします。GitHub Freeでは公開リポジトリでGitHub Pagesを利用できます。
-3. リポジトリの **Settings → Pages** を開き、**Build and deployment → Source** を `GitHub Actions` にします。
-4. **Actions** タブで `Deploy static game to GitHub Pages` ワークフローが成功したことを確認します。
-5. Settings → Pagesに表示されたURLを開きます。初回公開に少し時間がかかる場合があります。
+1. https://console.firebase.google.com/ を開き、Googleアカウントでログインします。
+2. **プロジェクトを作成**し、Google Analyticsは不要なら無効にして進めます。
+3. 左側の **Build → Authentication** を開き、**Get started** を押します。
+4. Sign-in method / Sign-in providers で **Email/Password** を有効にして保存します。ここでいうメール/パスワード方式を、サイト側ではID＋パスワードの形にしています。
+5. Authenticationの設定にある **Authorized domains** に `pan933.github.io` があるか確認します。なければ追加します。
+6. **Build → Firestore Database → Create database** を開き、データベースを作成します。リージョンは日本から使うなら `asia-northeast1`（Tokyo）が候補です。リージョンは後から変更できないため確認してから作成してください。
+7. Firestoreの **Rules** タブに移動し、同梱の `firestore.rules` の内容を全部貼り付けて **Publish** します。公開読み取りはランキングだけで、プロフィールは本人のみが読み取れます。
 
-このリポジトリには `.github/workflows/pages.yml` が含まれ、`main` に更新をpushすると自動デプロイします。
+## 2. FirebaseのWeb設定をHTMLに入れる
 
-## ファイル構成
+1. Firebase Consoleの歯車 **Project settings → General → Your apps** を開きます。
+2. Webアプリ（`</>`）がなければ追加します。
+3. Firebase SDK設定から `apiKey`、`authDomain`、`projectId`、`appId` をコピーします。
+4. `js/firebase-config.js` を開き、値を置き換えます。
 
-- `index.html` / `login.html`: ログイン・新規登録画面
-- `game.html`: ゲーム本体
-- `css/auth.css`: 認証画面のスタイル
-- `css/game.css`: ゲーム画面のスタイル
-- `js/login.js`: ブラウザー内での簡易登録・ログイン
-- `js/game.js`: ゲーム・ブラウザー内ランキング
-- `face.png`: 顔画像
-- `.github/workflows/pages.yml`: GitHub Pages自動公開
+```js
+const firebaseConfig = {
+  apiKey: "FirebaseのapiKey",
+  authDomain: "プロジェクトID.firebaseapp.com",
+  projectId: "プロジェクトID",
+  appId: "FirebaseのappId"
+};
+```
 
-## データについて
+**Web設定のapiKeyはブラウザーへ公開される値です。** FirebaseのセキュリティはFirestore RulesとAuthenticationで設定します。サービスアカウントJSON、Admin SDKの秘密鍵、秘密トークンは絶対にこのフォルダへ入れないでください。
 
-データはブラウザーのサイトデータに保存されます。ブラウザーのデータ消去、別端末、プライベートモードでは、登録・記録を引き継げない場合があります。パスワードを忘れた場合のサーバー側リセット機能はありません。
+## 3. GitHubへ更新ファイルをアップロード
+
+このリポジトリではサイトが `顔面シューティング_GitHubPages版` フォルダにあります。ZIP内の同じフォルダにある更新ファイルを、GitHub上の同名フォルダ内へ上書きアップロードします。少なくとも次のファイルを反映してください。
+
+- `index.html`
+- `login.html`
+- `game.html`
+- `js/login.js`
+- `js/game.js`
+- `js/firebase-config.js`（新規）
+- `css/auth.css`（必要なら同梱版で上書き）
+
+GitHubで **Commit changes** したあと、リポジトリの **Actions** タブでPagesデプロイが緑色になるのを待ちます。
+
+## 4. 動作確認
+
+1. 公開URLを開き、新規登録タブでID・パスワード・登録コード `komakikouka` を入力します。
+2. ゲームを開始し、スコアを獲得してゲームオーバーまたは途中終了までプレイします。
+3. タイトル画面のランキングに自己ベストが追加されることを確認します。
+4. 別ブラウザーまたはスマホで同じID・パスワードを入力し、同じランキングが見えるか確認します。
+
+## 5. Xログイン（任意）
+
+1. Firebase AuthenticationのSign-in providersで **Twitter** を有効にします。
+2. Firebaseが表示するコールバックURL（一般的には `https://<project-id>.firebaseapp.com/__/auth/handler`）をコピーします。
+3. X Developerアプリの認証設定に、FirebaseのAPI key/secretとコールバックURLを登録します。
+4. Firebase ConsoleでTwitter providerを有効化し、X側のキーとシークレットを保存します。
+5. GitHub Pagesの `login.html` から **Xでログイン / 新規登録** を試します。
+
+X Developer側の利用条件やアプリ設定はX側の管理画面で確認してください。FirebaseのWeb設定だけではXログインは有効になりません。
+
+## 無料枠について
+
+Firebase Authentication（Email/Password等）とCloud Firestoreは無料枠から始められます。ただし無料枠には読み書き回数・保存容量などの上限があり、超過・仕様変更時には利用制限が発生し得ます。利用量をFirebase Consoleで確認してください。無料枠に限定する場合は、プロジェクトを有料課金プランへ切り替えず、使用量を定期的に確認します。
+
+公式資料：
+- Firebase料金プラン: https://firebase.google.com/docs/projects/billing/firebase-pricing-plans
+- Cloud Firestoreのクイックスタート・ルール: https://firebase.google.com/docs/firestore/quickstart
+- Firebase Web SDK: https://firebase.google.com/docs/web/learn-more
+- FirebaseでTwitterログイン: https://firebase.google.com/docs/auth/web/twitter-login
+
+
+## Firebase設定
+
+`js/firebase-config.js` には、プロジェクト `face-61ed1` のWebアプリ設定を入力済みです。GitHubへアップロードする前に、Firebase Consoleで Authentication の Email/Password を有効化し、Firestore Databaseを作成して `firestore.rules` を公開してください。Authenticationの承認済みドメインに `pan933.github.io` が含まれることも確認してください。
