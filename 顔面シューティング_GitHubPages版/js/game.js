@@ -4137,17 +4137,31 @@ async function recordCurrentRun() {
 async function initializeSharedAuth() {
     const startButton = document.getElementById("startBtn");
     if (startButton) startButton.disabled = true;
+
     if (!firebaseReady || !auth || !db) {
         const statusEl = document.getElementById("onlineStatus");
-        const detail = firebaseConfigError ? ` (${firebaseConfigError.message})` : "";
-        if (statusEl) statusEl.textContent = `Firebase設定が必要です。READMEを確認してください。${detail}`;
+        const detail = firebaseConfigError
+            ? ` (${firebaseConfigError.message})`
+            : "";
+
+        if (statusEl) {
+            statusEl.textContent =
+                `Firebase設定が必要です。READMEを確認してください。${detail}`;
+        }
+
         const nameEl = document.getElementById("signedInName");
         if (nameEl) nameEl.textContent = "未設定";
+
         void renderLeaderboard();
         return;
     }
 
-    onAuthStateChanged(auth, async user => {
+    try {
+        // Firebaseがログイン状態を復元するまで待つ
+        await auth.authStateReady();
+
+        const user = auth.currentUser;
+
         if (!user) {
             authReady = false;
             currentUser = null;
@@ -4155,70 +4169,98 @@ async function initializeSharedAuth() {
             window.location.replace("./login.html");
             return;
         }
-        try {
-            const profileSnapshot = await getDoc(doc(db, "profiles", user.uid));
-            if (!profileSnapshot.exists()) {
-                authErrorMessage = "プロフィールが見つかりません。いったんログイン画面から再ログインしてください。";
-                authReady = false;
-                currentUser = null;
-                updateAuthUI();
-                return;
-            }
-            const profile = profileSnapshot.data();
-            currentUser = {
-                uid: user.uid,
-                username: String(profile.username || "player"),
-                displayName: String(profile.displayName || profile.username || "Player")
-            };
-            authErrorMessage = "";
-            authReady = true;
-            updateAuthUI();
-            await renderLeaderboard();
-        } catch (error) {
-            console.error("Firebase auth/profile initialization failed:", error);
-            authErrorMessage = error.code === "permission-denied"
-                ? "Firestoreのセキュリティルールが未設定です。READMEのルールを登録してください。"
-                : "Firebaseに接続できません。設定とネットワークを確認してください。";
+
+        const profileSnapshot = await getDoc(
+            doc(db, "profiles", user.uid)
+        );
+
+        if (!profileSnapshot.exists()) {
+            authErrorMessage =
+                "プロフィールが見つかりません。ログイン画面から再ログインしてください。";
+
             authReady = false;
+            currentUser = null;
+            updateAuthUI();
+            return;
+        }
+
+        const profile = profileSnapshot.data();
+
+        currentUser = {
+            uid: user.uid,
+            username: String(profile.username || "player"),
+            displayName: String(
+                profile.displayName || profile.username || "Player"
+            )
+        };
+
+        authErrorMessage = "";
+        authReady = true;
+        updateAuthUI();
+
+        await renderLeaderboard();
+
+    } catch (error) {
+        console.error(
+            "Firebase auth/profile initialization failed:",
+            error
+        );
+
+        authErrorMessage =
+            error.code === "permission-denied"
+                ? "Firestoreのセキュリティルールを確認してください。"
+                : "Firebaseに接続できません。設定とネットワークを確認してください。";
+
+        authReady = false;
+        updateAuthUI();
+    }
+}
+
+const logoutBtn = document.getElementById("logoutBtn");
+
+if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+        if (!auth) return;
+
+        logoutBtn.disabled = true;
+
+        try {
+            await signOut(auth);
+            window.location.href = "./login.html";
+        } catch (error) {
+            console.error("Logout failed:", error);
+            logoutBtn.disabled = false;
+            authErrorMessage = "ログアウトに失敗しました。再度お試しください。";
             updateAuthUI();
         }
     });
 }
 
-const logoutBtn = document.getElementById("logoutBtn");
-if (logoutBtn) logoutBtn.addEventListener("click", async () => {
-    if (!auth) return;
-    logoutBtn.disabled = true;
-    try {
-        await signOut(auth);
-        window.location.href = "./login.html";
-    } catch (error) {
-        console.error("Logout failed:", error);
-        logoutBtn.disabled = false;
-        authErrorMessage = "ログアウトに失敗しました。再度お試しください。";
+const gameoverLeaderboardBtn =
+    document.getElementById("gameoverLeaderboardBtn");
+
+if (gameoverLeaderboardBtn) {
+    gameoverLeaderboardBtn.addEventListener("click", async () => {
+        await recordCurrentRun();
+
+        running = false;
+        paused = false;
+
+        document.getElementById("gameover").style.display = "none";
+        document.getElementById("start").style.display = "flex";
+
+        if (pauseGameBtn) pauseGameBtn.style.display = "none";
+
+        const quitBtn = document.getElementById("quitGameBtn");
+        if (quitBtn) quitBtn.style.display = "none";
+
         updateAuthUI();
-    }
-});
-
-const gameoverLeaderboardBtn = document.getElementById("gameoverLeaderboardBtn");
-if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", async () => {
-    await recordCurrentRun();
-    running = false;
-    paused = false;
-    document.getElementById("gameover").style.display = "none";
-    document.getElementById("start").style.display = "flex";
-    if (pauseGameBtn) pauseGameBtn.style.display = "none";
-    const quitBtn = document.getElementById("quitGameBtn");
-    if (quitBtn) quitBtn.style.display = "none";
-    updateAuthUI();
-    await renderLeaderboard();
-});
-
-/* ==================================================
-   START / RETRY
-================================================== */
+        await renderLeaderboard();
+    });
+}
 
 const startButton = document.getElementById("startBtn");
+
 if (startButton) {
     startButton.addEventListener("click", event => {
         event.preventDefault();
@@ -4226,13 +4268,6 @@ if (startButton) {
     });
 }
 
+document.getElementById("retryBtn").onclick = startGame;
 
-document.getElementById(
-    "retryBtn"
-).onclick =
-    startGame;
-
-
-// Static login is loaded before enabling the start button.
 void initializeSharedAuth();
-
