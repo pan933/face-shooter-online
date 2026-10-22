@@ -1,3 +1,7 @@
+import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
 
 
 
@@ -724,6 +728,7 @@ function startGame() {
     }
 
     runRecorded = false;
+    runRecordPromise = null;
     paused = false;
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
@@ -4019,26 +4024,20 @@ document.addEventListener("fullscreenchange", updateFullscreenButton);
 updateFullscreenButton();
 
 /* ==================================================
-   GITHUB PAGES STATIC LOGIN + LOCAL LEADERBOARD
-   Data is saved only in this browser's localStorage.
+   FIREBASE AUTH + SHARED LEADERBOARD
 ================================================== */
-const STATIC_CURRENT_USER_KEY = "faceShooterStaticCurrentUserV1";
-const STATIC_LEADERBOARD_KEY = "faceShooterStaticLeaderboardV1";
 let currentUser = null;
 let authReady = false;
 let runRecorded = false;
+let runRecordPromise = null;
+let authErrorMessage = "";
 
 function escapeHTML(value) {
     return String(value).replace(/[&<>"']/g, char => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     }[char]));
 }
-function readLocalLeaderboard() {
-    try {
-        const value = JSON.parse(localStorage.getItem(STATIC_LEADERBOARD_KEY) || "[]");
-        return Array.isArray(value) ? value : [];
-    } catch (_) { return []; }
-}
+
 function updateAuthUI() {
     const nameEl = document.getElementById("signedInName");
     const statusEl = document.getElementById("onlineStatus");
@@ -4046,99 +4045,164 @@ function updateAuthUI() {
     if (nameEl) nameEl.textContent = currentUser ? (currentUser.displayName || currentUser.username) : "未ログイン";
     if (startButton) startButton.disabled = !authReady || !currentUser;
     if (statusEl) {
-        statusEl.textContent = currentUser
-            ? "GitHub Pages静的版：記録はこのブラウザ内に保存されます"
-            : "ログインしてください";
+        statusEl.textContent = authErrorMessage || (currentUser
+            ? "☁ 全員共通ランキングに接続中"
+            : "ログインを確認しています…");
     }
 }
+
+function showLeaderboardError(message) {
+    const messageEl = document.getElementById("leaderboardMessage");
+    if (messageEl) messageEl.textContent = message;
+}
+
 async function renderLeaderboard() {
     const list = document.getElementById("leaderboardList");
     const message = document.getElementById("leaderboardMessage");
     if (!list) return;
-    const ranking = readLocalLeaderboard().sort((a, b) => {
-        const scoreDiff = (Number(b.score) || 0) - (Number(a.score) || 0);
-        if (scoreDiff) return scoreDiff;
-        const waveDiff = (Number(b.wave) || 1) - (Number(a.wave) || 1);
-        if (waveDiff) return waveDiff;
-        return String(a.username || "").localeCompare(String(b.username || ""), "ja");
-    });
-    if (message) message.textContent = "このランキングは現在のブラウザ内だけで保存されます。";
-    if (!ranking.length) {
-        list.innerHTML = '<li class="rankEmpty">まだ記録がありません。最初のランクインを目指そう！</li>';
-        return;
-    }
-    list.innerHTML = ranking.slice(0, 10).map((item, index) => {
-        const name = escapeHTML(item.displayName || item.username || "Player");
-        const scoreValue = Math.max(0, Math.floor(Number(item.score) || 0));
-        const waveValue = Math.max(1, Math.floor(Number(item.wave) || 1));
-        return `<li class="rankItem"><span class="rankNo">${index + 1}</span><span class="rankUser">${name}</span><span class="rankScore">${scoreValue.toLocaleString("ja-JP")} 点<br><small>WAVE ${waveValue}</small></span></li>`;
-    }).join("");
-}
-async function recordCurrentRun() {
-    if (runRecorded) return;
-    runRecorded = true;
-    if (!currentUser) return;
-    const scoreValue = Math.max(0, Math.floor(Number(score) || 0));
-    const waveValue = Math.max(1, Math.floor(Number(wave) || 1));
-    if (scoreValue <= 0 && waveValue <= 1) {
-        await renderLeaderboard();
+    if (!firebaseReady || !db) {
+        list.innerHTML = '<li class="rankEmpty">Firebaseの設定が必要です。</li>';
+        if (message) message.textContent = "js/firebase-config.js の設定を完了してください。";
         return;
     }
     try {
-        const ranking = readLocalLeaderboard();
-        const key = String(currentUser.username).toLowerCase();
-        const idx = ranking.findIndex(item => String(item.username || "").toLowerCase() === key);
-        const old = idx >= 0 ? ranking[idx] : null;
-        const isBetter = !old || scoreValue > (Number(old.score) || 0) ||
-            (scoreValue === (Number(old.score) || 0) && waveValue > (Number(old.wave) || 1));
-        if (isBetter) {
-            const record = {
-                username: currentUser.username,
-                displayName: currentUser.displayName || currentUser.username,
-                score: scoreValue,
-                wave: waveValue,
-                updatedAt: new Date().toISOString()
-            };
-            if (idx >= 0) ranking[idx] = record;
-            else ranking.push(record);
-            localStorage.setItem(STATIC_LEADERBOARD_KEY, JSON.stringify(ranking));
+        // A single server-side ordering avoids requiring a composite Firestore index.
+        const result = await getDocs(query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(100)));
+        const ranking = result.docs.map(snapshot => snapshot.data()).sort((a, b) => {
+            const scoreDiff = (Number(b.score) || 0) - (Number(a.score) || 0);
+            if (scoreDiff) return scoreDiff;
+            const waveDiff = (Number(b.wave) || 1) - (Number(a.wave) || 1);
+            if (waveDiff) return waveDiff;
+            return String(a.displayName || a.username || "").localeCompare(String(b.displayName || b.username || ""), "ja");
+        });
+        if (message) message.textContent = "全ユーザー共通。各プレイヤーの自己ベストを表示しています。";
+        if (!ranking.length) {
+            list.innerHTML = '<li class="rankEmpty">まだ記録がありません。最初のランクインを目指そう！</li>';
+            return;
         }
-        await renderLeaderboard();
+        list.innerHTML = ranking.slice(0, 10).map((item, index) => {
+            const name = escapeHTML(item.displayName || item.username || "Player");
+            const scoreValue = Math.max(0, Math.floor(Number(item.score) || 0));
+            const waveValue = Math.max(1, Math.floor(Number(item.wave) || 1));
+            return `<li class="rankItem"><span class="rankNo">${index + 1}</span><span class="rankUser">${name}</span><span class="rankScore">${scoreValue.toLocaleString("ja-JP")} 点<br><small>WAVE ${waveValue}</small></span></li>`;
+        }).join("");
     } catch (error) {
-        const message = document.getElementById("leaderboardMessage");
-        if (message) message.textContent = "記録を保存できませんでした。ブラウザの保存容量を確認してください。";
-        console.error("Local score save failed:", error);
+        console.error("Shared leaderboard load failed:", error);
+        list.innerHTML = '<li class="rankEmpty">ランキングを読み込めませんでした。</li>';
+        if (message) message.textContent = error.code === "permission-denied"
+            ? "FirestoreのセキュリティルールをREADMEどおりに設定してください。"
+            : "通信またはFirebase設定を確認してください。";
     }
 }
-function initializeStaticAuth() {
+
+async function recordCurrentRun() {
+    if (runRecorded) return runRecordPromise || undefined;
+    runRecorded = true;
+    runRecordPromise = (async () => {
+        const firebaseUser = auth?.currentUser;
+        if (!firebaseReady || !firebaseUser || !currentUser || !db) return;
+        const scoreValue = Math.max(0, Math.floor(Number(score) || 0));
+        const waveValue = Math.max(1, Math.floor(Number(wave) || 1));
+        if (scoreValue <= 0 && waveValue <= 1) {
+            await renderLeaderboard();
+            return;
+        }
+        try {
+            const scoreRef = doc(db, "leaderboard", firebaseUser.uid);
+            const oldSnapshot = await getDoc(scoreRef);
+            const old = oldSnapshot.exists() ? oldSnapshot.data() : null;
+            const isBetter = !old || scoreValue > (Number(old.score) || 0) ||
+                (scoreValue === (Number(old.score) || 0) && waveValue > (Number(old.wave) || 1));
+            if (isBetter) {
+                await setDoc(scoreRef, {
+                    uid: firebaseUser.uid,
+                    username: currentUser.username || "player",
+                    displayName: currentUser.displayName || currentUser.username || "Player",
+                    score: scoreValue,
+                    wave: waveValue,
+                    updatedAt: serverTimestamp()
+                });
+            }
+            await renderLeaderboard();
+        } catch (error) {
+            console.error("Shared score save failed:", error);
+            showLeaderboardError(error.code === "permission-denied"
+                ? "記録保存が拒否されました。Firestoreのルールを確認してください。"
+                : "記録をクラウドに保存できませんでした。接続を確認してください。");
+        }
+    })();
+    return runRecordPromise;
+}
+
+async function initializeSharedAuth() {
     const startButton = document.getElementById("startBtn");
     if (startButton) startButton.disabled = true;
-    try {
-        const stored = JSON.parse(localStorage.getItem(STATIC_CURRENT_USER_KEY) || "null");
-        if (!stored || !stored.username) {
+    if (!firebaseReady || !auth || !db) {
+        const statusEl = document.getElementById("onlineStatus");
+        const detail = firebaseConfigError ? ` (${firebaseConfigError.message})` : "";
+        if (statusEl) statusEl.textContent = `Firebase設定が必要です。READMEを確認してください。${detail}`;
+        const nameEl = document.getElementById("signedInName");
+        if (nameEl) nameEl.textContent = "未設定";
+        void renderLeaderboard();
+        return;
+    }
+
+    onAuthStateChanged(auth, async user => {
+        if (!user) {
+            authReady = false;
+            currentUser = null;
+            updateAuthUI();
             window.location.replace("./login.html");
             return;
         }
-        currentUser = stored;
-        authReady = true;
-        updateAuthUI();
-        void renderLeaderboard();
-    } catch (error) {
-        const statusEl = document.getElementById("onlineStatus");
-        if (statusEl) statusEl.textContent = "このブラウザでは保存データを読み込めません。";
-        console.error("Local authentication initialization failed:", error);
-    }
+        try {
+            const profileSnapshot = await getDoc(doc(db, "profiles", user.uid));
+            if (!profileSnapshot.exists()) {
+                authErrorMessage = "プロフィールが見つかりません。いったんログイン画面から再ログインしてください。";
+                authReady = false;
+                currentUser = null;
+                updateAuthUI();
+                return;
+            }
+            const profile = profileSnapshot.data();
+            currentUser = {
+                uid: user.uid,
+                username: String(profile.username || "player"),
+                displayName: String(profile.displayName || profile.username || "Player")
+            };
+            authErrorMessage = "";
+            authReady = true;
+            updateAuthUI();
+            await renderLeaderboard();
+        } catch (error) {
+            console.error("Firebase auth/profile initialization failed:", error);
+            authErrorMessage = error.code === "permission-denied"
+                ? "Firestoreのセキュリティルールが未設定です。READMEのルールを登録してください。"
+                : "Firebaseに接続できません。設定とネットワークを確認してください。";
+            authReady = false;
+            updateAuthUI();
+        }
+    });
 }
 
 const logoutBtn = document.getElementById("logoutBtn");
-if (logoutBtn) logoutBtn.addEventListener("click", () => {
-    localStorage.removeItem(STATIC_CURRENT_USER_KEY);
-    window.location.href = "./login.html";
+if (logoutBtn) logoutBtn.addEventListener("click", async () => {
+    if (!auth) return;
+    logoutBtn.disabled = true;
+    try {
+        await signOut(auth);
+        window.location.href = "./login.html";
+    } catch (error) {
+        console.error("Logout failed:", error);
+        logoutBtn.disabled = false;
+        authErrorMessage = "ログアウトに失敗しました。再度お試しください。";
+        updateAuthUI();
+    }
 });
 
 const gameoverLeaderboardBtn = document.getElementById("gameoverLeaderboardBtn");
-if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", () => {
-    void recordCurrentRun();
+if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", async () => {
+    await recordCurrentRun();
     running = false;
     paused = false;
     document.getElementById("gameover").style.display = "none";
@@ -4147,7 +4211,7 @@ if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", () 
     const quitBtn = document.getElementById("quitGameBtn");
     if (quitBtn) quitBtn.style.display = "none";
     updateAuthUI();
-    void renderLeaderboard();
+    await renderLeaderboard();
 });
 
 /* ==================================================
@@ -4170,5 +4234,5 @@ document.getElementById(
 
 
 // Static login is loaded before enabling the start button.
-void initializeStaticAuth();
+void initializeSharedAuth();
 
