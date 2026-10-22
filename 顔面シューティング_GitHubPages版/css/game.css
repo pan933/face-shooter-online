@@ -1148,7 +1148,7 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
     #start .panel { max-height: 96dvh; }
 }
 
-/* ===== RESTORE / MOBILE START SCREEN FIX =====
+/* ===== RESTORE / MOBILE START SCREEN FIX ===== */
 /* Keep all original styles, while making the start page scroll safely. */
 #start .panel {
     width: min(94%, 620px) !important;
@@ -1210,3 +1210,110 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
     #start #startBtn { bottom: max(6px, env(safe-area-inset-bottom)) !important; }
 }
 
+
+
+/* ===== Compact mobile HUD and controls ===== */
+@media screen and (max-width: 900px) and (pointer: coarse) {
+    #hud {
+        top: 5px !important;
+        left: 6px !important;
+        right: 6px !important;
+        gap: 4px !important;
+        font-size: clamp(9px, 1.8vw, 12px) !important;
+    }
+    .badge { padding: 3px 5px !important; border-width: 1px !important; border-radius: 7px !important; }
+    .hpBadge { min-width: 88px !important; }
+    .hpHeader { font-size: 10px !important; gap: 3px !important; }
+    .hpTitle { font-size: 11px !important; }
+    .hpBar { height: 7px !important; margin-top: 3px !important; border-width: 1px !important; }
+    .hpHearts { font-size: 8px !important; margin-top: 2px !important; }
+    .comboBadge { display: none !important; }
+
+    #waveProgress { top: 39px !important; left: 20% !important; right: 20% !important; }
+    #waveProgressTitle { font-size: 11px !important; margin-bottom: 2px !important; }
+    #waveProgressTrack { height: 12px !important; border-width: 1px !important; }
+    #waveProgressText { font-size: 9px !important; margin-top: 1px !important; }
+    #bossBar { top: 39px !important; left: 22% !important; right: 22% !important; }
+    #bossName { font-size: 13px !important; margin-bottom: 2px !important; }
+    #bossTrack { height: 15px !important; border-width: 1px !important; }
+
+    #touchJoystick {
+        width: clamp(68px, 13vw, 92px) !important;
+        height: clamp(68px, 13vw, 92px) !important;
+        left: 7px !important;
+        bottom: max(7px, env(safe-area-inset-bottom)) !important;
+        border-width: 1px !important;
+    }
+    #joystickKnob {
+        width: clamp(30px, 6vw, 42px) !important;
+        height: clamp(30px, 6vw, 42px) !important;
+        border-width: 2px !important;
+    }
+    #touchActions {
+        right: 7px !important;
+        bottom: max(7px, env(safe-area-inset-bottom)) !important;
+        grid-template-columns: 52px 52px !important;
+        grid-template-rows: 52px 52px !important;
+        gap: 5px !important;
+    }
+    .touchAction {
+        padding: 2px !important;
+        border-width: 2px !important;
+        border-radius: 12px !important;
+        font-size: 10px !important;
+        box-shadow: 0 3px 0 #555 !important;
+    }
+    #touchShoot { width: 109px !important; font-size: 12px !important; }
+    #touchHelp { display: none !important; }
+
+    #quitGameBtn {
+        top: 5px !important;
+        padding: 4px 7px !important;
+        font-size: 10px !important;
+        border-width: 1px !important;
+    }
+    #controlModeBtn {
+        top: 50px !important;
+        right: 5px !important;
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+        border-width: 1px !important;
+    }
+    #fullscreenBtn {
+        top: 80px !important;
+        right: 5px !important;
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+        border-width: 1px !important;
+    }
+    #pauseGameBtn {
+        top: 110px !important;
+        right: 5px !important;
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+        border-width: 1px !important;
+    }
+
+    /* Title screen ranking uses less space on a phone. */
+    #start #leaderboardList { max-height: min(18dvh, 135px) !important; }
+    #start #leaderboardList li { padding: 5px 6px !important; gap: 5px !important; font-size: 11px !important; }
+    #start #authPanel h2, #start #leaderboardPanel h2 { font-size: 16px !important; }
+    #start #onlineStatus, #start #leaderboardMessage { font-size: 10px !important; }
+}
+
+@media screen and (max-width: 900px) and (orientation: landscape) and (pointer: coarse) {
+    #touchJoystick { width: 72px !important; height: 72px !important; }
+    #joystickKnob { width: 32px !important; height: 32px !important; }
+    #touchActions {
+        grid-template-columns: 46px 46px !important;
+        grid-template-rows: 46px 46px !important;
+        gap: 4px !important;
+    }
+    #touchShoot { width: 96px !important; }
+    #touchActions .touchAction { font-size: 9px !important; }
+    #waveProgress { top: 31px !important; }
+    #bossBar { top: 31px !important; }
+    #controlModeBtn { top: 36px !important; }
+    #fullscreenBtn { top: 62px !important; }
+    #pauseGameBtn { top: 88px !important; }
+}
