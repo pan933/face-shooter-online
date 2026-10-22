@@ -1,5 +1,5 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 
@@ -717,6 +717,64 @@ function updateHUD() {
 
 
 /* ==================================================
+   MOBILE LANDSCAPE MODE
+================================================== */
+let orientationOverlayDismissed = false;
+const orientationOverlay = document.getElementById("orientationOverlay");
+const rotateNowBtn = document.getElementById("rotateNowBtn");
+const continuePortraitBtn = document.getElementById("continuePortraitBtn");
+
+function isMobileGameDevice() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+        || (window.matchMedia && window.matchMedia("(pointer: coarse) and (max-width: 1100px)").matches);
+}
+
+function updateOrientationPrompt() {
+    if (!orientationOverlay) return;
+    const portrait = window.matchMedia("(orientation: portrait)").matches;
+    const show = isMobileGameDevice() && portrait && running && !paused && !orientationOverlayDismissed;
+    orientationOverlay.style.display = show ? "flex" : "none";
+    orientationOverlay.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
+async function requestLandscapeMode() {
+    if (!isMobileGameDevice()) return;
+    orientationOverlayDismissed = false;
+    // These APIs require a user gesture and are not supported by every mobile browser.
+    try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+        }
+    } catch (error) {
+        console.info("Fullscreen request was not available on this browser:", error);
+    }
+    try {
+        if (screen.orientation && typeof screen.orientation.lock === "function") {
+            await screen.orientation.lock("landscape");
+        }
+    } catch (error) {
+        console.info("Landscape lock is not supported by this browser:", error);
+    }
+    updateOrientationPrompt();
+}
+
+if (rotateNowBtn) {
+    rotateNowBtn.addEventListener("click", () => { void requestLandscapeMode(); });
+}
+if (continuePortraitBtn) {
+    continuePortraitBtn.addEventListener("click", () => {
+        orientationOverlayDismissed = true;
+        updateOrientationPrompt();
+    });
+}
+window.addEventListener("orientationchange", () => {
+    orientationOverlayDismissed = false;
+    resize();
+    updateOrientationPrompt();
+});
+window.addEventListener("resize", () => updateOrientationPrompt());
+
+/* ==================================================
    START
 ================================================== */
 
@@ -770,6 +828,7 @@ function startGame() {
 
     running = true;
     document.getElementById("start").style.display = "none";
+    updateOrientationPrompt();
     document.getElementById("quitGameBtn").style.display = "block";
     if (pauseGameBtn) pauseGameBtn.style.display = "block";
     hideQuitConfirm();
@@ -818,6 +877,7 @@ function pauseGame() {
     if (!running || paused) return;
     paused = true;
     clearHeldInputs();
+    updateOrientationPrompt();
     if (pauseOverlay) {
         pauseOverlay.style.display = "flex";
         pauseOverlay.setAttribute("aria-hidden", "false");
@@ -829,6 +889,7 @@ function resumeGame() {
     if (!running || !paused) return;
     paused = false;
     clearHeldInputs();
+    updateOrientationPrompt();
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
         pauseOverlay.setAttribute("aria-hidden", "true");
@@ -854,6 +915,7 @@ function quitGame() {
     }
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     running = false;
+    updateOrientationPrompt();
     const quitBtn = document.getElementById("quitGameBtn");
     if (quitBtn) quitBtn.style.display = "none";
     document.getElementById("bossBar").style.display = "none";
@@ -867,6 +929,7 @@ function gameOver() {
     recordCurrentRun();
     running = false;
     paused = false;
+    updateOrientationPrompt();
     clearHeldInputs();
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
@@ -4010,7 +4073,13 @@ if (fullscreenBtn) {
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen();
+                if (isMobileGameDevice() && screen.orientation && screen.orientation.lock) {
+                    try { await screen.orientation.lock("landscape"); } catch (_) {}
+                }
             } else {
+                if (screen.orientation && screen.orientation.unlock) {
+                    try { screen.orientation.unlock(); } catch (_) {}
+                }
                 await document.exitFullscreen();
             }
         } catch (error) {
@@ -4020,7 +4089,10 @@ if (fullscreenBtn) {
     });
 }
 
-document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("fullscreenchange", () => {
+    updateFullscreenButton();
+    updateOrientationPrompt();
+});
 updateFullscreenButton();
 
 /* ==================================================
@@ -4140,26 +4212,19 @@ async function initializeSharedAuth() {
 
     if (!firebaseReady || !auth || !db) {
         const statusEl = document.getElementById("onlineStatus");
-        const detail = firebaseConfigError
-            ? ` (${firebaseConfigError.message})`
-            : "";
-
-        if (statusEl) {
-            statusEl.textContent =
-                `Firebase設定が必要です。READMEを確認してください。${detail}`;
-        }
-
+        const detail = firebaseConfigError ? ` (${firebaseConfigError.message})` : "";
+        if (statusEl) statusEl.textContent = `Firebase設定が必要です。READMEを確認してください。${detail}`;
         const nameEl = document.getElementById("signedInName");
         if (nameEl) nameEl.textContent = "未設定";
-
         void renderLeaderboard();
         return;
     }
 
     try {
-        // Firebaseがログイン状態を復元するまで待つ
+        // Firebaseが保存済みのログイン状態を復元し終えるまで待つ。
+        // 初期化中の一時的な null を見て login.html へ遷移すると、
+        // login.html と game.html が何度も行き来するリロードループになることがある。
         await auth.authStateReady();
-
         const user = auth.currentUser;
 
         if (!user) {
@@ -4170,14 +4235,9 @@ async function initializeSharedAuth() {
             return;
         }
 
-        const profileSnapshot = await getDoc(
-            doc(db, "profiles", user.uid)
-        );
-
+        const profileSnapshot = await getDoc(doc(db, "profiles", user.uid));
         if (!profileSnapshot.exists()) {
-            authErrorMessage =
-                "プロフィールが見つかりません。ログイン画面から再ログインしてください。";
-
+            authErrorMessage = "プロフィールが見つかりません。ログイン画面からもう一度登録・ログインしてください。";
             authReady = false;
             currentUser = null;
             updateAuthUI();
@@ -4185,82 +4245,59 @@ async function initializeSharedAuth() {
         }
 
         const profile = profileSnapshot.data();
-
         currentUser = {
             uid: user.uid,
             username: String(profile.username || "player"),
-            displayName: String(
-                profile.displayName || profile.username || "Player"
-            )
+            displayName: String(profile.displayName || profile.username || "Player")
         };
-
         authErrorMessage = "";
         authReady = true;
         updateAuthUI();
-
         await renderLeaderboard();
-
     } catch (error) {
-        console.error(
-            "Firebase auth/profile initialization failed:",
-            error
-        );
-
-        authErrorMessage =
-            error.code === "permission-denied"
-                ? "Firestoreのセキュリティルールを確認してください。"
-                : "Firebaseに接続できません。設定とネットワークを確認してください。";
-
+        console.error("Firebase auth/profile initialization failed:", error);
+        authErrorMessage = error.code === "permission-denied"
+            ? "Firestoreのセキュリティルールが未設定です。READMEのルールを登録してください。"
+            : "Firebaseに接続できません。設定とネットワークを確認してください。";
         authReady = false;
         updateAuthUI();
     }
 }
 
 const logoutBtn = document.getElementById("logoutBtn");
-
-if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-        if (!auth) return;
-
-        logoutBtn.disabled = true;
-
-        try {
-            await signOut(auth);
-            window.location.href = "./login.html";
-        } catch (error) {
-            console.error("Logout failed:", error);
-            logoutBtn.disabled = false;
-            authErrorMessage = "ログアウトに失敗しました。再度お試しください。";
-            updateAuthUI();
-        }
-    });
-}
-
-const gameoverLeaderboardBtn =
-    document.getElementById("gameoverLeaderboardBtn");
-
-if (gameoverLeaderboardBtn) {
-    gameoverLeaderboardBtn.addEventListener("click", async () => {
-        await recordCurrentRun();
-
-        running = false;
-        paused = false;
-
-        document.getElementById("gameover").style.display = "none";
-        document.getElementById("start").style.display = "flex";
-
-        if (pauseGameBtn) pauseGameBtn.style.display = "none";
-
-        const quitBtn = document.getElementById("quitGameBtn");
-        if (quitBtn) quitBtn.style.display = "none";
-
+if (logoutBtn) logoutBtn.addEventListener("click", async () => {
+    if (!auth) return;
+    logoutBtn.disabled = true;
+    try {
+        await signOut(auth);
+        window.location.href = "./login.html";
+    } catch (error) {
+        console.error("Logout failed:", error);
+        logoutBtn.disabled = false;
+        authErrorMessage = "ログアウトに失敗しました。再度お試しください。";
         updateAuthUI();
-        await renderLeaderboard();
-    });
-}
+    }
+});
+
+const gameoverLeaderboardBtn = document.getElementById("gameoverLeaderboardBtn");
+if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", async () => {
+    await recordCurrentRun();
+    running = false;
+    paused = false;
+    document.getElementById("gameover").style.display = "none";
+    document.getElementById("start").style.display = "flex";
+    if (pauseGameBtn) pauseGameBtn.style.display = "none";
+    const quitBtn = document.getElementById("quitGameBtn");
+    if (quitBtn) quitBtn.style.display = "none";
+    updateAuthUI();
+    await renderLeaderboard();
+});
+
+/* ==================================================
+   START / RETRY
+================================================== */
 
 const startButton = document.getElementById("startBtn");
-
 if (startButton) {
     startButton.addEventListener("click", event => {
         event.preventDefault();
@@ -4268,6 +4305,13 @@ if (startButton) {
     });
 }
 
-document.getElementById("retryBtn").onclick = startGame;
 
+document.getElementById(
+    "retryBtn"
+).onclick =
+    startGame;
+
+
+// Static login is loaded before enabling the start button.
 void initializeSharedAuth();
+
