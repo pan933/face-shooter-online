@@ -185,7 +185,8 @@ applyControlMode();
    IMAGE
 ================================================== */
 
-const FACE = "face.png";
+const FACE_GUEST = "face.png";
+const FACE_REGISTERED = "face2.png";
 
 
 const canvas =
@@ -204,8 +205,22 @@ const faceImage =
     new Image();
 
 
-faceImage.src =
-    FACE;
+faceImage.src = FACE_GUEST;
+
+// ゲストは face.png、登録ユーザーは face2.png を使用する。
+// face2.png が未配置・読み込み失敗の場合は face.png に戻す。
+function setFaceForMode(isGuest) {
+    faceImage.onerror = null;
+    if (isGuest) {
+        faceImage.src = FACE_GUEST;
+        return;
+    }
+    faceImage.onerror = () => {
+        faceImage.onerror = null;
+        faceImage.src = FACE_GUEST;
+    };
+    faceImage.src = FACE_REGISTERED;
+}
 
 
 /* ==================================================
@@ -717,70 +732,13 @@ function updateHUD() {
 
 
 /* ==================================================
-   MOBILE LANDSCAPE MODE
-================================================== */
-let orientationOverlayDismissed = false;
-const orientationOverlay = document.getElementById("orientationOverlay");
-const rotateNowBtn = document.getElementById("rotateNowBtn");
-const continuePortraitBtn = document.getElementById("continuePortraitBtn");
-
-function isMobileGameDevice() {
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-        || (window.matchMedia && window.matchMedia("(pointer: coarse) and (max-width: 1100px)").matches);
-}
-
-function updateOrientationPrompt() {
-    if (!orientationOverlay) return;
-    const portrait = window.matchMedia("(orientation: portrait)").matches;
-    const show = isMobileGameDevice() && portrait && running && !paused && !orientationOverlayDismissed;
-    orientationOverlay.style.display = show ? "flex" : "none";
-    orientationOverlay.setAttribute("aria-hidden", show ? "false" : "true");
-}
-
-async function requestLandscapeMode() {
-    if (!isMobileGameDevice()) return;
-    orientationOverlayDismissed = false;
-    // These APIs require a user gesture and are not supported by every mobile browser.
-    try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
-        }
-    } catch (error) {
-        console.info("Fullscreen request was not available on this browser:", error);
-    }
-    try {
-        if (screen.orientation && typeof screen.orientation.lock === "function") {
-            await screen.orientation.lock("landscape");
-        }
-    } catch (error) {
-        console.info("Landscape lock is not supported by this browser:", error);
-    }
-    updateOrientationPrompt();
-}
-
-if (rotateNowBtn) {
-    rotateNowBtn.addEventListener("click", () => { void requestLandscapeMode(); });
-}
-if (continuePortraitBtn) {
-    continuePortraitBtn.addEventListener("click", () => {
-        orientationOverlayDismissed = true;
-        updateOrientationPrompt();
-    });
-}
-window.addEventListener("orientationchange", () => {
-    orientationOverlayDismissed = false;
-    resize();
-    updateOrientationPrompt();
-});
-window.addEventListener("resize", () => updateOrientationPrompt());
-
-/* ==================================================
    START
 ================================================== */
 
 function startGame() {
 
-    if (!currentUser || !authReady) {
+    // ゲストはログインユーザーがいなくてもゲームを開始できる。
+    if (!guestMode && (!currentUser || !authReady)) {
         window.location.replace("./login.html");
         return;
     }
@@ -828,7 +786,6 @@ function startGame() {
 
     running = true;
     document.getElementById("start").style.display = "none";
-    updateOrientationPrompt();
     document.getElementById("quitGameBtn").style.display = "block";
     if (pauseGameBtn) pauseGameBtn.style.display = "block";
     hideQuitConfirm();
@@ -877,7 +834,6 @@ function pauseGame() {
     if (!running || paused) return;
     paused = true;
     clearHeldInputs();
-    updateOrientationPrompt();
     if (pauseOverlay) {
         pauseOverlay.style.display = "flex";
         pauseOverlay.setAttribute("aria-hidden", "false");
@@ -889,7 +845,6 @@ function resumeGame() {
     if (!running || !paused) return;
     paused = false;
     clearHeldInputs();
-    updateOrientationPrompt();
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
         pauseOverlay.setAttribute("aria-hidden", "true");
@@ -915,7 +870,6 @@ function quitGame() {
     }
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     running = false;
-    updateOrientationPrompt();
     const quitBtn = document.getElementById("quitGameBtn");
     if (quitBtn) quitBtn.style.display = "none";
     document.getElementById("bossBar").style.display = "none";
@@ -929,7 +883,6 @@ function gameOver() {
     recordCurrentRun();
     running = false;
     paused = false;
-    updateOrientationPrompt();
     clearHeldInputs();
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
@@ -4073,13 +4026,7 @@ if (fullscreenBtn) {
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen();
-                if (isMobileGameDevice() && screen.orientation && screen.orientation.lock) {
-                    try { await screen.orientation.lock("landscape"); } catch (_) {}
-                }
             } else {
-                if (screen.orientation && screen.orientation.unlock) {
-                    try { screen.orientation.unlock(); } catch (_) {}
-                }
                 await document.exitFullscreen();
             }
         } catch (error) {
@@ -4089,10 +4036,7 @@ if (fullscreenBtn) {
     });
 }
 
-document.addEventListener("fullscreenchange", () => {
-    updateFullscreenButton();
-    updateOrientationPrompt();
-});
+document.addEventListener("fullscreenchange", updateFullscreenButton);
 updateFullscreenButton();
 
 /* ==================================================
@@ -4100,6 +4044,8 @@ updateFullscreenButton();
 ================================================== */
 let currentUser = null;
 let authReady = false;
+// URLに ?guest=1 があるときは、Firebaseアカウント・ランキングとは独立して遊ぶ。
+let guestMode = new URLSearchParams(window.location.search).get("guest") === "1";
 let runRecorded = false;
 let runRecordPromise = null;
 let authErrorMessage = "";
@@ -4114,6 +4060,23 @@ function updateAuthUI() {
     const nameEl = document.getElementById("signedInName");
     const statusEl = document.getElementById("onlineStatus");
     const startButton = document.getElementById("startBtn");
+    const leaderboardPanel = document.getElementById("leaderboardPanel");
+    const profileActions = document.querySelector("#authPanel .profileActions");
+    const gameoverLeaderboardBtn = document.getElementById("gameoverLeaderboardBtn");
+
+    if (guestMode) {
+        if (nameEl) nameEl.textContent = "ゲスト";
+        if (startButton) startButton.disabled = !authReady;
+        if (statusEl) statusEl.textContent = "ゲストモード：アカウント不要・ランキング記録なし";
+        if (leaderboardPanel) leaderboardPanel.style.display = "none";
+        if (profileActions) profileActions.style.display = "none";
+        if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.style.display = "none";
+        return;
+    }
+
+    if (leaderboardPanel) leaderboardPanel.style.display = "";
+    if (profileActions) profileActions.style.display = "";
+    if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.style.display = "";
     if (nameEl) nameEl.textContent = currentUser ? (currentUser.displayName || currentUser.username) : "未ログイン";
     if (startButton) startButton.disabled = !authReady || !currentUser;
     if (statusEl) {
@@ -4129,6 +4092,7 @@ function showLeaderboardError(message) {
 }
 
 async function renderLeaderboard() {
+    if (guestMode) return;
     const list = document.getElementById("leaderboardList");
     const message = document.getElementById("leaderboardMessage");
     if (!list) return;
@@ -4168,6 +4132,8 @@ async function renderLeaderboard() {
 }
 
 async function recordCurrentRun() {
+    // ゲストのスコアは保存・送信しない。共通ランキングから完全に独立。
+    if (guestMode) return;
     if (runRecorded) return runRecordPromise || undefined;
     runRecorded = true;
     runRecordPromise = (async () => {
@@ -4210,6 +4176,15 @@ async function initializeSharedAuth() {
     const startButton = document.getElementById("startBtn");
     if (startButton) startButton.disabled = true;
 
+    if (guestMode) {
+        currentUser = { uid: "guest-local-only", username: "guest", displayName: "ゲスト" };
+        authReady = true;
+        authErrorMessage = "";
+        setFaceForMode(true);
+        updateAuthUI();
+        return;
+    }
+
     if (!firebaseReady || !auth || !db) {
         const statusEl = document.getElementById("onlineStatus");
         const detail = firebaseConfigError ? ` (${firebaseConfigError.message})` : "";
@@ -4250,6 +4225,7 @@ async function initializeSharedAuth() {
             username: String(profile.username || "player"),
             displayName: String(profile.displayName || profile.username || "Player")
         };
+        setFaceForMode(false);
         authErrorMessage = "";
         authReady = true;
         updateAuthUI();
