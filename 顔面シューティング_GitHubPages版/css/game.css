@@ -1094,3 +1094,56 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
 #leaderboardPanel .rankSub { text-align:center; }
 #leaderboardList { padding-left:28px; }
 #startBtn:disabled { opacity:.45; cursor:not-allowed; }
+
+
+/* Mobile landscape mode: attempt browser orientation lock and provide a manual prompt. */
+#orientationOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(3, 5, 16, .96);
+    color: #fff;
+    text-align: center;
+    touch-action: manipulation;
+}
+#orientationOverlay[aria-hidden="true"] { pointer-events: none; }
+#orientationOverlay .orientationPanel {
+    width: min(440px, 100%);
+    padding: 24px 20px;
+    border: 2px solid #ffe600;
+    border-radius: 18px;
+    background: #171a2b;
+    box-shadow: 0 12px 36px rgba(0,0,0,.55);
+}
+#orientationOverlay .orientationIcon { font-size: 48px; margin-bottom: 8px; }
+#orientationOverlay h2 { margin: 0 0 10px; font-size: clamp(22px, 5vw, 30px); }
+#orientationOverlay p { margin: 0 0 16px; line-height: 1.6; color: #dbe4ff; }
+#orientationOverlay button {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 2px solid #fff;
+    border-radius: 10px;
+    font-weight: 900;
+    font-size: 15px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+#rotateNowBtn { background: #ffe600; color: #111; }
+#continuePortraitBtn { background: #252a40; color: #fff; }
+@media screen and (max-width: 900px) and (orientation: landscape) {
+    #gameWrap {
+        width: 100vw;
+        height: 100dvh;
+        max-width: none;
+        max-height: none;
+        border-width: 0;
+        border-radius: 0;
+    }
+    #start .panel { max-height: 96dvh; }
+}
