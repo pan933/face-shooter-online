@@ -35,3 +35,26 @@ footer { text-align:center; color:#7883a5; font-size:11px; margin-top:14px; }
 .static-note { margin-top:14px; padding:13px 14px; border:1px solid rgba(126,232,255,.3); border-radius:12px; background:rgba(126,232,255,.06); color:#d7e5ff; font-size:12px; line-height:1.65; }
 .static-note strong { display:block; color:#7ee8ff; margin-bottom:5px; }
 .static-note p { margin:5px 0 0; }
+
+
+/* ゲストモードへの独立した入口 */
+.guest-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(126,232,255,.5);
+  border-radius: 10px;
+  background: rgba(17,43,57,.85);
+  color: #d6f7ff;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 850;
+}
+.guest-button small { color: #a7c9d7; font-size: 11px; font-weight: 600; }
+.guest-button:hover { background: rgba(28,68,86,.95); }
