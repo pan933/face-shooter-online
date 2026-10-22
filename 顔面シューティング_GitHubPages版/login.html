@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ログイン | 顔面シューティング</title>
+  <link rel="stylesheet" href="./css/auth.css">
+  <script src="./js/login.js" defer></script>
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="brand-mark">🎮</div>
+      <h1>顔面シューティング</h1>
+      <p class="subtitle">GitHub Pages版・ログイン</p>
+      <div id="globalMessage" class="message" role="status" aria-live="polite"></div>
+
+      <section id="standardAuth">
+        <div class="tabs">
+          <button id="loginTab" class="tab active" type="button">ログイン</button>
+          <button id="registerTab" class="tab" type="button">新規登録</button>
+        </div>
+        <form id="loginForm" class="form-grid" autocomplete="on">
+          <label>ID
+            <input id="loginUsername" name="username" type="text" minlength="2" maxlength="24" autocomplete="username" required>
+          </label>
+          <label>パスワード
+            <input id="loginPassword" name="password" type="password" maxlength="100" autocomplete="current-password" required>
+          </label>
+          <button class="primary" type="submit">ログイン</button>
+        </form>
+        <form id="registerForm" class="form-grid" autocomplete="on" hidden>
+          <label>設定するID（2〜24文字・空白なし）
+            <input id="registerUsername" name="new-username" type="text" minlength="2" maxlength="24" autocomplete="username" required>
+          </label>
+          <label>パスワード（8文字以上）
+            <input id="registerPassword" name="new-password" type="password" minlength="8" maxlength="100" autocomplete="new-password" required>
+          </label>
+          <label>パスワード（確認）
+            <input id="registerPasswordConfirm" type="password" minlength="8" maxlength="100" autocomplete="new-password" required>
+          </label>
+          <label>新規登録用パスワード
+            <input id="registrationCode" type="password" maxlength="100" autocomplete="off" placeholder="登録用コード" required>
+          </label>
+          <button class="primary" type="submit">アカウントを作成</button>
+        </form>
+      </section>
+
+      <section id="xCompleteSection" hidden>
+        <h2>𝕏 アカウントで新規登録</h2>
+        <p class="hint">Xの認証は完了しました。利用を開始するため、新規登録用パスワードを入力してください。</p>
+        <form id="xCompleteForm" class="form-grid">
+          <label>新規登録用パスワード
+            <input id="xRegistrationCode" type="password" autocomplete="off" required>
+          </label>
+          <button class="primary" type="submit">登録を完了</button>
+        </form>
+      </section>
+
+      <div class="divider"><span>GitHub Pages 静的版</span></div>
+      <div class="static-note">
+        <strong>ログインとランキングについて</strong>
+        <p>アカウントとランキングは、このブラウザ内に保存されます。別の端末や別のブラウザとは共有されません。</p>
+        <p>GitHub Pagesだけではサーバー側の認証・共通データベース・Xログインを動かせないため、この版ではXログインを無効にしています。</p>
+      </div>
+      <p class="small-note">これは学習・試作用の簡易ログインです。公開サイトに本物のパスワードを使わないでください。</p>
+    </section>
+    <footer>顔面シューティング オンライン版</footer>
+  </main>
+</body>
+</html>

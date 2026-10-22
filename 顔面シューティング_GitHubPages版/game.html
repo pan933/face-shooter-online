@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+>
+
+<title>顔面シューティング ～オンライン版～</title>
+
+<link rel="stylesheet" href="./css/game.css">
+
+</head>
+
+
+<body>
+
+
+<div id="gameWrap">
+
+
+<canvas id="game"></canvas>
+
+
+<!-- HUD -->
+
+<div id="hud">
+
+    <div class="badge">
+
+        SCORE:
+        <span id="score">0</span>
+
+    </div>
+
+    <div class="badge">
+
+        WAVE:
+        <span id="wave">1</span>
+
+    </div>
+
+    <div class="badge hpBadge">
+        <div class="hpHeader">
+            <span class="hpTitle">❤️ HP</span>
+            <span id="hp">5 / 5</span>
+        </div>
+        <div class="hpBar"><div id="hpFill"></div></div>
+        <div class="hpHearts" id="hpHearts">❤️❤️❤️❤️❤️</div>
+    </div>
+
+    <div class="badge comboBadge">
+        COMBO:
+        <span id="combo">0</span>
+    </div>
+
+</div>
+
+
+<!-- WAVE -->
+
+<div id="waveProgress">
+
+    <div id="waveProgressTitle">
+
+        ⚔ ウェーブ進行
+
+    </div>
+
+    <div id="waveProgressTrack">
+
+        <div id="waveProgressFill"></div>
+
+    </div>
+
+    <div id="waveProgressText">
+
+        撃破 0 / 8
+
+    </div>
+
+</div>
+
+
+<!-- BOSS -->
+
+<div id="bossBar">
+
+    <div id="bossName">
+
+        ☠️ 顔面大魔王
+
+    </div>
+
+    <div id="bossTrack">
+
+        <div id="bossFill"></div>
+
+    </div>
+
+</div>
+
+
+<!-- BOSS GIMMICK -->
+
+<div id="bossGimmick">
+
+    <div id="gimmickTitle">
+
+        ⚠ 弱点ギミック出現！
+
+    </div>
+
+    <div id="gimmickText">
+
+        黄色い弱点を撃て！
+
+    </div>
+
+</div>
+
+
+<!-- BUTTONS -->
+
+<div id="controls">
+
+    <button id="shootBtn">
+
+        🔫 発射
+
+    </button>
+
+    <button id="bombBtn">
+
+        💣 BOM
+        <span id="bombCount">2</span>
+
+        <br>
+
+        <span id="bombCool">
+
+            READY
+
+        </span>
+
+    </button>
+
+    <button id="shieldBtn">
+
+        🛡️ SHIELD
+        <span id="shieldCount">2</span>
+
+    </button>
+
+</div>
+
+<button id="controlModeBtn" type="button">📱 タッチ操作：OFF</button>
+<button id="fullscreenBtn" type="button" aria-label="全画面モード">⛶ 全画面</button>
+<button id="pauseGameBtn" type="button" aria-label="一時停止">⏸ 一時停止</button>
+<button id="quitGameBtn" type="button">🏁 ゲーム終了</button>
+
+
+<!-- TOUCH CONTROLS -->
+<div id="touchJoystick" aria-label="移動スティック">
+    <div id="joystickKnob"></div>
+</div>
+
+<div id="touchActions">
+    <button id="touchShoot" class="touchAction">🔫 発射</button>
+    <button id="touchBomb" class="touchAction">💣 爆弾<br><span id="touchBombCount">2</span></button>
+    <button id="touchShield" class="touchAction">🛡 盾<br><span id="touchShieldCount">2</span></button>
+</div>
+
+<div id="touchHelp">左：移動　右：発射・爆弾・シールド</div>
+
+<!-- START -->
+
+<div id="quitConfirm" aria-hidden="true">
+    <div class="quitPanel">
+        <h2>🏁 ゲームを終了しますか？</h2>
+        <p>現在のスコア・ウェーブで終了してタイトル画面に戻ります。</p>
+        <button id="quitYes" type="button">終了する</button>
+        <button id="quitNo" type="button">キャンセル</button>
+    </div>
+</div>
+
+<div id="pauseOverlay" aria-hidden="true">
+    <div class="pausePanel">
+        <h2>⏸ 一時停止中</h2>
+        <p>敵・弾・ウェーブの進行は停止しています。</p>
+        <p class="pauseShortcuts">Pキー / Escキー：再開・一時停止　Enterキー：再開</p>
+        <button id="pauseResumeBtn" type="button">▶ ゲームに戻る</button>
+        <button id="pauseToTitleBtn" type="button">🏁 タイトルに戻る</button>
+    </div>
+</div>
+
+<div id="start">
+
+    <div class="panel">
+
+        <h1>
+
+            顔面シューティング
+
+        </h1>
+
+        <p>
+
+            <b>WASD / 矢印</b>
+            で移動
+
+            <br>
+
+            <b>SPACE</b>
+            で発射
+
+            <br>
+
+            <b>B</b>
+            爆弾
+
+            <br>
+
+            <b>Q</b>
+            シールド
+
+        </p>
+
+        <p class="small">
+
+            敵を規定数倒すと次のウェーブへ。
+
+            <br>
+
+            5ウェーブごとにボス登場。
+
+            <br>
+
+            ボスの黄色い弱点を狙え！
+
+        </p>
+
+
+
+        <!-- ONLINE ACCOUNT STATUS -->
+        <div id="authPanel" aria-live="polite">
+            <h2>👤 アカウント</h2>
+            <p style="text-align:center">ログイン中：<strong id="signedInName">確認中…</strong></p>
+            <p id="onlineStatus" role="status">サーバーに接続しています…</p>
+            <div class="profileActions">
+                <a href="./login.html">アカウント設定</a>
+                <button id="logoutBtn" type="button">ログアウト</button>
+            </div>
+        </div>
+
+        <div id="leaderboardPanel">
+            <h2>🏆 ランキング TOP 10</h2>
+            <p class="rankSub">このブラウザ内のランキング（スコア順）</p>
+            <p id="leaderboardMessage" role="status"></p>
+            <ol id="leaderboardList"><li class="rankEmpty">ランキングを読み込み中…</li></ol>
+        </div>
+
+        <div id="sensitivityPanel">
+            <label for="cursorSensitivity">🎯 カーソル感度：<span id="cursorSensitivityValue">1.0</span></label>
+            <input id="cursorSensitivity" type="range" min="0.5" max="3" step="0.1" value="1.0">
+        </div>
+
+        <button
+            type="button"
+            class="mainButton"
+            id="startBtn"
+        >
+
+            出撃する
+
+        </button>
+
+        <button id="adminBtn" type="button">⚙ 管理者モード</button>
+
+        <div id="adminPanel">
+            <b>管理者デバッグ</b>
+            <div id="adminLogin">
+                <input id="adminPassword" type="password" placeholder="パスワードを入力">
+                <button class="mainButton" id="adminLoginBtn" type="button">ログイン</button>
+            </div>
+            <div id="adminControls" style="display:none">
+                <label>開始ウェーブ</label>
+                <input id="adminWave" type="number" min="1" max="999" value="1">
+                <div class="adminRow">
+                    <button type="button" data-wave="1">W1</button>
+                    <button type="button" data-wave="5">W5</button>
+                    <button type="button" data-wave="10">W10</button>
+                    <button type="button" data-wave="15">W15</button>
+                </div>
+                <div class="adminRow" style="margin-top:6px">
+                    <button type="button" id="adminStartWave">このウェーブから開始</button>
+                    <button type="button" id="adminBossNow">ボスを即出現</button>
+                    <button type="button" id="adminGimmickNow">ギミック即発動</button>
+                </div>
+                <div id="adminStatus">管理者モードON</div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- GAME OVER -->
+
+<div id="gameover">
+
+    <div class="panel">
+
+        <h1>
+
+            ゲームオーバー
+
+        </h1>
+
+        <p>
+
+            スコア：
+
+            <b id="finalScore">
+                0
+            </b>
+
+        </p>
+
+        <p>
+
+            到達ウェーブ：
+
+            <b id="finalWave">
+                1
+            </b>
+
+        </p>
+
+        <p id="comment">
+
+            顔に敗北しました。
+
+        </p>
+
+        <button
+            class="mainButton"
+            id="retryBtn"
+        >
+
+            もう一回やる
+
+        </button>
+
+        <button id="gameoverLeaderboardBtn" class="mainButton leaderboardLink" type="button">🏆 ランキングを見る</button>
+
+    </div>
+
+</div>
+
+
+</div>
+
+
+<script src="./js/game.js" defer></script>
+
+</body>
+
+</html>
