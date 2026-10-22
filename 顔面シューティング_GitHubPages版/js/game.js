@@ -223,6 +223,105 @@ function setFaceForMode(isGuest) {
 }
 
 
+// ゲストが選んだ画像はこのページのメモリ内だけで使う。
+// localStorage / Cookie / Firebase / サーバーへの保存・送信は行わない。
+let guestCustomFaceObjectURL = null;
+
+function createGuestImagePicker() {
+    if (!guestMode) return;
+
+    const authPanel = document.getElementById("authPanel");
+    if (!authPanel || document.getElementById("guestImageControls")) return;
+
+    const panel = document.createElement("section");
+    panel.id = "guestImageControls";
+    panel.style.cssText = "margin:12px auto;padding:12px;max-width:420px;border:1px solid rgba(255,255,255,.3);border-radius:12px;background:rgba(0,0,0,.3);text-align:center";
+
+    const title = document.createElement("h3");
+    title.textContent = "🖼️ ゲストの顔画像";
+    title.style.cssText = "margin:0 0 8px;font-size:16px";
+
+    const description = document.createElement("p");
+    description.textContent = "好きな画像を選んでゲームに使えます。";
+    description.style.cssText = "font-size:12px;margin:5px 0 10px";
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.hidden = true;
+    input.setAttribute("aria-label", "ゲスト用の顔画像を選択");
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "📁 画像を選択";
+    button.style.cssText = "min-height:44px;padding:10px 18px;border:0;border-radius:10px;background:#ffe600;color:#111;font-weight:900;font-size:15px;cursor:pointer;touch-action:manipulation";
+    button.addEventListener("click", () => input.click());
+
+    const preview = document.createElement("img");
+    preview.alt = "選択した画像のプレビュー";
+    preview.hidden = true;
+    preview.style.cssText = "display:none;max-width:100px;max-height:100px;object-fit:contain;margin:10px auto 0;border:2px solid white;border-radius:10px";
+
+    const status = document.createElement("p");
+    status.id = "guestImageStatus";
+    status.textContent = "画像はこのページ内だけで使用し、サーバーには送信しません。";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.style.cssText = "min-height:1.5em;font-size:11px;overflow-wrap:anywhere;margin:8px 0 0;color:#cfeaff";
+
+    input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+
+        if (!file.type || !file.type.startsWith("image/")) {
+            status.textContent = "画像ファイルを選んでください。";
+            input.value = "";
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            status.textContent = "画像は10 MB以下にしてください。";
+            input.value = "";
+            return;
+        }
+
+        status.textContent = "画像を読み込んでいます…";
+        const candidateURL = URL.createObjectURL(file);
+        const testImage = new Image();
+
+        testImage.onload = () => {
+            // 画像が正しく読み込めた場合だけゲーム内の画像を切り替える。
+            const previousURL = guestCustomFaceObjectURL;
+            guestCustomFaceObjectURL = candidateURL;
+            faceImage.onerror = () => {
+                faceImage.onerror = null;
+                status.textContent = "画像をゲームに読み込めませんでした。別の画像を試してください。";
+            };
+            faceImage.onload = () => {
+                faceImage.onload = null;
+                faceImage.onerror = null;
+                if (previousURL) URL.revokeObjectURL(previousURL);
+            };
+            faceImage.src = candidateURL;
+
+            preview.src = candidateURL;
+            preview.hidden = false;
+            preview.style.display = "block";
+            status.textContent = "設定しました。画像はサーバーに保存・送信されません。ページを閉じると元に戻ります。";
+            input.value = "";
+        };
+        testImage.onerror = () => {
+            URL.revokeObjectURL(candidateURL);
+            status.textContent = "画像を読み込めませんでした。別の画像を選んでください。";
+            input.value = "";
+        };
+        testImage.src = candidateURL;
+    });
+
+    panel.append(title, description, button, input, preview, status);
+    authPanel.appendChild(panel);
+}
+
+
 /* ==================================================
    SCREEN
 ================================================== */
@@ -1203,7 +1302,7 @@ function dropItem(x, y, elite = false) {
     else if (roll < .81) type = ITEM_TYPES[7];
     else if (roll < .89) type = ITEM_TYPES[8];
     else if (roll < .96) type = ITEM_TYPES[9];
-    else type = ITEM_TYPES[10];
+    else type = ITEM_TYPES[9];
 
     items.push({
         x, y,
@@ -4181,6 +4280,7 @@ async function initializeSharedAuth() {
         authReady = true;
         authErrorMessage = "";
         setFaceForMode(true);
+        createGuestImagePicker();
         updateAuthUI();
         return;
     }
