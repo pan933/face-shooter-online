@@ -10,26 +10,19 @@
 </head>
 <body>
   <header class="topbar">
-    <div><span class="mark">🎮</span><div><strong>顔面シューティング</strong><small>OWNER / ADMIN CONSOLE</small></div></div>
+    <div><span class="mark">🎮</span><div><strong>顔面シューティング</strong><small>FREE PLAN ADMIN</small></div></div>
     <nav><a href="./game.html">ゲームへ戻る</a><button id="logoutBtn" class="secondary" type="button" hidden>ログアウト</button></nav>
   </header>
-
   <main class="page">
-    <section id="checkingPanel" class="notice-card"><h1>管理権限を確認中…</h1><p>サーバー側で権限を検証しています。</p></section>
-    <section id="loginPanel" class="notice-card" hidden><h1>ログインが必要です</h1><p>通常のログイン画面から管理者アカウントでログインしてから開き直してください。</p><a class="primary link-button" href="./login.html">ログイン画面へ</a></section>
-    <section id="deniedPanel" class="notice-card" hidden><h1>管理権限がありません</h1><p id="deniedText">このアカウントには管理権限が付与されていません。</p><p class="muted">管理権限は、信頼できる端末からFirebase Admin SDKを使って付与してください。</p><a class="secondary link-button" href="./game.html">ゲームへ戻る</a></section>
-
+    <section id="checkingPanel" class="notice-card"><h1>管理権限を確認中…</h1><p>Firebase Authentication と Firestore の権限を確認しています。</p></section>
+    <section id="loginPanel" class="notice-card" hidden><h1>ログインが必要です</h1><p>先に管理者アカウントでログインしてください。</p><a class="primary link-button" href="./login.html">ログイン画面へ</a></section>
+    <section id="deniedPanel" class="notice-card" hidden><h1>管理権限がありません</h1><p id="deniedText">このアカウントには管理権限がありません。</p><p class="muted">最初の管理者はFirebase ConsoleのFirestoreで admins/{UID} を作成します（README参照）。</p><a class="secondary link-button" href="./game.html">ゲームへ戻る</a></section>
     <div id="adminPanel" hidden>
-      <section class="hero">
-        <div><p class="eyebrow">ADMINISTRATOR</p><h1>管理パネル</h1><p id="signedInLabel" class="muted">権限確認済み</p></div>
-        <div class="hero-actions"><button id="refreshAllBtn" class="secondary" type="button">↻ 更新</button><span id="ownerBadge" class="badge" hidden>オーナー管理者</span></div>
-      </section>
-
+      <section class="hero"><div><p class="eyebrow">ADMINISTRATOR</p><h1>管理パネル</h1><p id="signedInLabel" class="muted"></p></div><div class="hero-actions"><button id="refreshAllBtn" class="secondary" type="button">↻ 更新</button><span id="ownerBadge" class="badge" hidden>オーナー管理者</span></div></section>
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
       <section class="panel" id="gameSettings">
-        <div class="panel-heading"><div><p class="eyebrow">GAMEPLAY</p><h2>ゲームバランス設定</h2></div><span class="badge">次のページ読み込みから反映</span></div>
-        <p class="muted">設定はサーバーに保存され、ゲーム側パッチが設定値を読み込みます。倍率の範囲は安全のため制限しています。</p>
+        <div class="panel-heading"><div><p class="eyebrow">GAMEPLAY</p><h2>ゲーム設定</h2></div><span class="badge">再読み込み後に反映</span></div>
+        <p class="muted">Firebaseの無料枠内でFirestoreへ直接保存します。サーバー関数は使いません。設定変更は全プレイヤーに反映されます。</p>
         <form id="configForm">
           <div class="config-grid">
             <label>ボスHP倍率 <span>0.1〜10倍</span><input id="bossHpMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
@@ -40,35 +33,36 @@
             <label>受けるダメージ倍率 <span>0〜10倍</span><input id="incomingDamageMultiplier" type="number" min="0" max="10" step="0.1" required></label>
             <label>ギミック制限時間倍率 <span>0.25〜10倍</span><input id="gimmickTimeMultiplier" type="number" min="0.25" max="10" step="0.25" required></label>
             <label>アイテム効果時間倍率 <span>0.1〜10倍</span><input id="itemEffectDurationMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
-            <label>アイテム画面残留時間倍率 <span>0.1〜10倍</span><input id="itemLifetimeMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
-            <label>アイテム出現率倍率 <span>0〜5倍（出現率上限100%）</span><input id="itemDropRateMultiplier" type="number" min="0" max="5" step="0.1" required></label>
+            <label>アイテム残留時間倍率 <span>0.1〜10倍</span><input id="itemLifetimeMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
+            <label>アイテム出現率倍率 <span>0〜5倍</span><input id="itemDropRateMultiplier" type="number" min="0" max="5" step="0.1" required></label>
             <label>プレイヤー最大HP <span>1〜20</span><input id="playerMaxHp" type="number" min="1" max="20" step="1" required></label>
           </div>
           <div class="switches">
-            <label><input id="bossAttacksEnabled" type="checkbox"> ボス本体の攻撃を有効にする</label>
-            <label><input id="itemDropsEnabled" type="checkbox"> アイテムドロップを有効にする</label>
-            <label><input id="playerInvincible" type="checkbox"> プレイヤーを無敵にする（テスト用）</label>
+            <label><input id="bossAttacksEnabled" type="checkbox"> ボスの攻撃を有効にする</label>
+            <label><input id="itemDropsEnabled" type="checkbox"> アイテム出現を有効にする</label>
+            <label><input id="playerInvincible" type="checkbox"> プレイヤー無敵（テスト）</label>
           </div>
           <fieldset class="gimmicks"><legend>無効にするギミック</legend><div id="gimmickChecks" class="check-grid"></div></fieldset>
-          <div class="form-actions"><button class="primary" type="submit">設定を保存</button><button id="resetConfigBtn" class="secondary" type="button">初期値に戻す（保存前）</button></div>
+          <div class="form-actions"><button class="primary" type="submit">設定を保存</button><button id="resetConfigBtn" class="secondary" type="button">初期値に戻す</button></div>
         </form>
       </section>
-
       <section class="panel" id="accountsPanel">
-        <div class="panel-heading"><div><p class="eyebrow">ACCOUNTS</p><h2>アカウント管理</h2></div><button id="reloadAccountsBtn" class="secondary" type="button">一覧を再読込</button></div>
-        <p class="muted">アカウント停止・削除・ランキング削除・パスワードのリセットを行えます。パスワードそのものの取得はできません。</p>
-        <div class="search-row"><input id="accountSearch" type="search" placeholder="ID・表示名・UIDで検索"><span id="accountCount" class="muted">読み込み前</span></div>
-        <div id="accountsList" class="accounts-list"><p class="muted">アカウントを読み込んでいます…</p></div>
-        <p id="truncatedNotice" class="warning" hidden>最初の500アカウントのみ表示しています。</p>
+        <div class="panel-heading"><div><p class="eyebrow">ACCOUNTS</p><h2>アカウントデータ管理</h2></div><button id="reloadAccountsBtn" class="secondary" type="button">一覧を再読込</button></div>
+        <p class="warning">無料プランでは管理画面からFirebase Authentication自体の削除・停止や、他人のパスワード変更はできません。ここでの停止はゲーム内アクセスを止める操作です。</p>
+        <div class="search-row"><input id="accountSearch" type="search" placeholder="ID・表示名・UIDで検索"><span id="accountCount" class="muted"></span></div>
+        <div id="accountsList" class="accounts-list"><p class="muted">読み込み中…</p></div>
       </section>
-
+      <section class="panel" id="adminsPanel" hidden>
+        <div class="panel-heading"><div><p class="eyebrow">PERMISSIONS</p><h2>管理者権限</h2></div></div>
+        <p class="muted">オーナーのみ操作できます。管理者にしたいアカウントを登録し、不要なら権限を解除します。オーナー権限はこの画面から付与しません。</p>
+        <div id="adminsList" class="accounts-list"></div>
+      </section>
       <section class="panel" id="auditPanel" hidden>
-        <div class="panel-heading"><div><p class="eyebrow">SECURITY</p><h2>管理操作ログ</h2></div><button id="reloadAuditBtn" class="secondary" type="button">ログを更新</button></div>
-        <p class="muted">最近100件の管理操作を表示します。パスワードやAPIシークレットは記録しません。</p>
+        <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>管理操作ログ</h2></div><button id="reloadAuditBtn" class="secondary" type="button">ログを更新</button></div>
         <div id="auditList" class="audit-list"></div>
       </section>
     </div>
   </main>
-  <footer>顔面シューティング オンライン版 · 管理操作は記録されます</footer>
+  <footer>顔面シューティング · Firebase Spark無料枠向け（Cloud Functions不使用）</footer>
 </body>
 </html>
