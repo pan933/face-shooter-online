@@ -5865,7 +5865,7 @@ void initializeSharedAuth();
 })();
 
 /* =============================================================
-   FACE SHOOTER ADMIN GAMEPLAY CONFIG PATCH
+   FACE SHOOTER FREE-PLAN ADMIN GAMEPLAY CONFIG PATCH
    Copy the entire contents of this file to the very END of js/game.js.
    This is an append-only patch for the currently published game.js version.
    ============================================================= */
@@ -6126,14 +6126,30 @@ void initializeSharedAuth();
 
     async function loadAdminGameplayConfig() {
         try {
-            const { app } = await import("./firebase-config.js");
-            if (!app) throw new Error("Firebase app is not initialized.");
-            const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/13.1.0/firebase-functions.js");
-            const functions = getFunctions(app, "asia-northeast1");
-            const result = await httpsCallable(functions, "getGameConfig")({});
-            faceShooterAdminRuntime.config = normalizeConfig(result.data);
+            // Sparkプランで使えるFirestoreクライアントSDKのみを使用する。
+            if (!firebaseReady || !db) throw new Error("Firebase/Firestoreの設定を確認してください。");
+
+            // 利用停止フラグがあるユーザーは、ゲームを開始させずログイン画面へ戻す。
+            if (!guestMode && auth) {
+                await auth.authStateReady();
+                const user = auth.currentUser;
+                if (user) {
+                    const accessSnapshot = await getDoc(doc(db, "accessControl", user.uid));
+                    if (accessSnapshot.exists() && accessSnapshot.data().disabled === true) {
+                        faceShooterAdminRuntime.loaded = true;
+                        const status = document.getElementById("onlineStatus");
+                        if (status) status.textContent = "このアカウントは管理者によって利用停止されています。";
+                        if (adminStartButton) adminStartButton.disabled = true;
+                        window.location.replace("./login.html?disabled=1");
+                        return;
+                    }
+                }
+            }
+
+            const snapshot = await getDoc(doc(db, "adminSettings", "gameplay"));
+            faceShooterAdminRuntime.config = normalizeConfig(snapshot.exists() ? snapshot.data() : {});
         } catch (error) {
-            console.error("管理者ゲーム設定を読み込めません。標準設定で続行します。", error);
+            console.error("管理設定を読み込めません。標準設定で続行します。", error);
         } finally {
             faceShooterAdminRuntime.loaded = true;
             if (typeof updateHUD === "function") updateHUD();
