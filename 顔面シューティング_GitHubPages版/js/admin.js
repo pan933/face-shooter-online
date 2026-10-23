@@ -1,6 +1,9 @@
-import { app, auth, firebaseReady } from "./firebase-config.js";
+import { auth, db, firebaseReady } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-functions.js";
+import {
+  addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query,
+  serverTimestamp, setDoc
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 const GIMMICKS = [
@@ -8,7 +11,8 @@ const GIMMICKS = [
   ["clock", "時間制限"], ["ring", "リング"], ["decoy", "本物探し"],
   ["rain", "弾幕"], ["cross", "十字"], ["clone", "分身"],
   ["overheat", "オーバーヒート"], ["bombcore", "爆弾コア"],
-  ["armorParts", "装甲パーツ"], ["bombFuse", "爆弾解除"], ["energyDrain", "エネルギー吸収"]
+  ["armorParts", "装甲パーツ"], ["bombFuse", "爆弾解除"], ["energyDrain", "エネルギー吸収"],
+  ["pulse", "タイミング"]
 ];
 const DEFAULTS = {
   bossHpMultiplier: 1, bossSpeedMultiplier: 1, bossAttackFrequencyMultiplier: 1,
@@ -17,253 +21,273 @@ const DEFAULTS = {
   itemDropRateMultiplier: 1, playerMaxHp: 5, bossAttacksEnabled: true,
   itemDropsEnabled: true, playerInvincible: false, disabledGimmicks: []
 };
-let functionsApi;
+let currentUser = null;
 let isOwner = false;
-let allAccounts = [];
+let accounts = [];
 let toastTimer;
-const invoke = name => httpsCallable(functionsApi, name);
 
 function toast(message, error = false) {
-  const element = $("toast");
-  element.textContent = message;
-  element.classList.toggle("error", error);
-  element.style.display = "block";
+  const el = $("toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", error);
+  el.style.display = "block";
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { element.style.display = "none"; }, 6000);
+  toastTimer = setTimeout(() => { el.style.display = "none"; }, 6000);
 }
-
-function showPanel(id) { $(id).hidden = false; }
-function hidePanel(id) { $(id).hidden = true; }
-
-function setupGimmickChecks() {
+function show(id) { $(id).hidden = false; }
+function hide(id) { $(id).hidden = true; }
+function setupGimmicks() {
   const parent = $("gimmickChecks");
-  GIMMICKS.forEach(([value, label]) => {
-    const wrapper = document.createElement("label");
+  for (const [value, label] of GIMMICKS) {
+    const lab = document.createElement("label");
     const input = document.createElement("input");
-    input.type = "checkbox";
-    input.name = "disabledGimmicks";
-    input.value = value;
-    const text = document.createElement("span");
-    text.textContent = label;
-    wrapper.append(input, text);
-    parent.appendChild(wrapper);
-  });
+    input.type = "checkbox"; input.name = "disabledGimmicks"; input.value = value;
+    const span = document.createElement("span"); span.textContent = label;
+    lab.append(input, span); parent.appendChild(lab);
+  }
 }
-
 function readConfigForm() {
-  const config = {};
+  const cfg = {};
   for (const key of [
     "bossHpMultiplier", "bossSpeedMultiplier", "bossAttackFrequencyMultiplier", "bossBulletSpeedMultiplier",
     "playerDamageMultiplier", "incomingDamageMultiplier", "gimmickTimeMultiplier",
     "itemEffectDurationMultiplier", "itemLifetimeMultiplier", "itemDropRateMultiplier", "playerMaxHp"
-  ]) config[key] = Number($(key).value);
-  config.bossAttacksEnabled = $("bossAttacksEnabled").checked;
-  config.itemDropsEnabled = $("itemDropsEnabled").checked;
-  config.playerInvincible = $("playerInvincible").checked;
-  config.disabledGimmicks = [...document.querySelectorAll('input[name="disabledGimmicks"]:checked')].map(el => el.value);
-  return config;
+  ]) cfg[key] = Number($(key).value);
+  cfg.bossAttacksEnabled = $("bossAttacksEnabled").checked;
+  cfg.itemDropsEnabled = $("itemDropsEnabled").checked;
+  cfg.playerInvincible = $("playerInvincible").checked;
+  cfg.disabledGimmicks = [...document.querySelectorAll('input[name="disabledGimmicks"]:checked')].map(el => el.value);
+  return cfg;
 }
-
-function fillConfigForm(config = DEFAULTS) {
-  const merged = { ...DEFAULTS, ...config };
+function fillConfigForm(input = {}) {
+  const cfg = { ...DEFAULTS, ...input };
   for (const key of Object.keys(DEFAULTS)) {
     if (["bossAttacksEnabled", "itemDropsEnabled", "playerInvincible", "disabledGimmicks"].includes(key)) continue;
-    if ($(key)) $(key).value = String(merged[key]);
+    if ($(key)) $(key).value = String(cfg[key]);
   }
-  $("bossAttacksEnabled").checked = merged.bossAttacksEnabled !== false;
-  $("itemDropsEnabled").checked = merged.itemDropsEnabled !== false;
-  $("playerInvincible").checked = merged.playerInvincible === true;
-  const disabled = new Set(Array.isArray(merged.disabledGimmicks) ? merged.disabledGimmicks : []);
+  $("bossAttacksEnabled").checked = cfg.bossAttacksEnabled !== false;
+  $("itemDropsEnabled").checked = cfg.itemDropsEnabled !== false;
+  $("playerInvincible").checked = cfg.playerInvincible === true;
+  const disabled = new Set(Array.isArray(cfg.disabledGimmicks) ? cfg.disabledGimmicks : []);
   document.querySelectorAll('input[name="disabledGimmicks"]').forEach(el => { el.checked = disabled.has(el.value); });
 }
-
+function escapeText(value) { return String(value ?? ""); }
+async function audit(action, targetUid = null, details = {}) {
+  try {
+    await addDoc(collection(db, "adminAuditLog"), {
+      actorUid: currentUser.uid, action, targetUid, details, createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    // Log failure should not mask a successful operation; console can help during setup.
+    console.warn("Audit log could not be saved:", error);
+  }
+}
 async function loadConfig() {
-  const result = await invoke("getGameConfig")({});
-  fillConfigForm(result.data || DEFAULTS);
+  const snap = await getDoc(doc(db, "adminSettings", "gameplay"));
+  fillConfigForm(snap.exists() ? snap.data() : DEFAULTS);
 }
-
-function makeButton(label, className, action, uid, extra = {}) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = className;
-  button.textContent = label;
-  button.dataset.action = action;
-  button.dataset.uid = uid;
-  for (const [key, value] of Object.entries(extra)) button.dataset[key] = String(value);
-  return button;
+function button(label, action, uid, danger = false) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = danger ? "danger" : "secondary";
+  b.textContent = label; b.dataset.action = action; b.dataset.uid = uid;
+  return b;
 }
-
 function renderAccounts() {
   const parent = $("accountsList");
-  const query = $("accountSearch").value.trim().toLowerCase();
-  const filtered = allAccounts.filter(account => [account.username, account.displayName, account.uid].some(value => String(value || "").toLowerCase().includes(query)));
-  $("accountCount").textContent = `${filtered.length} / ${allAccounts.length} 件`;
+  const search = $("accountSearch").value.trim().toLowerCase();
+  const rows = accounts.filter(a => [a.uid, a.username, a.displayName].some(v => escapeText(v).toLowerCase().includes(search)));
+  $("accountCount").textContent = `${rows.length} / ${accounts.length} 件`;
   parent.replaceChildren();
-  if (!filtered.length) {
-    const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "該当するアカウントがありません。"; parent.appendChild(empty); return;
+  if (!rows.length) {
+    const p = document.createElement("p"); p.className = "muted"; p.textContent = "該当するアカウントがありません。"; parent.appendChild(p); return;
   }
-  filtered.forEach(account => {
+  for (const a of rows) {
     const card = document.createElement("article"); card.className = "account-card";
     const main = document.createElement("div"); main.className = "account-main";
-    const name = document.createElement("div"); name.className = "account-name"; name.textContent = account.displayName || account.username || "Player";
-    const username = document.createElement("div"); username.className = "account-meta"; username.textContent = `ID: ${account.username}`;
-    const uid = document.createElement("div"); uid.className = "account-uid"; uid.textContent = `UID: ${account.uid}`;
-    main.append(name, username, uid);
-
+    const title = document.createElement("div"); title.className = "account-name"; title.textContent = a.displayName || a.username || "未登録プロフィール";
+    const id = document.createElement("div"); id.className = "account-meta"; id.textContent = `ID: ${a.username || "（プロフィールなし）"}`;
+    const uid = document.createElement("div"); uid.className = "account-uid"; uid.textContent = `UID: ${a.uid}`;
+    main.append(title, id, uid);
     const meta = document.createElement("div"); meta.className = "account-meta";
-    const state = document.createElement("span"); state.className = `status${account.disabled ? " disabled" : ""}`; state.textContent = account.disabled ? "ログイン停止中" : "有効"; meta.appendChild(state);
-    if (account.isAdmin) { const admin = document.createElement("p"); const badge = document.createElement("span"); badge.className = "status admin"; badge.textContent = account.adminRole === "owner" ? "オーナー管理者" : "管理者"; admin.appendChild(badge); meta.appendChild(admin); }
-    const created = document.createElement("p"); created.textContent = `登録: ${account.createdAt ? new Date(account.createdAt).toLocaleDateString("ja-JP") : "不明"}`;
-    const signIn = document.createElement("p"); signIn.textContent = `最終ログイン: ${account.lastSignInAt ? new Date(account.lastSignInAt).toLocaleString("ja-JP") : "記録なし"}`;
-    const rank = document.createElement("p"); rank.textContent = account.hasRank ? `最高記録: ${Number(account.rankScore).toLocaleString("ja-JP")} 点 / WAVE ${account.rankWave}` : "ランキング記録なし";
-    meta.append(created, signIn, rank);
-
+    const state = document.createElement("span"); state.className = `status${a.disabled ? " disabled" : ""}`;
+    state.textContent = a.disabled ? "ゲーム利用停止中" : "ゲーム利用可能"; meta.appendChild(state);
+    if (a.isAdmin) {
+      const role = document.createElement("p"); const badge = document.createElement("span"); badge.className = "status admin";
+      badge.textContent = a.adminRole === "owner" ? "オーナー管理者" : "管理者"; role.appendChild(badge); meta.appendChild(role);
+    }
+    const rank = document.createElement("p"); rank.textContent = a.hasRank ? `ランキング: ${Number(a.rankScore || 0).toLocaleString("ja-JP")} 点 / WAVE ${a.rankWave || 1}` : "ランキング記録なし"; meta.appendChild(rank);
     const actions = document.createElement("div"); actions.className = "account-actions";
-    if (account.uid !== window.adminUid && account.adminRole !== "owner" && (!account.isAdmin || isOwner)) {
-      actions.appendChild(makeButton(account.disabled ? "ログイン再開" : "アカウント停止", "secondary", "toggle-disable", account.uid, { disabled: !account.disabled }));
-      actions.appendChild(makeButton("パスワードを変更", "secondary", "reset-password", account.uid));
-      if (account.hasRank) actions.appendChild(makeButton("ランキング削除", "secondary", "delete-rank", account.uid));
-      actions.appendChild(makeButton("アカウント削除", "danger", "delete-account", account.uid));
+    const canManageRegular = a.uid !== currentUser.uid && !a.isAdmin;
+    if (canManageRegular) {
+      actions.appendChild(button(a.disabled ? "利用再開" : "ゲーム利用停止", "toggle-disable", a.uid));
+      if (a.hasRank) actions.appendChild(button("ランキング削除", "delete-rank", a.uid));
+      if (a.hasProfile) actions.appendChild(button("プロフィール・記録を削除", "delete-data", a.uid, true));
     }
-    if (isOwner && account.uid !== window.adminUid && account.adminRole !== "owner") {
-      actions.appendChild(makeButton(account.isAdmin ? "管理者権限を解除" : "管理者権限を付与", "secondary", "toggle-admin", account.uid, { enabled: !account.isAdmin }));
+    if (isOwner && a.uid !== currentUser.uid && a.adminRole !== "owner") {
+      actions.appendChild(button(a.isAdmin ? "管理者権限を解除" : "管理者権限を付与", "toggle-admin", a.uid));
     }
-    card.append(main, meta, actions);
-    parent.appendChild(card);
-  });
-}
-
-async function loadAccounts() {
-  $("accountsList").textContent = "アカウントを読み込んでいます…";
-  const response = await invoke("adminListAccounts")({});
-  allAccounts = response.data.accounts || [];
-  $("truncatedNotice").hidden = !response.data.truncated;
-  renderAccounts();
-}
-
-async function loadAudit() {
-  if (!isOwner) return;
-  $("auditList").textContent = "操作ログを読み込んでいます…";
-  const response = await invoke("adminReadAuditLog")({});
-  const parent = $("auditList"); parent.replaceChildren();
-  const labels = {
-    save_game_config: "ゲーム設定の保存", disable_account: "アカウント停止", enable_account: "アカウント再開",
-    delete_account: "アカウント削除", delete_leaderboard_entry: "ランキング削除", reset_password: "パスワード変更",
-    grant_admin: "管理者権限付与", revoke_admin: "管理者権限解除"
-  };
-  (response.data.entries || []).forEach(entry => {
-    const row = document.createElement("div"); row.className = "audit-row";
-    const action = document.createElement("div"); action.className = "audit-action"; action.textContent = labels[entry.action] || entry.action;
-    const meta = document.createElement("div"); meta.className = "audit-meta";
-    meta.textContent = `${entry.createdAt ? new Date(entry.createdAt).toLocaleString("ja-JP") : "日時不明"}\n実行者: ${entry.actorUid}\n対象: ${entry.targetUid || "—"}`;
-    row.append(action, meta); parent.appendChild(row);
-  });
-  if (!parent.children.length) parent.textContent = "操作ログはまだありません。";
-}
-
-async function actOnAccount(action, uid, button) {
-  const account = allAccounts.find(item => item.uid === uid);
-  if (!account) return;
-  button.disabled = true;
-  try {
-    if (action === "toggle-disable") {
-      const disabled = !account.disabled;
-      if (!confirm(`${account.username} を${disabled ? "停止" : "再開"}しますか？${disabled ? "既存のログインセッションも無効化します。" : ""}`)) return;
-      await invoke("adminSetAccountDisabled")({ uid, disabled });
-      toast(disabled ? "アカウントを停止しました。" : "アカウントを再開しました。");
-    } else if (action === "reset-password") {
-      const value = prompt(`${account.username} の新しいパスワードを入力してください（12文字以上）。\n現在のパスワードは取得できません。`);
-      if (value === null) return;
-      if (value.length < 12) { toast("パスワードは12文字以上にしてください。", true); return; }
-      if (!confirm(`${account.username} のパスワードを変更し、既存セッションを無効化しますか？`)) return;
-      const result = await invoke("adminResetPassword")({ uid, newPassword: value });
-      toast(result.data.message || "パスワードを変更しました。");
-    } else if (action === "delete-rank") {
-      if (!confirm(`${account.username} のランキング記録だけを削除しますか？アカウントは残ります。`)) return;
-      await invoke("adminDeleteLeaderboardEntry")({ uid });
-      toast("ランキング記録を削除しました。");
-    } else if (action === "delete-account") {
-      const typed = prompt(`【取り消せません】${account.username} のアカウントとランキング・プロフィールを削除します。\n確認のため、このUIDを入力してください。\n${uid}`);
-      if (typed !== uid) { toast("UIDが一致しないため削除を中止しました。"); return; }
-      if (!confirm("最終確認：このアカウントを完全に削除しますか？復元できません。")) return;
-      await invoke("adminDeleteAccount")({ uid });
-      toast("アカウントと関連データを削除しました。");
-    } else if (action === "toggle-admin") {
-      if (!isOwner) throw new Error("管理者権限の変更はオーナーのみ実行できます。");
-      const enabled = button.dataset.enabled === "true";
-      if (!confirm(`${account.username} の管理者権限を${enabled ? "付与" : "解除"}しますか？`)) return;
-      await invoke("adminSetAdminRole")({ uid, enabled, role: "admin" });
-      toast(enabled ? "管理者権限を付与しました。対象者は再ログインすると反映されます。" : "管理者権限を解除しました。");
-    }
-    await loadAccounts();
-    if (isOwner) await loadAudit();
-  } catch (error) {
-    console.error(error);
-    toast(error?.message || "操作に失敗しました。", true);
-  } finally {
-    button.disabled = false;
+    card.append(main, meta, actions); parent.appendChild(card);
   }
 }
-
+async function loadAccounts() {
+  $("accountsList").textContent = "読み込んでいます…";
+  const [profileSnap, rankSnap, accessSnap, adminSnap] = await Promise.all([
+    getDocs(collection(db, "profiles")), getDocs(collection(db, "leaderboard")),
+    getDocs(collection(db, "accessControl")), getDocs(collection(db, "admins"))
+  ]);
+  const profiles = new Map(profileSnap.docs.map(d => [d.id, d.data()]));
+  const ranks = new Map(rankSnap.docs.map(d => [d.id, d.data()]));
+  const accesses = new Map(accessSnap.docs.map(d => [d.id, d.data()]));
+  const admins = new Map(adminSnap.docs.map(d => [d.id, d.data()]));
+  const allUids = new Set([...profiles.keys(), ...ranks.keys(), ...accesses.keys(), ...admins.keys()]);
+  accounts = [...allUids].map(uid => {
+    const p = profiles.get(uid) || {}, r = ranks.get(uid), access = accesses.get(uid) || {}, adm = admins.get(uid) || {};
+    return {
+      uid, username: p.username || "", displayName: p.displayName || p.username || (access.disabled ? "停止・削除済みアカウント" : uid),
+      hasProfile: profiles.has(uid), hasRank: !!r, rankScore: r?.score || 0, rankWave: r?.wave || 1,
+      disabled: access.disabled === true, isAdmin: !!admins.has(uid), adminRole: adm.role || ""
+    };
+  }).sort((a,b) => (a.username || a.uid).localeCompare(b.username || b.uid, "ja"));
+  renderAccounts();
+  renderAdmins();
+}
+function renderAdmins() {
+  const parent = $("adminsList");
+  parent.replaceChildren();
+  const admins = accounts.filter(a => a.isAdmin);
+  for (const a of admins) {
+    const item = document.createElement("article"); item.className = "account-card";
+    const info = document.createElement("div"); info.className = "account-main";
+    const name = document.createElement("div"); name.className = "account-name"; name.textContent = `${a.displayName} — ${a.adminRole === "owner" ? "オーナー" : "管理者"}`;
+    const uid = document.createElement("div"); uid.className = "account-uid"; uid.textContent = a.uid;
+    info.append(name, uid); item.appendChild(info); parent.appendChild(item);
+  }
+  if (!admins.length) parent.textContent = "管理者データがありません。Firestore Consoleで初期設定してください。";
+}
+async function doAccountAction(action, uid) {
+  const account = accounts.find(a => a.uid === uid);
+  if (!account || uid === currentUser.uid) return;
+  if (account.isAdmin && !(isOwner && account.adminRole === "admin" && action === "toggle-admin")) {
+    toast("管理者アカウントのこの操作はできません。", true); return;
+  }
+  if (action === "toggle-disable") {
+    if (account.disabled) {
+      if (!confirm(`${account.username || uid} のゲーム利用を再開しますか？`)) return;
+      await deleteDoc(doc(db, "accessControl", uid));
+      await audit("enable_game_access", uid);
+      toast("ゲーム利用を再開しました。本人は再ログインしてください。");
+    } else {
+      if (!confirm(`${account.username || uid} のゲーム利用を停止しますか？Firebase Authenticationのアカウント自体は停止されません。`)) return;
+      await setDoc(doc(db, "accessControl", uid), { disabled: true, reason: "管理者による停止", updatedAt: serverTimestamp() });
+      await audit("disable_game_access", uid);
+      toast("ゲーム内の利用を停止しました。");
+    }
+  } else if (action === "delete-rank") {
+    if (!confirm(`${account.username || uid} のランキング記録を削除しますか？`)) return;
+    await deleteDoc(doc(db, "leaderboard", uid));
+    await audit("delete_leaderboard_entry", uid);
+    toast("ランキング記録を削除しました。");
+  } else if (action === "delete-data") {
+    const typed = prompt(`ゲーム側のデータを削除し、アクセスを停止します。Firebase Authenticationのユーザーは残ります。確認のためUIDを入力してください:\n${uid}`);
+    if (typed !== uid) { toast("UIDが一致しないため中止しました。"); return; }
+    if (!confirm("プロフィールとランキングを削除し、ゲーム利用を停止します。続けますか？")) return;
+    await setDoc(doc(db, "accessControl", uid), { disabled: true, reason: "管理者によるデータ削除", updatedAt: serverTimestamp() });
+    await deleteDoc(doc(db, "leaderboard", uid)).catch(() => {});
+    await deleteDoc(doc(db, "profiles", uid)).catch(() => {});
+    await audit("delete_game_profile_and_rank", uid);
+    toast("プロフィール・ランキングを削除し、ゲーム利用を停止しました。AuthのユーザーはFirebase Consoleに残ります。");
+  } else if (action === "toggle-admin") {
+    if (!isOwner) throw new Error("管理者権限の変更はオーナーのみ行えます。");
+    if (account.adminRole === "owner") throw new Error("オーナー権限はこの画面から変更できません。");
+    if (account.isAdmin) {
+      if (!confirm(`${account.username || uid} の管理者権限を解除しますか？`)) return;
+      await deleteDoc(doc(db, "admins", uid));
+      await audit("revoke_admin", uid);
+      toast("管理者権限を解除しました。");
+    } else {
+      if (!account.hasProfile) { toast("先に通常ログインでこのアカウントのプロフィールを作成してください。", true); return; }
+      if (!confirm(`${account.username || uid} に管理者権限を付与しますか？`)) return;
+      await setDoc(doc(db, "admins", uid), { role: "admin", createdAt: serverTimestamp() });
+      await audit("grant_admin", uid);
+      toast("管理者権限を付与しました。");
+    }
+  }
+  await loadAccounts();
+  if (isOwner) await loadAudit();
+}
+async function loadAudit() {
+  if (!isOwner) return;
+  const q = query(collection(db, "adminAuditLog"), orderBy("createdAt", "desc"), limit(100));
+  const result = await getDocs(q);
+  const parent = $("auditList"); parent.replaceChildren();
+  for (const snap of result.docs) {
+    const entry = snap.data();
+    const row = document.createElement("div"); row.className = "audit-row";
+    const action = document.createElement("div"); action.className = "audit-action"; action.textContent = entry.action || "操作";
+    const meta = document.createElement("div"); meta.className = "audit-meta";
+    meta.textContent = `${entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleString("ja-JP") : "日時不明"}\n実行者: ${entry.actorUid || "不明"}\n対象: ${entry.targetUid || "—"}`;
+    row.append(action, meta); parent.appendChild(row);
+  }
+  if (!parent.children.length) parent.textContent = "操作ログはまだありません。";
+}
 async function start() {
-  setupGimmickChecks();
-  if (!firebaseReady || !auth || !app) {
-    hidePanel("checkingPanel"); showPanel("deniedPanel"); $("deniedText").textContent = "Firebaseの設定が読み込めません。"; return;
+  setupGimmicks();
+  if (!firebaseReady || !auth || !db) {
+    hide("checkingPanel"); show("deniedPanel"); $("deniedText").textContent = "Firebaseの初期化に失敗しました。"; return;
   }
   try {
     await auth.authStateReady();
-    const user = auth.currentUser;
-    if (!user) { hidePanel("checkingPanel"); showPanel("loginPanel"); return; }
-    window.adminUid = user.uid;
-    const token = await user.getIdTokenResult(true);
-    if (token.claims.admin !== true) {
-      hidePanel("checkingPanel"); showPanel("deniedPanel"); return;
+    currentUser = auth.currentUser;
+    if (!currentUser) { hide("checkingPanel"); show("loginPanel"); return; }
+    const adminDoc = await getDoc(doc(db, "admins", currentUser.uid));
+    if (!adminDoc.exists() || !["owner", "admin"].includes(adminDoc.data().role)) {
+      hide("checkingPanel"); show("deniedPanel"); return;
     }
-    isOwner = token.claims.adminRole === "owner";
-    functionsApi = getFunctions(app, "asia-northeast1");
-    $("signedInLabel").textContent = `ログイン中: ${user.displayName || user.email || user.uid}`;
+    isOwner = adminDoc.data().role === "owner";
+    $("signedInLabel").textContent = `ログイン中: ${currentUser.displayName || currentUser.email || currentUser.uid}`;
     $("ownerBadge").hidden = !isOwner;
     $("logoutBtn").hidden = false;
-    if (isOwner) { showPanel("auditPanel"); }
-    hidePanel("checkingPanel"); showPanel("adminPanel");
+    if (isOwner) { show("adminsPanel"); show("auditPanel"); }
+    hide("checkingPanel"); show("adminPanel");
     await Promise.all([loadConfig(), loadAccounts()]);
     if (isOwner) await loadAudit();
   } catch (error) {
     console.error(error);
-    hidePanel("checkingPanel"); showPanel("deniedPanel"); $("deniedText").textContent = `管理画面を初期化できませんでした: ${error.message}`;
+    hide("checkingPanel"); show("deniedPanel");
+    $("deniedText").textContent = `初期化に失敗しました: ${error.code || error.message || error}`;
   }
 }
 
 $("configForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const button = event.submitter;
-  button.disabled = true;
+  const buttonEl = event.submitter;
+  buttonEl.disabled = true;
   try {
-    const result = await invoke("adminSaveGameConfig")({ config: readConfigForm() });
-    fillConfigForm(result.data.config);
-    toast("ゲーム設定を保存しました。ゲームを再読み込みすると反映されます。");
-    if (isOwner) await loadAudit();
-  } catch (error) { toast(error?.message || "設定の保存に失敗しました。", true); }
-  finally { button.disabled = false; }
+    const cfg = readConfigForm();
+    await setDoc(doc(db, "adminSettings", "gameplay"), { ...cfg, updatedBy: currentUser.uid, updatedAt: serverTimestamp() });
+    await audit("save_game_config", null, { disabledGimmicks: cfg.disabledGimmicks, playerMaxHp: cfg.playerMaxHp });
+    toast("ゲーム設定を保存しました。再読み込み後に反映されます。");
+    await loadAudit();
+  } catch (error) { console.error(error); toast(`保存に失敗しました: ${error.code || error.message}`, true); }
+  finally { buttonEl.disabled = false; }
 });
-
 $("resetConfigBtn").addEventListener("click", () => {
-  if (confirm("フォームを初期値に戻しますか？このボタンだけではサーバーに保存されません。")) fillConfigForm(DEFAULTS);
+  if (confirm("フォームを初期値に戻しますか？ 保存ボタンを押すまで保存されません。")) fillConfigForm(DEFAULTS);
 });
 $("accountSearch").addEventListener("input", renderAccounts);
-$("accountsList").addEventListener("click", event => {
-  const button = event.target.closest("button[data-action]");
-  if (button) void actOnAccount(button.dataset.action, button.dataset.uid, button);
+$("accountsList").addEventListener("click", async event => {
+  const btn = event.target.closest("button[data-action]"); if (!btn) return;
+  btn.disabled = true;
+  try { await doAccountAction(btn.dataset.action, btn.dataset.uid); }
+  catch (error) { console.error(error); toast(`操作に失敗しました: ${error.code || error.message}`, true); }
+  finally { btn.disabled = false; }
 });
-$("reloadAccountsBtn").addEventListener("click", () => loadAccounts().catch(error => toast(error.message, true)));
-$("reloadAuditBtn").addEventListener("click", () => loadAudit().catch(error => toast(error.message, true)));
+$("reloadAccountsBtn").addEventListener("click", () => loadAccounts().catch(e => toast(e.message, true)));
+$("reloadAuditBtn").addEventListener("click", () => loadAudit().catch(e => toast(e.message, true)));
 $("refreshAllBtn").addEventListener("click", async () => {
-  try { await Promise.all([loadConfig(), loadAccounts()]); if (isOwner) await loadAudit(); toast("管理データを更新しました。"); }
-  catch (error) { toast(error.message || "更新に失敗しました。", true); }
+  try { await Promise.all([loadConfig(), loadAccounts()]); if (isOwner) await loadAudit(); toast("更新しました。"); }
+  catch (e) { toast(e.message || "更新に失敗しました。", true); }
 });
-$("logoutBtn").addEventListener("click", async () => {
-  await signOut(auth);
-  window.location.href = "./login.html";
-});
-
+$("logoutBtn").addEventListener("click", async () => { await signOut(auth); window.location.href = "./login.html"; });
 void start();
