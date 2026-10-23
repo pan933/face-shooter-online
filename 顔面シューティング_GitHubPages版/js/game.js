@@ -25,11 +25,8 @@ let cursorSize = document.getElementById("cursorSize");
 let cursorSizeValue = document.getElementById("cursorSizeValue");
 let cursorSizeLevel = Number(cursorSize?.value) || 32;
 let gameCursor = null;
-let cursorOffsetX = 0;
-let cursorOffsetY = 0;
 let cursorBaseX = 0;
 let cursorBaseY = 0;
-let cursorOffsetReadout = null;
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
@@ -71,28 +68,17 @@ function loadControlLayout() {
 
 let controlLayout = loadControlLayout();
 
-function clampCursorOffset(value) {
-    return Math.max(-160, Math.min(160, value));
-}
-
+// ゲーム中に別の微調整パネルは出さず、カーソル位置は
+// タイトル画面の「操作ボタンの配置をカスタム」で設定した場所を使う。
 function renderGameCursorPosition() {
     if (!gameCursor) return;
     if (touchMode && gameWrap) {
-        gameCursor.style.left = `${controlLayout.aim.x * gameWrap.clientWidth + cursorOffsetX}px`;
-        gameCursor.style.top = `${controlLayout.aim.y * gameWrap.clientHeight + cursorOffsetY}px`;
+        gameCursor.style.left = `${controlLayout.aim.x * gameWrap.clientWidth}px`;
+        gameCursor.style.top = `${controlLayout.aim.y * gameWrap.clientHeight}px`;
     } else {
-        gameCursor.style.left = `${cursorBaseX + cursorOffsetX}px`;
-        gameCursor.style.top = `${cursorBaseY + cursorOffsetY}px`;
+        gameCursor.style.left = `${cursorBaseX}px`;
+        gameCursor.style.top = `${cursorBaseY}px`;
     }
-    if (cursorOffsetReadout) {
-        cursorOffsetReadout.textContent = `X ${cursorOffsetX} / Y ${cursorOffsetY}`;
-    }
-}
-
-function shiftCursor(dx, dy) {
-    cursorOffsetX = clampCursorOffset(cursorOffsetX + dx);
-    cursorOffsetY = clampCursorOffset(cursorOffsetY + dy);
-    renderGameCursorPosition();
 }
 
 
@@ -195,22 +181,6 @@ gameCursorStyle.textContent = `
     #gameCursor::after {
         top:50%; left:-25%; height:2px; width:150%; transform:translateY(-50%);
     }
-    #cursorAdjustPanel {
-        position:absolute; z-index:70; left:10px; bottom:82px;
-        display:grid; grid-template-columns:42px 42px 42px;
-        grid-template-rows:auto 42px 42px 42px; gap:5px; align-items:center;
-        padding:9px; border:1px solid rgba(255,230,0,.8); border-radius:12px;
-        background:rgba(5,8,24,.9); color:white; box-shadow:0 4px 16px rgba(0,0,0,.45);
-        font:800 11px system-ui,sans-serif;
-    }
-    #cursorAdjustPanel .cursorAdjustTitle { grid-column:1/4;text-align:center;color:#ffe600;font-size:12px; }
-    #cursorAdjustPanel .cursorOffsetReadout { grid-column:1/4;text-align:center;color:#dbe9ff;font-size:10px; }
-    #cursorAdjustPanel button {
-        min-width:42px; min-height:42px; padding:4px; border:1px solid #fff;
-        border-radius:8px; background:#222943; color:#fff; font-size:18px;
-        font-weight:1000; cursor:pointer; touch-action:manipulation;
-    }
-    #cursorAdjustPanel button[data-reset] { font-size:10px; background:#ffe600;color:#111; }
     #bossSupplyNotice {
         position:absolute; z-index:26; left:50%; bottom:148px; transform:translateX(-50%);
         display:none; max-width:90%; padding:10px 16px; border:2px solid #7ffcff;
@@ -240,7 +210,6 @@ gameCursorStyle.textContent = `
         #sensitivityPanel input[type=range] { min-height:28px; }
         .profileActions { gap:7px; }
         .profileActions a, .profileActions button { min-height:44px; flex:1; }
-        #cursorAdjustPanel { display:none !important; }
         #bossSupplyNotice { bottom:132px; font-size:13px; padding:8px 10px; }
         #touchJoystick { width:112px; height:112px; }
         #joystickKnob { width:52px; height:52px; }
@@ -597,37 +566,6 @@ if (gameWrap && canvas) {
         }
     });
 
-    // ゲーム中にも照準の表示位置を微調整できる十字ボタン。
-    const cursorAdjustPanel = document.createElement("div");
-    cursorAdjustPanel.id = "cursorAdjustPanel";
-    cursorAdjustPanel.innerHTML = `
-        <div class="cursorAdjustTitle">🎯 照準位置の微調整</div>
-        <div class="cursorOffsetReadout" id="cursorOffsetReadout">X 0 / Y 0</div>
-        <span></span><button type="button" data-dx="0" data-dy="-8" aria-label="照準を上へ">▲</button><span></span>
-        <button type="button" data-dx="-8" data-dy="0" aria-label="照準を左へ">◀</button>
-        <button type="button" data-reset="1">中央</button>
-        <button type="button" data-dx="8" data-dy="0" aria-label="照準を右へ">▶</button>
-        <span></span><button type="button" data-dx="0" data-dy="8" aria-label="照準を下へ">▼</button><span></span>
-    `;
-    gameWrap.appendChild(cursorAdjustPanel);
-    cursorOffsetReadout = cursorAdjustPanel.querySelector("#cursorOffsetReadout");
-    cursorAdjustPanel.querySelectorAll("button").forEach(button => {
-        button.addEventListener("pointerdown", event => {
-            event.preventDefault();
-            event.stopPropagation();
-        });
-        button.addEventListener("click", event => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (button.hasAttribute("data-reset")) {
-                cursorOffsetX = 0;
-                cursorOffsetY = 0;
-                renderGameCursorPosition();
-            } else {
-                shiftCursor(Number(button.dataset.dx) || 0, Number(button.dataset.dy) || 0);
-            }
-        });
-    });
 }
 applyCursorSize();
 
