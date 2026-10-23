@@ -1373,3 +1373,34 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
         margin: 7px 0 !important;
     }
 }
+/* =========================================
+   修正：ゲーム開始後に出撃画面が残る問題
+========================================= */
+
+/* ゲーム開始後、JavaScriptが非表示にした出撃画面を確実に隠す */
+#start[style*="display: none"] {
+    display: none !important;
+}
+
+/* =========================================
+   修正：黄色い照準カーソルを非表示にする
+========================================= */
+
+/* ゲーム画面の照準を消す */
+#gameCursor {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* 操作配置のデモ画面にある照準も消す */
+#controlLayoutEditor .cle-aim {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* PCの通常のマウスカーソルは表示する */
+#game {
+    cursor: auto !important;
+}
