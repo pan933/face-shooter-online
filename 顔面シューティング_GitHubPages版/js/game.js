@@ -5864,3 +5864,282 @@ void initializeSharedAuth();
     console.info("[ボス調整] ギミック時間1.5倍、シールド弱体化ダメージ20x/15x/10xを適用しました。");
 })();
 
+/* =============================================================
+   FACE SHOOTER ADMIN GAMEPLAY CONFIG PATCH
+   Copy the entire contents of this file to the very END of js/game.js.
+   This is an append-only patch for the currently published game.js version.
+   ============================================================= */
+(() => {
+    const faceShooterAdminRuntime = {
+        loaded: false,
+        config: {
+            bossHpMultiplier: 1,
+            bossSpeedMultiplier: 1,
+            bossAttackFrequencyMultiplier: 1,
+            bossBulletSpeedMultiplier: 1,
+            playerDamageMultiplier: 1,
+            incomingDamageMultiplier: 1,
+            gimmickTimeMultiplier: 1,
+            itemEffectDurationMultiplier: 1,
+            itemLifetimeMultiplier: 1,
+            itemDropRateMultiplier: 1,
+            playerMaxHp: 5,
+            bossAttacksEnabled: true,
+            itemDropsEnabled: true,
+            playerInvincible: false,
+            disabledGimmicks: []
+        }
+    };
+    window.faceShooterAdminRuntime = faceShooterAdminRuntime;
+
+    const normalizeConfig = value => {
+        const defaults = faceShooterAdminRuntime.config;
+        const input = value && typeof value === "object" ? value : {};
+        const number = (key, min, max, integer = false) => {
+            let n = Number(input[key] ?? defaults[key]);
+            if (!Number.isFinite(n)) n = defaults[key];
+            n = Math.max(min, Math.min(max, n));
+            return integer ? Math.round(n) : n;
+        };
+        const knownGimmicks = ["weak", "moving", "shield", "clock", "ring", "decoy", "rain", "cross", "clone", "overheat", "bombcore", "armorParts", "bombFuse", "energyDrain"];
+        return {
+            bossHpMultiplier: number("bossHpMultiplier", 0.1, 10),
+            bossSpeedMultiplier: number("bossSpeedMultiplier", 0.1, 4),
+            bossAttackFrequencyMultiplier: number("bossAttackFrequencyMultiplier", 0.1, 5),
+            bossBulletSpeedMultiplier: number("bossBulletSpeedMultiplier", 0.1, 4),
+            playerDamageMultiplier: number("playerDamageMultiplier", 0.1, 50),
+            incomingDamageMultiplier: number("incomingDamageMultiplier", 0, 10),
+            gimmickTimeMultiplier: number("gimmickTimeMultiplier", 0.25, 10),
+            itemEffectDurationMultiplier: number("itemEffectDurationMultiplier", 0.1, 10),
+            itemLifetimeMultiplier: number("itemLifetimeMultiplier", 0.1, 10),
+            itemDropRateMultiplier: number("itemDropRateMultiplier", 0, 5),
+            playerMaxHp: number("playerMaxHp", 1, 20, true),
+            bossAttacksEnabled: input.bossAttacksEnabled !== false,
+            itemDropsEnabled: input.itemDropsEnabled !== false,
+            playerInvincible: input.playerInvincible === true,
+            disabledGimmicks: Array.isArray(input.disabledGimmicks) ? [...new Set(input.disabledGimmicks.filter(id => knownGimmicks.includes(id)))] : []
+        };
+    };
+
+    function replaceFunctionBody(fn, replacements, label) {
+        if (typeof fn !== "function") {
+            console.warn(`[管理設定] ${label}: 対象関数が見つかりません。`);
+            return fn;
+        }
+        let source = fn.toString();
+        const original = source;
+        for (const [from, to] of replacements) {
+            source = source.replace(from, to);
+        }
+        if (source === original) {
+            console.warn(`[管理設定] ${label}: ソース置換が一致しませんでした。ゲーム本体の更新を確認してください。`);
+            return fn;
+        }
+        try {
+            return eval(`(${source})`);
+        } catch (error) {
+            console.error(`[管理設定] ${label}: 関数パッチに失敗しました。`, error);
+            return fn;
+        }
+    }
+
+    // Wait for gameplay settings, so a very fast click cannot start the game with stale defaults.
+    const adminStartButton = document.getElementById("startBtn");
+    if (adminStartButton) adminStartButton.disabled = true;
+    if (typeof updateAuthUI === "function") {
+        const faceShooterOriginalUpdateAuthUI = updateAuthUI;
+        updateAuthUI = function (...args) {
+            faceShooterOriginalUpdateAuthUI.apply(this, args);
+            if (!faceShooterAdminRuntime.loaded && adminStartButton) adminStartButton.disabled = true;
+        };
+    }
+
+    // Health-cap edits in the original functions. These replacements preserve the existing game logic.
+    collectItem = replaceFunctionBody(collectItem, [
+        ["Math.min(5, hp + 1)", "Math.min(faceShooterAdminRuntime.config.playerMaxHp, hp + 1)"],
+        ["Math.min(5, hp + 2)", "Math.min(faceShooterAdminRuntime.config.playerMaxHp, hp + 2)"]
+    ], "collectItem HP上限");
+
+    dropItem = replaceFunctionBody(dropItem, [
+        ["const chance = elite ? 0.32 : 0.08;", "const chance = Math.max(0, Math.min(1, (elite ? 0.32 : 0.08) * faceShooterAdminRuntime.config.itemDropRateMultiplier));"],
+        ["if (hp >= 5 && (type.id === \"heal\" || type.id === \"heal2\"))", "if (hp >= faceShooterAdminRuntime.config.playerMaxHp && (type.id === \"heal\" || type.id === \"heal2\"))"]
+    ], "dropItem ドロップ率・回復判定");
+
+    // Admin-adjustable player health and HUD display.
+    const faceShooterOriginalResetGame = resetGame;
+    resetGame = function (...args) {
+        faceShooterOriginalResetGame.apply(this, args);
+        hp = faceShooterAdminRuntime.config.playerMaxHp;
+        if (typeof updateHUD === "function") updateHUD();
+    };
+
+    const faceShooterOriginalUpdateHUD = updateHUD;
+    updateHUD = function (...args) {
+        const result = faceShooterOriginalUpdateHUD.apply(this, args);
+        const maxHp = faceShooterAdminRuntime.config.playerMaxHp;
+        const hpEl = document.getElementById("hp");
+        if (hpEl) hpEl.textContent = `${hp} / ${maxHp}`;
+        const hpFill = document.getElementById("hpFill");
+        if (hpFill) hpFill.style.width = `${Math.max(0, Math.min(100, hp / Math.max(1, maxHp) * 100))}%`;
+        const hpHearts = document.getElementById("hpHearts");
+        if (hpHearts) hpHearts.textContent = "❤️".repeat(Math.max(0, Math.floor(hp))) + "🖤".repeat(Math.max(0, maxHp - Math.floor(hp)));
+        return result;
+    };
+
+    // Item effect timers and collectible lifetime.
+    const faceShooterOriginalCollectItem = collectItem;
+    collectItem = function (item, ...args) {
+        const before = { rapidTimer, pierceTimer, magnetTimer, scoreBoostTimer };
+        const result = faceShooterOriginalCollectItem.call(this, item, ...args);
+        const multiplier = faceShooterAdminRuntime.config.itemEffectDurationMultiplier;
+        if (item?.type === "rapid") rapidTimer = Math.max(before.rapidTimer, 8 * multiplier);
+        if (item?.type === "pierce") pierceTimer = Math.max(before.pierceTimer, 8 * multiplier);
+        if (item?.type === "magnet") magnetTimer = Math.max(before.magnetTimer, 8 * multiplier);
+        if (item?.type === "double") scoreBoostTimer = Math.max(before.scoreBoostTimer, 8 * multiplier);
+        return result;
+    };
+
+    const faceShooterOriginalDropItem = dropItem;
+    dropItem = function (...args) {
+        if (!faceShooterAdminRuntime.config.itemDropsEnabled) return;
+        const beforeLength = items.length;
+        faceShooterOriginalDropItem.apply(this, args);
+        const multiplier = faceShooterAdminRuntime.config.itemLifetimeMultiplier;
+        for (let i = beforeLength; i < items.length; i++) items[i].life *= multiplier;
+    };
+
+    const faceShooterOriginalSpawnBossSupply = spawnBossSupply;
+    spawnBossSupply = function (...args) {
+        if (!faceShooterAdminRuntime.config.itemDropsEnabled) return;
+        const beforeLength = items.length;
+        faceShooterOriginalSpawnBossSupply.apply(this, args);
+        const multiplier = faceShooterAdminRuntime.config.itemLifetimeMultiplier;
+        for (let i = beforeLength; i < items.length; i++) items[i].life *= multiplier;
+    };
+
+    // Boss HP multiplier is applied to each newly spawned boss.
+    const faceShooterOriginalStartBoss = startBoss;
+    startBoss = function (...args) {
+        const result = faceShooterOriginalStartBoss.apply(this, args);
+        if (boss) {
+            const multiplier = faceShooterAdminRuntime.config.bossHpMultiplier;
+            boss.maxHp = Math.max(1, Math.round(boss.maxHp * multiplier));
+            boss.hp = Math.max(1, Math.min(boss.maxHp, Math.round(boss.hp * multiplier)));
+            if (typeof updateHUD === "function") updateHUD();
+        }
+        return result;
+    };
+
+    // Damage settings must be applied inside updateBullets, before the game can call defeatBoss().
+    updateBullets = replaceFunctionBody(updateBullets, [
+        [/boss\.hp\s*-=?\s*\(([^;\n]*boss\.weaknessTimer[^;\n]*)\)\s*;/, "boss.hp -= ($1) * faceShooterAdminRuntime.config.playerDamageMultiplier;"],
+        ["boss.hp--;", "boss.hp -= faceShooterAdminRuntime.config.playerDamageMultiplier;"]
+    ], "updateBullets 与えるダメージ");
+
+    if (typeof useBomb === "function") {
+        useBomb = replaceFunctionBody(useBomb, [
+            ["boss.hp -= 150;", "boss.hp -= 150 * faceShooterAdminRuntime.config.playerDamageMultiplier;"]
+        ], "useBomb 爆弾ダメージ");
+    }
+
+    // Player damage received / invincibility test toggle.
+    const faceShooterOriginalTakeDamage = takeDamage;
+    takeDamage = function (amount = 1, ...args) {
+        if (faceShooterAdminRuntime.config.playerInvincible) return;
+        return faceShooterOriginalTakeDamage.call(this, Math.max(0, amount * faceShooterAdminRuntime.config.incomingDamageMultiplier), ...args);
+    };
+
+    // Gimmick duration/disable toggle and boss movement, attack cadence, and projectile speed.
+    const faceShooterOriginalSpawnGimmick = spawnGimmick;
+    spawnGimmick = function (...args) {
+        if (!boss) return;
+        const disabled = faceShooterAdminRuntime.config.disabledGimmicks;
+        if (disabled.length >= 14) {
+            boss.gimmickCooldown = 999999;
+            return;
+        }
+        const before = gimmick;
+        faceShooterOriginalSpawnGimmick.apply(this, args);
+        if (!gimmick || gimmick === before) return;
+        if (disabled.includes(gimmick.type)) {
+            gimmick = null;
+            boss.gimmickCooldown = 0.25;
+            return;
+        }
+        const durationMultiplier = faceShooterAdminRuntime.config.gimmickTimeMultiplier;
+        if (Number.isFinite(gimmick.life) && gimmick.life > 0) gimmick.life *= durationMultiplier;
+        if (Number.isFinite(gimmick.timer) && gimmick.timer > 0) gimmick.timer *= durationMultiplier;
+    };
+
+    const faceShooterOriginalBossAttack = bossAttack;
+    bossAttack = function (...args) {
+        if (!faceShooterAdminRuntime.config.bossAttacksEnabled) return;
+        const beforeLength = enemyBullets.length;
+        const result = faceShooterOriginalBossAttack.apply(this, args);
+        const multiplier = faceShooterAdminRuntime.config.bossBulletSpeedMultiplier;
+        for (let i = beforeLength; i < enemyBullets.length; i++) {
+            const bullet = enemyBullets[i];
+            if (!bullet || bullet._adminSpeedApplied) continue;
+            bullet.vx *= multiplier;
+            bullet.vy *= multiplier;
+            bullet._adminSpeedApplied = true;
+        }
+        return result;
+    };
+
+    const faceShooterOriginalUpdateBoss = updateBoss;
+    updateBoss = function (dt, ...args) {
+        const currentBoss = boss;
+        const beforeX = currentBoss?.x;
+        const beforeY = currentBoss?.y;
+        const beforeAttackCount = currentBoss?.attackCount || 0;
+        const beforeBulletCount = enemyBullets.length;
+        const result = faceShooterOriginalUpdateBoss.call(this, dt, ...args);
+        if (boss && boss === currentBoss) {
+            const speedMultiplier = faceShooterAdminRuntime.config.bossSpeedMultiplier;
+            const minX = boss.size * 0.62;
+            const maxX = Math.max(minX, W - boss.size * 0.62);
+            boss.x = Math.max(minX, Math.min(maxX, beforeX + (boss.x - beforeX) * speedMultiplier));
+            boss.y = Math.max(boss.size * 0.62, Math.min(H * 0.38, beforeY + (boss.y - beforeY) * speedMultiplier));
+            const countDelta = Math.max(0, (boss.attackCount || 0) - beforeAttackCount);
+            if (countDelta > 0) {
+                const frequency = faceShooterAdminRuntime.config.bossAttackFrequencyMultiplier;
+                boss.attackTimer = Math.max(0.05, boss.attackTimer / Math.pow(frequency, countDelta));
+            }
+        }
+        const bulletMultiplier = faceShooterAdminRuntime.config.bossBulletSpeedMultiplier;
+        for (let i = beforeBulletCount; i < enemyBullets.length; i++) {
+            const bullet = enemyBullets[i];
+            if (!bullet || bullet._adminSpeedApplied) continue;
+            bullet.vx *= bulletMultiplier;
+            bullet.vy *= bulletMultiplier;
+            bullet._adminSpeedApplied = true;
+        }
+        const notice = document.getElementById("bossWeaknessNotice");
+        if (notice && boss && boss.weaknessTimer > 0) {
+            const base = Math.max(10, 20 - Math.max(0, Math.floor(Number(boss.level) || 1) - 1) * 5);
+            const actual = Math.max(1, base * faceShooterAdminRuntime.config.playerDamageMultiplier);
+            notice.textContent = `🛡 シールド破壊！弱体化中 ${boss.weaknessTimer.toFixed(1)}秒　通常弾×${actual} / ボス弾が遅い`;
+        }
+        return result;
+    };
+
+    async function loadAdminGameplayConfig() {
+        try {
+            const { app } = await import("./firebase-config.js");
+            if (!app) throw new Error("Firebase app is not initialized.");
+            const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/13.1.0/firebase-functions.js");
+            const functions = getFunctions(app, "asia-northeast1");
+            const result = await httpsCallable(functions, "getGameConfig")({});
+            faceShooterAdminRuntime.config = normalizeConfig(result.data);
+        } catch (error) {
+            console.error("管理者ゲーム設定を読み込めません。標準設定で続行します。", error);
+        } finally {
+            faceShooterAdminRuntime.loaded = true;
+            if (typeof updateHUD === "function") updateHUD();
+            if (typeof updateAuthUI === "function") updateAuthUI();
+        }
+    }
+
+    void loadAdminGameplayConfig();
+})();
