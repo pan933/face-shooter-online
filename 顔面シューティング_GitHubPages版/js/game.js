@@ -738,7 +738,6 @@ function createControlLayoutEditor() {
             <p class="cle-help">配置できるもの：移動スティック・発射・爆弾・シールド・照準。選んだボタンは黄色い枠で表示されます。</p>
             <p class="cle-status" id="cleStatus" role="status" aria-live="polite"></p>
             <div class="cle-actions">
-                <button type="button" class="cle-action-button" id="cleReset">↺ 初期配置</button>
                 <button type="button" class="cle-action-button" id="cleCancel">キャンセル</button>
                 <button type="button" class="cle-action-button cle-save" id="cleSave">✓ 保存して戻る</button>
             </div>
@@ -865,12 +864,6 @@ function createControlLayoutEditor() {
     openButton.addEventListener("click", openEditor);
     overlay.querySelector("#cleClose").addEventListener("click", () => closeEditor(true));
     overlay.querySelector("#cleCancel").addEventListener("click", () => closeEditor(true));
-    overlay.querySelector("#cleReset").addEventListener("click", () => {
-        draft = copyDefaultControlLayout();
-        selectedKey = "move";
-        status.textContent = "初期配置に戻しました。保存するまで実際の操作には反映されません。";
-        renderDemo();
-    });
     overlay.querySelector("#cleSave").addEventListener("click", () => {
         controlLayout = normalizeControlLayout(draft);
         try {
