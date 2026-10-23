@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>管理パネル | 顔面シューティング</title>
+  <link rel="stylesheet" href="./css/admin.css">
+  <script type="module" src="./js/admin.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="mark">🎮</span><div><strong>顔面シューティング</strong><small>OWNER / ADMIN CONSOLE</small></div></div>
+    <nav><a href="./game.html">ゲームへ戻る</a><button id="logoutBtn" class="secondary" type="button" hidden>ログアウト</button></nav>
+  </header>
+
+  <main class="page">
+    <section id="checkingPanel" class="notice-card"><h1>管理権限を確認中…</h1><p>サーバー側で権限を検証しています。</p></section>
+    <section id="loginPanel" class="notice-card" hidden><h1>ログインが必要です</h1><p>通常のログイン画面から管理者アカウントでログインしてから開き直してください。</p><a class="primary link-button" href="./login.html">ログイン画面へ</a></section>
+    <section id="deniedPanel" class="notice-card" hidden><h1>管理権限がありません</h1><p id="deniedText">このアカウントには管理権限が付与されていません。</p><p class="muted">管理権限は、信頼できる端末からFirebase Admin SDKを使って付与してください。</p><a class="secondary link-button" href="./game.html">ゲームへ戻る</a></section>
+
+    <div id="adminPanel" hidden>
+      <section class="hero">
+        <div><p class="eyebrow">ADMINISTRATOR</p><h1>管理パネル</h1><p id="signedInLabel" class="muted">権限確認済み</p></div>
+        <div class="hero-actions"><button id="refreshAllBtn" class="secondary" type="button">↻ 更新</button><span id="ownerBadge" class="badge" hidden>オーナー管理者</span></div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <section class="panel" id="gameSettings">
+        <div class="panel-heading"><div><p class="eyebrow">GAMEPLAY</p><h2>ゲームバランス設定</h2></div><span class="badge">次のページ読み込みから反映</span></div>
+        <p class="muted">設定はサーバーに保存され、ゲーム側パッチが設定値を読み込みます。倍率の範囲は安全のため制限しています。</p>
+        <form id="configForm">
+          <div class="config-grid">
+            <label>ボスHP倍率 <span>0.1〜10倍</span><input id="bossHpMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
+            <label>ボス移動速度倍率 <span>0.1〜4倍</span><input id="bossSpeedMultiplier" type="number" min="0.1" max="4" step="0.1" required></label>
+            <label>ボス攻撃頻度倍率 <span>0.1〜5倍</span><input id="bossAttackFrequencyMultiplier" type="number" min="0.1" max="5" step="0.1" required></label>
+            <label>ボス弾速倍率 <span>0.1〜4倍</span><input id="bossBulletSpeedMultiplier" type="number" min="0.1" max="4" step="0.1" required></label>
+            <label>プレイヤー攻撃倍率 <span>0.1〜50倍</span><input id="playerDamageMultiplier" type="number" min="0.1" max="50" step="0.1" required></label>
+            <label>受けるダメージ倍率 <span>0〜10倍</span><input id="incomingDamageMultiplier" type="number" min="0" max="10" step="0.1" required></label>
+            <label>ギミック制限時間倍率 <span>0.25〜10倍</span><input id="gimmickTimeMultiplier" type="number" min="0.25" max="10" step="0.25" required></label>
+            <label>アイテム効果時間倍率 <span>0.1〜10倍</span><input id="itemEffectDurationMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
+            <label>アイテム画面残留時間倍率 <span>0.1〜10倍</span><input id="itemLifetimeMultiplier" type="number" min="0.1" max="10" step="0.1" required></label>
+            <label>アイテム出現率倍率 <span>0〜5倍（出現率上限100%）</span><input id="itemDropRateMultiplier" type="number" min="0" max="5" step="0.1" required></label>
+            <label>プレイヤー最大HP <span>1〜20</span><input id="playerMaxHp" type="number" min="1" max="20" step="1" required></label>
+          </div>
+          <div class="switches">
+            <label><input id="bossAttacksEnabled" type="checkbox"> ボス本体の攻撃を有効にする</label>
+            <label><input id="itemDropsEnabled" type="checkbox"> アイテムドロップを有効にする</label>
+            <label><input id="playerInvincible" type="checkbox"> プレイヤーを無敵にする（テスト用）</label>
+          </div>
+          <fieldset class="gimmicks"><legend>無効にするギミック</legend><div id="gimmickChecks" class="check-grid"></div></fieldset>
+          <div class="form-actions"><button class="primary" type="submit">設定を保存</button><button id="resetConfigBtn" class="secondary" type="button">初期値に戻す（保存前）</button></div>
+        </form>
+      </section>
+
+      <section class="panel" id="accountsPanel">
+        <div class="panel-heading"><div><p class="eyebrow">ACCOUNTS</p><h2>アカウント管理</h2></div><button id="reloadAccountsBtn" class="secondary" type="button">一覧を再読込</button></div>
+        <p class="muted">アカウント停止・削除・ランキング削除・パスワードのリセットを行えます。パスワードそのものの取得はできません。</p>
+        <div class="search-row"><input id="accountSearch" type="search" placeholder="ID・表示名・UIDで検索"><span id="accountCount" class="muted">読み込み前</span></div>
+        <div id="accountsList" class="accounts-list"><p class="muted">アカウントを読み込んでいます…</p></div>
+        <p id="truncatedNotice" class="warning" hidden>最初の500アカウントのみ表示しています。</p>
+      </section>
+
+      <section class="panel" id="auditPanel" hidden>
+        <div class="panel-heading"><div><p class="eyebrow">SECURITY</p><h2>管理操作ログ</h2></div><button id="reloadAuditBtn" class="secondary" type="button">ログを更新</button></div>
+        <p class="muted">最近100件の管理操作を表示します。パスワードやAPIシークレットは記録しません。</p>
+        <div id="auditList" class="audit-list"></div>
+      </section>
+    </div>
+  </main>
+  <footer>顔面シューティング オンライン版 · 管理操作は記録されます</footer>
+</body>
+</html>
