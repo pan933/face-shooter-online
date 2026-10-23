@@ -255,9 +255,39 @@ async function initializeLoginPage() {
     // A previous sign-up could have completed in Auth but failed before writing
     // the profile. Sign out so the user can retry signing in with their ID.
     await signOut(auth);
-  } catch (error) {
-    setMessage(humanizeError(error), true);
-  }
+    } catch (error) {
+      console.error("Xログインエラー:", error?.code, error?.message);
+
+      const xErrorMessages = {
+        "auth/operation-not-allowed":
+          "FirebaseでX（Twitter）ログインが有効になっていません。",
+
+        "auth/unauthorized-domain":
+          "Firebaseの承認済みドメインを確認してください。",
+
+        "auth/popup-blocked":
+          "ブラウザが認証画面をブロックしました。",
+
+        "auth/popup-closed-by-user":
+          "認証画面が閉じられました。もう一度試してください。",
+
+        "auth/cancelled-popup-request":
+          "認証処理がキャンセルされました。もう一度試してください。",
+
+        "auth/invalid-credential":
+          "Xの認証情報を確認できません。FirebaseのAPIキー・シークレットとXのコールバックURLを確認してください。",
+
+        "auth/network-request-failed":
+          "通信に失敗しました。インターネット接続を確認してください。"
+      };
+
+      const message =
+        xErrorMessages[error?.code] ||
+        `Xログインに失敗しました（${error?.code || "エラーコード不明"}）。FirebaseとX Developerの設定を確認してください。`;
+
+      setMessage(message, true);
+      xLoginBtn.disabled = false;
+    }
 }
 
 void initializeLoginPage();
