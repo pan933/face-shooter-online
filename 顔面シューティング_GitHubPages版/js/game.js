@@ -5121,393 +5121,616 @@ document.getElementById(
 // Static login is loaded before enabling the start button.
 void initializeSharedAuth();
 /* =========================================================
-   追加ボスギミック：装甲パーツ / 爆弾解除 / エネルギー吸収
+   ボスギミック調整パッチ v2
 
-   使い方：この内容を game.js の一番下に追加してください。
-   game.js 全体をこのパッチだけで置き換えないでください。
+   目的:
+   - 既存ギミック成功時のボスHPダメージを約半分にする
+   - シールド破壊時は即ダメージを与えず、一定時間ボスを弱体化
+   - 弱体化中は通常弾が3倍ダメージ、ボスの弾速も低下
+   - 装甲パーツ / 爆弾解除 / エネルギー吸収を追加
+   - ボスレベルに応じて、的の数・必要ヒット数・制限時間を少しずつ増加
+
+   使い方:
+   game.js の末尾へ追加。旧 boss-gimmicks-patch.js を追加済みなら、
+   その旧パッチブロックを削除してから、この版に置き換えてください。
 ========================================================= */
 
-const addonOriginalSpawnGimmick = spawnGimmick;
-const addonOriginalHitGimmick = hitGimmick;
-const addonOriginalUpdateBoss = updateBoss;
-const addonOriginalDraw = draw;
-const addonGimmickTypes = ["armorParts", "bombFuse", "energyDrain"];
-let addonGimmickCycle = 0;
+(() => {
+    "use strict";
 
-function addonSetGimmickText(title, description, color = "#ffffff") {
-    const titleEl = document.getElementById("gimmickTitle");
-    const textEl = document.getElementById("gimmickText");
-    const box = document.getElementById("bossGimmick");
-    if (titleEl) {
-        titleEl.textContent = title;
-        titleEl.style.color = color;
-    }
-    if (textEl) {
-        textEl.textContent = description;
-        textEl.style.color = "#ffffff";
-    }
-    if (box) box.style.display = "block";
-}
-
-function addonCreateGimmick(type) {
-    if (!boss || gimmick) return;
-
-    const centerX = W / 2;
-    const y = Math.max(235, Math.min(H - 190, boss.y + boss.size * 0.85 + 38));
-    const spacing = Math.min(100, W * 0.22);
-    const base = {
-        type,
-        x: centerX,
-        y,
-        radius: type === "armorParts" ? 31 : 34,
-        pulse: 0,
-        life: 90,
-        timer: type === "armorParts" ? 15 : type === "bombFuse" ? 8 : 9,
-        hits: 0,
-        open: false,
-        targets: [],
-        hp: 0,
-        maxHp: 0
-    };
-
-    if (type === "armorParts") {
-        // 3枚の装甲。各パーツを2回ずつ撃つ。
-        base.title = "🔷 ボス装甲を破壊！";
-        base.description = "青い装甲パーツ3枚を、それぞれ2回撃って破壊！";
-        base.hp = 6;
-        base.maxHp = 6;
-        base.targets = [-1, 0, 1].map((offset, index) => ({
-            x: Math.max(38, Math.min(W - 38, centerX + offset * spacing)),
-            y: y + (index === 1 ? -8 : 10),
-            hp: 2,
-            maxHp: 2,
-            destroyed: false,
-            label: String(index + 1)
-        }));
-        addonSetGimmickText(base.title, base.description, "#65e7ff");
-    } else if (type === "bombFuse") {
-        // 3本の導火線を時間内に切って爆発を止める。
-        base.title = "💣 爆弾解除！";
-        base.description = "赤い導火線3本を8秒以内に全部撃て！失敗すると爆発！";
-        base.hp = 3;
-        base.maxHp = 3;
-        base.targets = [-1, 0, 1].map((offset, index) => ({
-            x: Math.max(38, Math.min(W - 38, centerX + offset * spacing)),
-            y: y + (index === 1 ? -8 : 10),
-            hp: 1,
-            maxHp: 1,
-            destroyed: false,
-            label: String(index + 1)
-        }));
-        addonSetGimmickText(base.title, base.description, "#ff9a45");
-    } else if (type === "energyDrain") {
-        // 放置するとボスのHPが回復。紫コアを8回撃って吸収を停止。
-        base.title = "🟣 エネルギー吸収を止めろ！";
-        base.description = "紫のコアを8回撃て！放置するとボスのHPが回復する！";
-        base.hp = 8;
-        base.maxHp = 8;
-        base.targets = [{ x: centerX, y, hp: 8, maxHp: 8, destroyed: false, label: "CORE" }];
-        addonSetGimmickText(base.title, base.description, "#dc8cff");
-    } else {
-        return;
-    }
-
-    gimmick = base;
-}
-
-function addonCompleteGimmick(type) {
-    if (!boss || !gimmick) return;
-
-    const damage = type === "armorParts"
-        ? 420 + wave * 38 + boss.level * 250
-        : type === "bombFuse"
-            ? 620 + wave * 42 + boss.level * 280
-            : 360 + wave * 40 + boss.level * 250;
-
-    boss.hp = Math.max(0, boss.hp - damage);
-    boss.attackTimer = Math.max(boss.attackTimer, 1.5);
-    boss.gimmickCooldown = boss.level === 1 ? 4.5 : boss.level === 2 ? 1.8 : 1.0;
-    score += type === "bombFuse" ? 3200 : 2400;
-    combo += type === "bombFuse" ? 8 : 5;
-
-    for (let i = 0; i < 24; i++) {
-        boom(boss.x + (Math.random() - 0.5) * 150,
-             boss.y + (Math.random() - 0.5) * 100, true);
-    }
-
-    const title = type === "armorParts"
-        ? "✅ 装甲破壊！大ダメージ！"
-        : type === "bombFuse"
-            ? "✅ 爆弾解除成功！大爆発！"
-            : "✅ 吸収停止！反撃チャンス！";
-    addonSetGimmickText(title, `ボスに ${Math.round(damage).toLocaleString("ja-JP")} ダメージ！`, "#7dffb1");
-    gimmick = null;
-
-    if (typeof updateHUD === "function") updateHUD();
-    if (boss && boss.hp <= 0) defeatBoss();
-}
-
-function addonFailGimmick(type) {
-    if (!boss || !gimmick) return;
-
-    if (type === "bombFuse") {
-        // 爆発：プレイヤーへダメージ判定 + 放射状の弾幕。
-        takeDamage(1);
-        for (let i = 0; i < 12; i++) {
-            const angle = (Math.PI * 2 * i) / 12;
-            enemyBullets.push({
-                x: gimmick.x,
-                y: gimmick.y,
-                vx: Math.cos(angle) * (190 + boss.level * 18),
-                vy: Math.sin(angle) * (190 + boss.level * 18),
-                r: 7,
-                life: 4.2,
-                kind: "boss"
-            });
+    function patchFunction(fn, oldText, newText, label) {
+        if (typeof fn !== "function") {
+            console.warn(`[ボス調整] ${label}: 関数が見つかりません。`);
+            return fn;
         }
-        flash = Math.max(flash, 0.3);
-        shake = Math.max(shake, 18);
+        const source = fn.toString();
+        if (!source.includes(oldText)) {
+            console.warn(`[ボス調整] ${label}: 想定した箇所が見つかりません。既存処理を維持します。`);
+            return fn;
+        }
+        return eval(`(${source.replace(oldText, newText)})`);
     }
 
-    const heal = type === "energyDrain"
-        ? 240 + boss.level * 90
-        : type === "armorParts"
-            ? 100 + boss.level * 50
-            : 80 + boss.level * 40;
-    boss.hp = Math.min(boss.maxHp, boss.hp + heal);
-    boss.gimmickCooldown = boss.level === 1 ? 3.4 : 1.1;
-    gimmick = null;
-    addonSetGimmickText(
-        type === "bombFuse" ? "💥 爆弾が爆発！" :
-        type === "energyDrain" ? "🟣 吸収完了：ボスが回復！" :
-        "🛡 装甲修復！",
-        `ボスのHPが ${heal} 回復した`,
-        "#ff7777"
+    // 1. 既存ギミックの直接ダメージを約半分にし、シールドは弱体化型へ変更。
+    hitGimmick = patchFunction(
+        hitGimmick,
+        `const damage = gimmick.type === "overheat"
+            ? 650 + wave * 55 + boss.level * 250
+            : 350 + wave * 30 + boss.level * 180;
+        boss.hp -= damage;`,
+        `const shieldBreak = gimmick.type === "shield";
+        const damage = shieldBreak ? 0 : gimmick.type === "overheat"
+            ? 320 + wave * 28 + boss.level * 125
+            : 175 + wave * 15 + boss.level * 90;
+        if (shieldBreak) {
+            boss.weaknessTimer = 12 + Math.min(8, Math.floor(Math.max(0, boss.level - 1) / 2));
+            boss.attackTimer = Math.max(boss.attackTimer, 1.2);
+        }
+        boss.hp -= damage;`,
+        "既存ギミックのダメージ調整"
     );
-    if (typeof updateHUD === "function") updateHUD();
-}
 
-// WAIT/赤緑のタイミングギミックは抽選から実質除外し、新ギミックを混ぜる。
-const addonSpawnReplacement = function () {
-    if (!boss || gimmick) return;
+    // ボスレベルが上がるほど動く弱点を少しずつ速くする。
+    updateBoss = patchFunction(
+        updateBoss,
+        "gimmick.x += gimmick.dir * 150 * dt;",
+        "gimmick.x += gimmick.dir * (150 + Math.min(70, Math.max(0, boss.level - 1) * 7)) * dt;",
+        "動く弱点の段階的な速度"
+    );
 
-    // 最初のギミックは既存の青いシールド解除を維持。
-    if (boss.gimmickCount === 0) {
-        addonOriginalSpawnGimmick();
-        return;
+    // 間違った爆弾コアや、ギミック失敗時のボス回復も控えめにする。
+    hitGimmick = patchFunction(
+        hitGimmick,
+        "boss.hp = Math.min(boss.maxHp, boss.hp + 220 + boss.level * 50);",
+        "boss.hp = Math.min(boss.maxHp, boss.hp + 100 + boss.level * 25);",
+        "爆弾コアの失敗ペナルティ"
+    );
+    updateBoss = patchFunction(
+        updateBoss,
+        "const heal = gimmick.type === \"clock\" ? 180 + boss.level * 60 : 90 + boss.level * 25;",
+        "const heal = gimmick.type === \"clock\" ? 90 + boss.level * 30 : 45 + boss.level * 12;",
+        "ギミック失敗時の回復量"
+    );
+
+    // シールド弱体化中だけ通常弾を3倍ダメージにする。
+    updateBullets = patchFunction(
+        updateBullets,
+        "boss.hp--;",
+        "boss.hp -= (boss.weaknessTimer > 0 ? 3 : 1);",
+        "弱体化中の通常弾ダメージ"
+    );
+
+    // 「WAIT / 赤・緑」のタイミングギミックを抽選対象から外す。
+    spawnGimmick = patchFunction(
+        spawnGimmick,
+        'const basic = ["weak", "moving", "shield", "pulse"];',
+        'const basic = ["weak", "moving", "shield"];',
+        "基本ギミックの抽選"
+    );
+    spawnGimmick = patchFunction(
+        spawnGimmick,
+        'const advanced = ["weak", "moving", "shield", "pulse", "clock", "ring", "decoy", "clone", "overheat"];',
+        'const advanced = ["weak", "moving", "shield", "clock", "ring", "decoy", "clone", "overheat"];',
+        "中級ギミックの抽選"
+    );
+    spawnGimmick = patchFunction(
+        spawnGimmick,
+        'const extreme = ["weak", "moving", "shield", "pulse", "clock", "ring", "decoy", "rain", "cross", "clone", "overheat", "bombcore"];',
+        'const extreme = ["weak", "moving", "shield", "clock", "ring", "decoy", "rain", "cross", "clone", "overheat", "bombcore"];',
+        "上級ギミックの抽選"
+    );
+
+    const originalSpawnGimmick = spawnGimmick;
+    const originalHitGimmick = hitGimmick;
+    const originalUpdateBoss = updateBoss;
+    const originalDraw = draw;
+
+    const extraGimmickTypes = ["armorParts", "bombFuse", "energyDrain"];
+    let extraGimmickCycle = 0;
+
+    function setGimmickText(title, description, color = "#ffffff") {
+        const titleEl = document.getElementById("gimmickTitle");
+        const textEl = document.getElementById("gimmickText");
+        const box = document.getElementById("bossGimmick");
+        if (titleEl) {
+            titleEl.textContent = title;
+            titleEl.style.color = color;
+        }
+        if (textEl) {
+            textEl.textContent = description;
+            textEl.style.color = "#fff";
+        }
+        if (box) box.style.display = "block";
     }
 
-    if (Math.random() < 0.62) {
-        const type = addonGimmickTypes[addonGimmickCycle % addonGimmickTypes.length];
-        addonGimmickCycle++;
-        addonCreateGimmick(type);
-        return;
+    // 弱体化中の表示を作る（ゲーム画面内だけ）。
+    let weaknessNotice = document.getElementById("bossWeaknessNotice");
+    if (!weaknessNotice && gameWrap) {
+        weaknessNotice = document.createElement("div");
+        weaknessNotice.id = "bossWeaknessNotice";
+        weaknessNotice.setAttribute("aria-live", "polite");
+        weaknessNotice.style.cssText = [
+            "position:absolute", "z-index:24", "top:158px", "left:50%",
+            "transform:translateX(-50%)", "display:none", "width:max-content",
+            "max-width:92%", "padding:8px 12px", "border:2px solid #79eaff",
+            "border-radius:10px", "background:rgba(0,22,42,.94)", "color:#fff",
+            "font:900 13px system-ui,sans-serif", "text-align:center",
+            "pointer-events:none", "box-shadow:0 0 12px rgba(80,220,255,.35)"
+        ].join(";");
+        gameWrap.appendChild(weaknessNotice);
     }
 
-    addonOriginalSpawnGimmick();
-    // 既存抽選で pulse が選ばれた場合は、分かりやすい新ギミックに置き換える。
-    if (gimmick && gimmick.type === "pulse") {
+    function renderWeaknessNotice() {
+        if (!weaknessNotice) return;
+        if (boss && boss.weaknessTimer > 0) {
+            weaknessNotice.style.display = "block";
+            weaknessNotice.textContent = `🛡 シールド破壊！弱体化中 ${boss.weaknessTimer.toFixed(1)}秒　通常弾3倍 / ボス弾が遅い`;
+        } else {
+            weaknessNotice.style.display = "none";
+        }
+    }
+
+    function createExtraGimmick(type) {
+        if (!boss || gimmick) return;
+
+        const level = Math.max(1, Number(boss.level) || 1);
+        const steps = Math.floor((level - 1) / 2);
+        const centerX = W / 2;
+        const y = Math.max(230, Math.min(H - 195, boss.y + boss.size * 0.85 + 38));
+        const targetCount = (n) => Math.max(3, Math.min(5, n));
+        const base = {
+            type,
+            x: centerX,
+            y,
+            radius: type === "armorParts" ? 31 : 34,
+            pulse: 0,
+            life: 90,
+            timer: 0,
+            hits: 0,
+            open: false,
+            targets: [],
+            hp: 0,
+            maxHp: 0
+        };
+
+        if (type === "armorParts") {
+            const count = targetCount(3 + Math.floor((level - 1) / 4));
+            const spacing = Math.min(100, (W - 100) / Math.max(1, count - 1));
+            base.timer = 15 + steps * 0.35;
+            base.hp = count * 2;
+            base.maxHp = base.hp;
+            base.targets = Array.from({ length: count }, (_, index) => ({
+                x: Math.max(34, Math.min(W - 34, centerX + (index - (count - 1) / 2) * spacing)),
+                y: y + (index % 2 ? -8 : 10),
+                hp: 2,
+                maxHp: 2,
+                destroyed: false,
+                label: String(index + 1)
+            }));
+            base.description = `青い装甲パーツ${count}枚を撃ち壊せ！各パーツは2発で破壊。`;
+            base.title = "🔷 ボス装甲を破壊！";
+            setGimmickText(base.title, base.description, "#65e7ff");
+        } else if (type === "bombFuse") {
+            const count = Math.min(5, 3 + Math.floor((level - 1) / 5));
+            const spacing = Math.min(100, (W - 100) / Math.max(1, count - 1));
+            base.timer = 8 + steps * 0.5;
+            base.hp = count;
+            base.maxHp = count;
+            base.targets = Array.from({ length: count }, (_, index) => ({
+                x: Math.max(34, Math.min(W - 34, centerX + (index - (count - 1) / 2) * spacing)),
+                y: y + (index % 2 ? -8 : 10),
+                hp: 1,
+                maxHp: 1,
+                destroyed: false,
+                label: String(index + 1)
+            }));
+            base.description = `導火線${count}本を制限時間内に全部撃て！失敗すると爆発！`;
+            base.title = "💣 爆弾解除！";
+            setGimmickText(base.title, base.description, "#ff9a45");
+        } else if (type === "energyDrain") {
+            base.timer = 9 + steps * 0.45;
+            base.hp = 8 + steps;
+            base.maxHp = base.hp;
+            base.targets = [{ x: centerX, y, hp: base.hp, maxHp: base.maxHp, destroyed: false, label: "CORE" }];
+            base.description = `紫のコアを${base.hp}発撃て！吸収を止めろ！`;
+            base.title = "🟣 エネルギー吸収を止めろ！";
+            setGimmickText(base.title, base.description, "#dc8cff");
+        } else {
+            return;
+        }
+
+        gimmick = base;
+    }
+
+    function completeExtraGimmick(type) {
+        if (!boss || !gimmick) return;
+
+        // 装甲は従来計算のちょうど半分。爆弾・吸収も報酬ダメージを控えめに。
+        const damage = type === "armorParts"
+            ? 210 + wave * 19 + boss.level * 125
+            : type === "bombFuse"
+                ? 310 + wave * 21 + boss.level * 140
+                : 180 + wave * 20 + boss.level * 125;
+
+        boss.hp = Math.max(0, boss.hp - damage);
+        boss.attackTimer = Math.max(boss.attackTimer, 1.3);
+        boss.gimmickCooldown = boss.level === 1 ? 4.5 : boss.level === 2 ? 1.8 : 1.0;
+        score += type === "bombFuse" ? 1800 : 1400;
+        combo += type === "bombFuse" ? 5 : 3;
+
+        for (let i = 0; i < 18; i++) {
+            boom(
+                boss.x + (Math.random() - 0.5) * 150,
+                boss.y + (Math.random() - 0.5) * 100,
+                true
+            );
+        }
+
+        const title = type === "armorParts"
+            ? "✅ 装甲破壊！ボスにダメージ！"
+            : type === "bombFuse"
+                ? "✅ 爆弾解除成功！"
+                : "✅ エネルギー吸収を阻止！";
+        setGimmickText(title, `ボスに ${Math.round(damage).toLocaleString("ja-JP")} ダメージ！`, "#7dffb1");
         gimmick = null;
-        const type = addonGimmickTypes[addonGimmickCycle % addonGimmickTypes.length];
-        addonGimmickCycle++;
-        addonCreateGimmick(type);
-    }
-};
-spawnGimmick = addonSpawnReplacement;
-
-// 新ギミックのヒット処理を追加。既存ギミックは元の処理を使う。
-hitGimmick = function (targetIndex = -1) {
-    if (!gimmick || !boss || !addonGimmickTypes.includes(gimmick.type)) {
-        return addonOriginalHitGimmick(targetIndex);
+        if (typeof updateHUD === "function") updateHUD();
+        if (boss && boss.hp <= 0) defeatBoss();
     }
 
-    const type = gimmick.type;
-    const target = gimmick.targets[targetIndex];
-    if (!target || target.destroyed) return;
+    function failExtraGimmick(type) {
+        if (!boss || !gimmick) return;
+        if (type === "bombFuse") {
+            takeDamage(1);
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI * 2 * i) / 8;
+                enemyBullets.push({
+                    x: gimmick.x,
+                    y: gimmick.y,
+                    vx: Math.cos(angle) * (170 + boss.level * 12),
+                    vy: Math.sin(angle) * (170 + boss.level * 12),
+                    r: 6,
+                    life: 3.8,
+                    kind: "boss"
+                });
+            }
+            flash = Math.max(flash, 0.22);
+            shake = Math.max(shake, 12);
+        }
 
-    if (type === "armorParts") {
-        target.hp--;
-        gimmick.hp = Math.max(0, gimmick.hp - 1);
-        score += 100;
-        boom(target.x, target.y, true);
-        if (target.hp <= 0) {
+        const heal = type === "energyDrain"
+            ? 100 + boss.level * 30
+            : type === "armorParts"
+                ? 50 + boss.level * 25
+                : 45 + boss.level * 20;
+        boss.hp = Math.min(boss.maxHp, boss.hp + heal);
+        boss.gimmickCooldown = boss.level === 1 ? 3.4 : 1.1;
+        gimmick = null;
+        setGimmickText(
+            type === "bombFuse" ? "💥 爆弾が爆発！" :
+            type === "energyDrain" ? "🟣 吸収完了：ボスが少し回復" :
+            "🛡 装甲が修復された！",
+            `ボスHP +${heal}`,
+            "#ff7777"
+        );
+        if (typeof updateHUD === "function") updateHUD();
+    }
+
+    function extraTargetHit(targetIndex) {
+        if (!gimmick || !boss) return false;
+        const type = gimmick.type;
+        if (!extraGimmickTypes.includes(type)) return false;
+        const target = gimmick.targets[targetIndex];
+        if (!target || target.destroyed) return true;
+
+        if (type === "armorParts") {
+            target.hp--;
+            gimmick.hp = Math.max(0, gimmick.hp - 1);
+            score += 60;
+            boom(target.x, target.y, true);
+            if (target.hp <= 0) {
+                target.destroyed = true;
+                target.x = -999;
+                target.y = -999;
+            }
+            const remaining = gimmick.targets.filter(item => !item.destroyed).length;
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `装甲破壊 ${gimmick.targets.length - remaining} / ${gimmick.targets.length}　残り ${gimmick.timer.toFixed(1)}秒`;
+            if (remaining === 0) completeExtraGimmick(type);
+            return true;
+        }
+
+        if (type === "bombFuse") {
+            const hitX = target.x;
+            const hitY = target.y;
             target.destroyed = true;
             target.x = -999;
             target.y = -999;
+            gimmick.hp = Math.max(0, gimmick.hp - 1);
+            score += 100;
+            boom(hitX, hitY, true);
+            const remaining = gimmick.targets.filter(item => !item.destroyed).length;
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `導火線 ${gimmick.targets.length - remaining} / ${gimmick.targets.length} 解除　残り ${gimmick.timer.toFixed(1)}秒`;
+            if (remaining === 0) completeExtraGimmick(type);
+            return true;
         }
-        const remaining = gimmick.targets.filter(item => !item.destroyed).length;
-        const text = document.getElementById("gimmickText");
-        if (text) text.textContent = `装甲破壊 ${3 - remaining} / 3（各パーツを2回撃つ） 残り ${gimmick.timer.toFixed(1)}秒`;
-        if (remaining === 0) addonCompleteGimmick(type);
-        return;
+
+        if (type === "energyDrain") {
+            gimmick.hp--;
+            gimmick.hits++;
+            score += 60;
+            boom(target.x, target.y, true);
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `吸収阻止まで ${gimmick.hp} 発！　残り ${gimmick.timer.toFixed(1)}秒`;
+            if (gimmick.hp <= 0) completeExtraGimmick(type);
+            return true;
+        }
+        return false;
     }
 
-    if (type === "bombFuse") {
-        const hitX = target.x;
-        const hitY = target.y;
-        target.destroyed = true;
-        target.x = -999;
-        target.y = -999;
-        gimmick.hp = Math.max(0, gimmick.hp - 1);
-        score += 250;
-        boom(hitX, hitY, true);
-        const remaining = gimmick.targets.filter(item => !item.destroyed).length;
-        const text = document.getElementById("gimmickText");
-        if (text) text.textContent = `導火線 ${3 - remaining} / 3 解除　残り ${gimmick.timer.toFixed(1)}秒`;
-        if (remaining === 0) addonCompleteGimmick(type);
-        return;
-    }
+    // 最初のシールドは、ボスHPを直接削らず弱体化させる。
+    hitGimmick = function (targetIndex = -1) {
+        if (!gimmick || !boss) return;
+        if (gimmick.type === "shield") {
+            gimmick.hp--;
+            gimmick.hits++;
+            score += 80;
+            boom(gimmick.x, gimmick.y, true);
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `シールド破壊 ${gimmick.maxHp - gimmick.hp} / ${gimmick.maxHp}`;
+            if (gimmick.hp <= 0) {
+                boss.weaknessTimer = 12 + Math.min(8, Math.floor(Math.max(0, boss.level - 1) / 2));
+                boss.attackTimer = Math.max(boss.attackTimer, 1.2);
+                score += 900;
+                combo += 4;
+                for (let i = 0; i < 20; i++) boom(boss.x + (Math.random() - 0.5) * 100, boss.y + (Math.random() - 0.5) * 80, true);
+                gimmick = null;
+                boss.gimmickCooldown = boss.level === 1 ? 4.5 : boss.level === 2 ? 1.8 : 1;
+                setGimmickText("🛡 シールド破壊！", "ボス弱体化！通常弾3倍ダメージ・ボスの弾速ダウン！", "#65e7ff");
+                if (typeof updateHUD === "function") updateHUD();
+            }
+            return;
+        }
+        if (extraTargetHit(targetIndex)) return;
+        return originalHitGimmick(targetIndex);
+    };
 
-    if (type === "energyDrain") {
+    // レベルの上昇に応じて、移動的・時間制限を段階的に調整。
+    // WAITタイプは移動弱点に置き換える。
+    const spawnWithDifficulty = function () {
+        originalSpawnGimmick();
+        if (!boss || !gimmick) return;
+
+        const level = Math.max(1, Number(boss.level) || 1);
+        const steps = Math.floor((level - 1) / 2);
+
+        if (gimmick.type === "pulse") {
+            gimmick.type = "moving";
+            gimmick.dir = Math.random() < 0.5 ? -1 : 1;
+            gimmick.hp = 10 + steps;
+            gimmick.maxHp = gimmick.hp;
+            gimmick.life = 15 + steps * 0.75;
+            gimmick.radius = 34;
+            setGimmickText("🎯 動く弱点！", `動くコアを ${gimmick.hp} 回撃て！　制限 ${gimmick.life.toFixed(1)}秒`, "#ffe600");
+        } else if (gimmick.type === "moving") {
+            gimmick.hp = 10 + steps;
+            gimmick.maxHp = gimmick.hp;
+            gimmick.life = 15 + steps * 0.75;
+            setGimmickText("⚠ 高速弱点", `動く弱点を ${gimmick.hp} 回撃て！　制限 ${gimmick.life.toFixed(1)}秒`, "#ffe600");
+        } else if (gimmick.type === "clock") {
+            gimmick.hp = 10 + steps;
+            gimmick.maxHp = gimmick.hp;
+            gimmick.life = 3.2 + steps * 0.4;
+            setGimmickText("⚠ 時間制限", `${gimmick.life.toFixed(1)}秒以内に ${gimmick.hp} 回撃て！`, "#ffe600");
+        } else if (extraGimmickTypes.includes(gimmick.type)) {
+            // 新ギミックは生成時点でレベル調整済み。表示だけ合わせる。
+            if (gimmick.type === "armorParts" || gimmick.type === "bombFuse") {
+                const text = document.getElementById("gimmickText");
+                if (text) text.textContent += `　制限 ${gimmick.timer.toFixed(1)}秒`;
+            }
+        }
+    };
+
+    // 追加3ギミックを含む、既存のランダム出現を維持。
+    const spawnReplacement = function () {
+        if (!boss || gimmick) return;
+        if (boss.gimmickCount === 0) {
+            originalSpawnGimmick();
+            return;
+        }
+        if (Math.random() < 0.58) {
+            const type = extraGimmickTypes[extraGimmickCycle % extraGimmickTypes.length];
+            extraGimmickCycle++;
+            createExtraGimmick(type);
+            return;
+        }
+        spawnWithDifficulty();
+    };
+    spawnGimmick = spawnReplacement;
+
+    // 追加ギミックの命中処理。strict modeでも動くようハンドラーを明示する。
+    const shieldHandler = function (targetIndex = -1) {
+        if (!gimmick || !boss || gimmick.type !== "shield") return originalHitGimmick(targetIndex);
         gimmick.hp--;
         gimmick.hits++;
-        score += 120;
-        boom(target.x, target.y, true);
+        score += 80;
+        boom(gimmick.x, gimmick.y, true);
         const text = document.getElementById("gimmickText");
-        if (text) text.textContent = `吸収阻止まで ${gimmick.hp} 発！ ボスHPが回復中　残り ${gimmick.timer.toFixed(1)}秒`;
-        if (gimmick.hp <= 0) addonCompleteGimmick(type);
-        return;
+        if (text) text.textContent = `シールド破壊 ${gimmick.maxHp - gimmick.hp} / ${gimmick.maxHp}`;
+        if (gimmick.hp <= 0) {
+            boss.weaknessTimer = 12 + Math.min(8, Math.floor(Math.max(0, boss.level - 1) / 2));
+            boss.attackTimer = Math.max(boss.attackTimer, 1.2);
+            score += 900;
+            combo += 4;
+            for (let i = 0; i < 20; i++) boom(boss.x + (Math.random() - 0.5) * 100, boss.y + (Math.random() - 0.5) * 80, true);
+            gimmick = null;
+            boss.gimmickCooldown = boss.level === 1 ? 4.5 : boss.level === 2 ? 1.8 : 1;
+            setGimmickText("🛡 シールド破壊！", "ボス弱体化！通常弾3倍ダメージ・ボスの弾速ダウン！", "#65e7ff");
+            if (typeof updateHUD === "function") updateHUD();
+        }
+    };
+    hitGimmick = function (targetIndex = -1) {
+        if (gimmick && gimmick.type === "shield") return shieldHandler(targetIndex);
+        if (gimmick && extraTargetHit(targetIndex)) return;
+        return originalHitGimmick(targetIndex);
+    };
+
+    function updateExtraGimmick(dt) {
+        if (!boss || !gimmick || !extraGimmickTypes.includes(gimmick.type)) return;
+        const type = gimmick.type;
+        gimmick.timer -= dt;
+        gimmick.pulse = (gimmick.pulse || 0) + dt;
+        if (type === "energyDrain") {
+            // 高レベルでも吸収回復が強くなりすぎないよう抑える。
+            boss.hp = Math.min(boss.maxHp, boss.hp + (12 + boss.level * 4) * dt);
+        }
+        if (type === "armorParts") {
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `装甲を破壊！ ${gimmick.targets.filter(t => t.destroyed).length} / ${gimmick.targets.length}　残り ${gimmick.timer.toFixed(1)}秒`;
+        } else if (type === "bombFuse") {
+            const remaining = gimmick.targets.filter(t => !t.destroyed).length;
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `導火線を解除 ${gimmick.targets.length - remaining} / ${gimmick.targets.length}　残り ${Math.max(0, gimmick.timer).toFixed(1)}秒`;
+        } else if (type === "energyDrain") {
+            const text = document.getElementById("gimmickText");
+            if (text) text.textContent = `吸収停止まで ${gimmick.hp} 発！　残り ${gimmick.timer.toFixed(1)}秒`;
+        }
+        if (gimmick && gimmick.timer <= 0) failExtraGimmick(type);
     }
-};
 
-// タイマーとエネルギー吸収処理を、通常のボス更新に追加。
-updateBoss = function (dt) {
-    addonOriginalUpdateBoss(dt);
-    if (!boss || !gimmick || !addonGimmickTypes.includes(gimmick.type)) return;
+    updateBoss = function (dt) {
+        if (boss && boss.weaknessTimer > 0) boss.weaknessTimer = Math.max(0, boss.weaknessTimer - dt);
+        const bossAtStart = boss;
+        const firstNewBullet = enemyBullets.length;
+        originalUpdateBoss(dt);
+        updateExtraGimmick(dt);
 
-    const type = gimmick.type;
-    gimmick.timer -= dt;
-    gimmick.pulse = (gimmick.pulse || 0) + dt;
+        // 弱体化中はボスから新しく出た弾を遅くする。
+        if (boss && boss === bossAtStart && boss.weaknessTimer > 0) {
+            for (let i = firstNewBullet; i < enemyBullets.length; i++) {
+                const bullet = enemyBullets[i];
+                if (!bullet || bullet.balanceSlowed) continue;
+                bullet.vx *= 0.72;
+                bullet.vy *= 0.72;
+                bullet.balanceSlowed = true;
+            }
+        }
+        renderWeaknessNotice();
+    };
 
-    if (type === "energyDrain") {
-        const healPerSecond = 35 + boss.level * 15;
-        boss.hp = Math.min(boss.maxHp, boss.hp + healPerSecond * dt);
-    }
-
-    if (type === "armorParts") {
-        const text = document.getElementById("gimmickText");
-        if (text) text.textContent = `装甲パーツを破壊！ 残り ${gimmick.timer.toFixed(1)}秒`;
-    } else if (type === "bombFuse") {
-        const text = document.getElementById("gimmickText");
-        if (text) text.textContent = `導火線を3本破壊して爆弾解除！ 残り ${Math.max(0, gimmick.timer).toFixed(1)}秒`;
-    }
-
-    if (gimmick && gimmick.timer <= 0) addonFailGimmick(type);
-};
-
-// 描画：新ギミックは従来の黄色い汎用コアを隠し、個別の形とラベルで表示。
-function addonDrawCustomGimmick() {
-    if (!gimmick || !addonGimmickTypes.includes(gimmick.type)) return;
-
-    const g = gimmick;
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.lineJoin = "round";
-
-    if (g.type === "energyDrain" && boss) {
-        // プレイヤーからボスへ吸い上げる紫のエネルギー線。
+    function drawExtraGimmick() {
+        if (!gimmick || !extraGimmickTypes.includes(gimmick.type)) return;
+        const g = gimmick;
         ctx.save();
-        ctx.globalAlpha = 0.5 + Math.sin(g.pulse * 8) * 0.18;
-        ctx.strokeStyle = "#d77dff";
-        ctx.lineWidth = 4;
-        ctx.setLineDash([12, 9]);
-        ctx.shadowColor = "#d77dff";
-        ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(g.x, g.y);
-        ctx.lineTo(boss.x, boss.y + 35);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-    }
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
 
-    if (g.type === "armorParts" || g.type === "bombFuse") {
-        g.targets.forEach((t, i) => {
-            if (t.destroyed) return;
+        if (g.type === "energyDrain" && boss) {
             ctx.save();
-            ctx.translate(t.x, t.y);
-            const r = g.type === "armorParts" ? 29 : 25;
+            ctx.globalAlpha = 0.38 + Math.sin(g.pulse * 7) * 0.12;
+            ctx.strokeStyle = "#d77dff";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([10, 9]);
+            ctx.shadowColor = "#d77dff";
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.lineTo(g.x, g.y);
+            ctx.lineTo(boss.x, boss.y + 30);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        if (g.type === "armorParts" || g.type === "bombFuse") {
+            g.targets.forEach((t, i) => {
+                if (t.destroyed) return;
+                ctx.save();
+                ctx.translate(t.x, t.y);
+                const r = g.type === "armorParts" ? 27 : 24;
+                ctx.shadowBlur = 14;
+                ctx.shadowColor = g.type === "armorParts" ? "#55eaff" : "#ff522e";
+                ctx.fillStyle = g.type === "armorParts" ? (t.hp === 2 ? "#159ac7" : "#f5b942") : "#bd241f";
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                if (g.type === "armorParts") {
+                    for (let n = 0; n < 6; n++) {
+                        const angle = -Math.PI / 2 + n * Math.PI / 3;
+                        const xx = Math.cos(angle) * r;
+                        const yy = Math.sin(angle) * r;
+                        if (n === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.arc(0, 0, r, 0, Math.PI * 2);
+                }
+                ctx.fill();
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "#fff";
+                ctx.font = "1000 16px system-ui,sans-serif";
+                ctx.fillText(g.type === "armorParts" ? (t.hp === 2 ? "Ⅱ" : "Ⅰ") : "!", 0, 0);
+                ctx.restore();
+                ctx.fillStyle = "#fff";
+                ctx.font = "900 11px system-ui,sans-serif";
+                ctx.fillText(g.type === "armorParts" ? `装甲 ${t.label}` : `導火線 ${t.label}`, t.x, t.y + 38);
+            });
+        } else if (g.type === "energyDrain") {
+            const r = 31 + Math.sin(g.pulse * 6) * 3;
             ctx.shadowBlur = 18;
-            ctx.shadowColor = g.type === "armorParts" ? "#55eaff" : "#ff522e";
-            ctx.fillStyle = g.type === "armorParts" ? (t.hp === 1 ? "#f5b942" : "#159ac7") : "#bd241f";
-            ctx.strokeStyle = "#ffffff";
+            ctx.shadowColor = "#d77dff";
+            ctx.fillStyle = "#922bd4";
+            ctx.strokeStyle = "#f0c1ff";
             ctx.lineWidth = 3;
             ctx.beginPath();
-            if (g.type === "armorParts") {
-                for (let n = 0; n < 6; n++) {
-                    const angle = -Math.PI / 2 + n * Math.PI / 3;
-                    const x = Math.cos(angle) * r;
-                    const y = Math.sin(angle) * r;
-                    if (n === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-                }
-                ctx.closePath();
-            } else {
-                ctx.arc(0, 0, r, 0, Math.PI * 2);
-            }
+            ctx.arc(g.x, g.y, r, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
             ctx.shadowBlur = 0;
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "1000 18px system-ui,sans-serif";
-            ctx.fillText(g.type === "armorParts" ? (t.hp === 2 ? "Ⅱ" : "Ⅰ") : "!", 0, 0);
-            ctx.restore();
-            ctx.fillStyle = "#ffffff";
+            ctx.fillStyle = "#fff";
+            ctx.font = "1000 17px system-ui,sans-serif";
+            ctx.fillText(String(Math.max(0, g.hp)), g.x, g.y);
             ctx.font = "900 12px system-ui,sans-serif";
-            ctx.fillText(g.type === "armorParts" ? `装甲 ${t.label}` : `導火線 ${t.label}`, t.x, t.y + 42);
-        });
-    } else if (g.type === "energyDrain") {
-        const r = 34 + Math.sin(g.pulse * 7) * 4;
-        ctx.shadowBlur = 24;
-        ctx.shadowColor = "#d77dff";
-        ctx.fillStyle = "#922bd4";
-        ctx.strokeStyle = "#f0c1ff";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(g.x, g.y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "1000 18px system-ui,sans-serif";
-        ctx.fillText(String(Math.max(0, g.hp)), g.x, g.y);
-        ctx.font = "900 13px system-ui,sans-serif";
-        ctx.fillText("吸収コア", g.x, g.y + 49);
-    }
+            ctx.fillText("吸収コア", g.x, g.y + 44);
+        }
 
-    // 大きな残り時間バーで制限時間を読み取りやすくする。
-    if (g.type === "armorParts" || g.type === "bombFuse" || g.type === "energyDrain") {
+        const maxTime = g.type === "armorParts" ? 15 + Math.floor((Math.max(1, boss?.level || 1) - 1) / 2) * 0.35
+            : g.type === "bombFuse" ? 8 + Math.floor((Math.max(1, boss?.level || 1) - 1) / 2) * 0.5
+            : 9 + Math.floor((Math.max(1, boss?.level || 1) - 1) / 2) * 0.45;
         const barW = Math.min(240, W * 0.62);
         const barX = (W - barW) / 2;
-        const barY = Math.min(H - 135, g.y + 76);
-        const maxTime = g.type === "armorParts" ? 15 : g.type === "bombFuse" ? 8 : 9;
+        const barY = Math.min(H - 135, g.y + 70);
         const ratio = Math.max(0, Math.min(1, g.timer / maxTime));
         ctx.fillStyle = "rgba(0,0,0,.8)";
-        ctx.fillRect(barX, barY, barW, 12);
+        ctx.fillRect(barX, barY, barW, 11);
         ctx.fillStyle = g.type === "armorParts" ? "#45dcff" : g.type === "bombFuse" ? "#ff493c" : "#cb65ff";
-        ctx.fillRect(barX, barY, barW * ratio, 12);
-        ctx.strokeStyle = "#ffffff";
+        ctx.fillRect(barX, barY, barW * ratio, 11);
+        ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
-        ctx.strokeRect(barX, barY, barW, 12);
+        ctx.strokeRect(barX, barY, barW, 11);
+        ctx.restore();
     }
 
-    ctx.restore();
-}
+    draw = function () {
+        const extraActive = !!(gimmick && extraGimmickTypes.includes(gimmick.type));
+        if (!extraActive) {
+            originalDraw();
+            return;
+        }
+        const savedGimmick = gimmick;
+        gimmick = null;
+        try {
+            originalDraw();
+        } finally {
+            gimmick = savedGimmick;
+        }
+        drawExtraGimmick();
+    };
 
-draw = function () {
-    const customActive = !!(gimmick && addonGimmickTypes.includes(gimmick.type));
-    if (!customActive) {
-        addonOriginalDraw();
-        return;
-    }
+    // If the browser blocks a cosmetic helper, leave the gameplay mechanics active.
+    renderWeaknessNotice();
+    console.info("[ボス調整] ダメージ・シールド弱体化・段階的難易度を適用しました。");
+})();
 
-    const savedGimmick = gimmick;
-    gimmick = null;
-    try {
-        addonOriginalDraw();
-    } finally {
-        gimmick = savedGimmick;
-    }
-    addonDrawCustomGimmick();
-};
