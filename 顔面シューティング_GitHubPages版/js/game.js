@@ -5733,4 +5733,134 @@ void initializeSharedAuth();
     renderWeaknessNotice();
     console.info("[ボス調整] ダメージ・シールド弱体化・段階的難易度を適用しました。");
 })();
+/*
+ * ボスギミック調整パッチ
+ * game.js の一番下（現在のボスギミック調整パッチの後ろ）に追加してください。
+ * 既存のコードは削除しません。
+ *
+ * 変更点:
+ * - 時間制限を全体的に1.5倍に延長
+ * - シールド破壊後の通常弾ダメージ: ボスLv1=20倍、Lv2=15倍、Lv3以降=10倍
+ * - 時間制限表示と補給・追加ギミックのゲージ表示も合わせて調整
+ */
+(() => {
+    "use strict";
+
+    const TIME_LIMIT_MULTIPLIER = 1.5;
+    const shieldDamageMultiplier = level =>
+        Math.max(10, 20 - Math.max(0, Math.floor(Number(level) || 1) - 1) * 5);
+
+    // 1. シールド弱体化中の通常弾ダメージをボスレベルに合わせる。
+    // 現在のバランスパッチが設定した「3倍」処理を20x / 15x / 10xに差し替える。
+    if (typeof updateBullets === "function") {
+        const source = updateBullets.toString();
+        const oldDamagePattern = /boss\.hp\s*-=?\s*\(\s*boss\.weaknessTimer\s*>\s*0\s*\?\s*3\s*:\s*1\s*\)\s*;/;
+        const newDamage = "boss.hp -= (boss.weaknessTimer > 0 ? Math.max(10, 20 - Math.max(0, Math.floor(Number(boss.level) || 1) - 1) * 5) : 1);";
+        let updatedSource = source.replace(oldDamagePattern, newDamage);
+
+        // 元のコード表記が異なる場合にも対応。
+        if (updatedSource === source && source.includes("boss.hp--;")) {
+            updatedSource = source.replace(
+                "boss.hp--;",
+                newDamage
+            );
+        }
+
+        if (updatedSource !== source) {
+            updateBullets = eval(`(${updatedSource})`);
+        } else {
+            console.warn("[ボス調整] 通常弾ダメージの置換対象が見つかりませんでした。現在のupdateBulletsを確認してください。");
+        }
+    }
+
+    // 2. シールド破壊時の説明を、実際の倍率に合わせる。
+    const previousHitGimmick = hitGimmick;
+    hitGimmick = function (targetIndex = -1) {
+        const breakingShield = !!(gimmick && gimmick.type === "shield" && gimmick.hp <= 1);
+        const result = previousHitGimmick.call(this, targetIndex);
+
+        if (breakingShield && boss && boss.weaknessTimer > 0) {
+            const multiplier = shieldDamageMultiplier(boss.level);
+            const title = document.getElementById("gimmickTitle");
+            const text = document.getElementById("gimmickText");
+            if (title) {
+                title.textContent = "🛡 シールド破壊！";
+                title.style.color = "#65e7ff";
+            }
+            if (text) {
+                text.textContent = `ボス弱体化！通常弾×${multiplier}ダメージ！ボスの弾速も低下！`;
+            }
+        }
+
+        return result;
+    };
+
+    // 3. すべてのギミックの制限時間を1.5倍にする。
+    // extra gimmickはlife=90がダミー値なので、timerだけを延長する。
+    const previousSpawnGimmick = spawnGimmick;
+    spawnGimmick = function (...args) {
+        const oldGimmick = gimmick;
+        const result = previousSpawnGimmick.apply(this, args);
+        if (!gimmick || gimmick === oldGimmick || gimmick.__extendedTimeLimit) {
+            return result;
+        }
+
+        if (typeof gimmick.timer === "number" && gimmick.timer > 0) {
+            gimmick.timer *= TIME_LIMIT_MULTIPLIER;
+            gimmick.__timerDisplayScale = TIME_LIMIT_MULTIPLIER;
+        } else if (typeof gimmick.life === "number" && gimmick.life > 0) {
+            gimmick.life *= TIME_LIMIT_MULTIPLIER;
+        }
+        gimmick.__extendedTimeLimit = true;
+        return result;
+    };
+
+    // 4. 通常ギミックにも残り時間を表示し、現在の進捗文を壊さないように更新する。
+    const previousUpdateBoss = updateBoss;
+    updateBoss = function (dt, ...args) {
+        const result = previousUpdateBoss.call(this, dt, ...args);
+
+        if (boss && boss.weaknessTimer > 0) {
+            const notice = document.getElementById("bossWeaknessNotice");
+            if (notice) {
+                const multiplier = shieldDamageMultiplier(boss.level);
+                notice.style.display = "block";
+                notice.textContent = `🛡 シールド破壊！弱体化 ${boss.weaknessTimer.toFixed(1)}秒　通常弾×${multiplier} / ボス弾が遅い`;
+            }
+        }
+
+        if (gimmick && typeof gimmick.life === "number" && !("timer" in gimmick) && gimmick.life > 0) {
+            const text = document.getElementById("gimmickText");
+            if (text) {
+                let label = text.textContent || "ギミックを突破しろ！";
+                label = label
+                    .replace(/\s*⏱\s*残り\s*[\d.]+秒\s*$/, "")
+                    .replace(/^\s*[\d.]+秒以内に\s*/, "")
+                    .replace(/\s*(?:制限時間|制限|残り)\s*[\d.]+秒(?:以内に)?/g, "")
+                    .trim();
+                text.textContent = `${label || "ギミックを突破しろ！"}　⏱ 残り ${Math.max(0, gimmick.life).toFixed(1)}秒`;
+            }
+        }
+        return result;
+    };
+
+    // 5. 追加ギミックの時間ゲージを1.5倍後の残り時間に合わせて表示。
+    // 描画時だけ元の比率に戻すため、実際のタイマーやルールは変わらない。
+    const previousDraw = draw;
+    draw = function (...args) {
+        const activeGimmick = gimmick;
+        if (activeGimmick && activeGimmick.__timerDisplayScale > 1 && typeof activeGimmick.timer === "number") {
+            const actualTimer = activeGimmick.timer;
+            activeGimmick.timer = actualTimer / activeGimmick.__timerDisplayScale;
+            try {
+                return previousDraw.apply(this, args);
+            } finally {
+                activeGimmick.timer = actualTimer;
+            }
+        }
+        return previousDraw.apply(this, args);
+    };
+
+    console.info("[ボス調整] ギミック時間1.5倍、シールド弱体化ダメージ20x/15x/10xを適用しました。");
+})();
 
