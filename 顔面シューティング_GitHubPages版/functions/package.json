@@ -1,0 +1,12 @@
+{
+  "name": "face-shooter-admin-functions",
+  "private": true,
+  "description": "Secure admin backend for Face Shooter Online",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "scripts": { "lint": "node --check index.js" },
+  "dependencies": {
+    "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.4.0"
+  }
+}
