@@ -31,14 +31,59 @@ let cursorBaseX = 0;
 let cursorBaseY = 0;
 let cursorOffsetReadout = null;
 
+const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
+const DEFAULT_CONTROL_LAYOUT = {
+    move:   { x: 0.13, y: 0.77, size: 1.00, opacity: 0.82 },
+    shoot:  { x: 0.87, y: 0.77, size: 1.00, opacity: 0.96 },
+    bomb:   { x: 0.80, y: 0.59, size: 1.00, opacity: 0.93 },
+    shield: { x: 0.94, y: 0.59, size: 1.00, opacity: 0.93 },
+    aim:    { x: 0.50, y: 0.47, size: 1.00, opacity: 0.88 }
+};
+
+function copyDefaultControlLayout() {
+    return JSON.parse(JSON.stringify(DEFAULT_CONTROL_LAYOUT));
+}
+
+function normalizeControlLayout(input) {
+    const result = copyDefaultControlLayout();
+    if (!input || typeof input !== "object") return result;
+
+    for (const key of Object.keys(result)) {
+        const item = input[key];
+        if (!item || typeof item !== "object") continue;
+        result[key].x = Math.max(0.06, Math.min(0.94, Number(item.x) || result[key].x));
+        result[key].y = Math.max(0.08, Math.min(0.92, Number(item.y) || result[key].y));
+        result[key].size = Math.max(0.55, Math.min(1.70, Number(item.size) || result[key].size));
+        result[key].opacity = Math.max(0.25, Math.min(1, Number(item.opacity) || result[key].opacity));
+    }
+    return result;
+}
+
+function loadControlLayout() {
+    try {
+        const saved = localStorage.getItem(CONTROL_LAYOUT_STORAGE_KEY);
+        return saved ? normalizeControlLayout(JSON.parse(saved)) : copyDefaultControlLayout();
+    } catch (error) {
+        console.warn("操作レイアウトを読み込めませんでした。初期配置を使います。", error);
+        return copyDefaultControlLayout();
+    }
+}
+
+let controlLayout = loadControlLayout();
+
 function clampCursorOffset(value) {
     return Math.max(-160, Math.min(160, value));
 }
 
 function renderGameCursorPosition() {
     if (!gameCursor) return;
-    gameCursor.style.left = `${cursorBaseX + cursorOffsetX}px`;
-    gameCursor.style.top = `${cursorBaseY + cursorOffsetY}px`;
+    if (touchMode && gameWrap) {
+        gameCursor.style.left = `${controlLayout.aim.x * gameWrap.clientWidth + cursorOffsetX}px`;
+        gameCursor.style.top = `${controlLayout.aim.y * gameWrap.clientHeight + cursorOffsetY}px`;
+    } else {
+        gameCursor.style.left = `${cursorBaseX + cursorOffsetX}px`;
+        gameCursor.style.top = `${cursorBaseY + cursorOffsetY}px`;
+    }
     if (cursorOffsetReadout) {
         cursorOffsetReadout.textContent = `X ${cursorOffsetX} / Y ${cursorOffsetY}`;
     }
@@ -107,10 +152,11 @@ if (cursorSensitivityValue && cursorSensitivityValue.parentElement) {
 
 function applyCursorSize() {
     cursorSizeLevel = Math.max(12, Math.min(80, Number(cursorSizeLevel) || 32));
+    const effectiveSize = cursorSizeLevel * (controlLayout?.aim?.size || 1);
     if (gameCursor) {
-        gameCursor.style.width = `${cursorSizeLevel}px`;
-        gameCursor.style.height = `${cursorSizeLevel}px`;
-        gameCursor.style.borderWidth = cursorSizeLevel >= 56 ? "3px" : "2px";
+        gameCursor.style.width = `${effectiveSize}px`;
+        gameCursor.style.height = `${effectiveSize}px`;
+        gameCursor.style.borderWidth = effectiveSize >= 56 ? "3px" : "2px";
     }
     if (cursorSizeValue) cursorSizeValue.textContent = `${Math.round(cursorSizeLevel)}px`;
 }
@@ -213,6 +259,117 @@ gameCursorStyle.textContent = `
         #touchShoot { width:121px; min-height:48px; }
         #touchActions .touchAction { min-height:48px; font-size:10px; padding:3px; }
         #bossSupplyNotice { bottom:75px; }
+    }
+
+    /* Minecraft-style pre-game control layout editor and saved touch layout. */
+    body.touch-mode #touchActions {
+        display:contents !important;
+        position:static !important;
+        inset:auto !important;
+        width:auto !important;
+        height:auto !important;
+    }
+    body.touch-mode #touchActions .touchAction {
+        position:absolute !important;
+        right:auto !important;
+        bottom:auto !important;
+        margin:0 !important;
+        grid-column:auto !important;
+        grid-row:auto !important;
+    }
+    #controlLayoutButton {
+        display:block; width:100%; margin:9px auto 8px; padding:12px 14px;
+        min-height:46px; border:2px solid #7fe8ff; border-radius:12px;
+        background:#132c47; color:#fff; font-size:15px; font-weight:1000;
+        cursor:pointer; touch-action:manipulation;
+    }
+    #controlLayoutEditor {
+        position:absolute; inset:0; z-index:1000; display:none;
+        align-items:center; justify-content:center; padding:8px;
+        background:rgba(2,5,16,.96); color:#fff; box-sizing:border-box;
+        font-family:system-ui,"Yu Gothic",sans-serif;
+    }
+    .cle-panel {
+        display:flex; flex-direction:column; gap:10px; width:min(100%,900px);
+        max-height:100%; overflow:auto; padding:14px; box-sizing:border-box;
+        border:2px solid rgba(127,232,255,.7); border-radius:18px;
+        background:linear-gradient(160deg,#172540,#080e20);
+        box-shadow:0 10px 35px rgba(0,0,0,.5);
+    }
+    .cle-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .cle-heading h2 { margin:0; font-size:clamp(18px,3.2vw,25px); }
+    .cle-heading button,.cle-action-button {
+        min-height:42px; padding:8px 13px; border:1px solid rgba(255,255,255,.7);
+        border-radius:10px; background:#253652; color:#fff; font-weight:900;
+        cursor:pointer; touch-action:manipulation;
+    }
+    .cle-help { margin:0; color:#d6e8ff; font-size:13px; line-height:1.5; }
+    .cle-stage {
+        position:relative; flex:0 0 auto; width:100%; height:min(43dvh,410px);
+        min-height:220px; overflow:hidden; border:2px solid #6c809d;
+        border-radius:12px; touch-action:none; user-select:none;
+        background:
+            radial-gradient(ellipse at 50% 35%,rgba(40,103,132,.65),transparent 58%),
+            linear-gradient(180deg,#192e43,#0b1828 70%,#142519);
+    }
+    .cle-demo-hud {
+        position:absolute; top:8px; left:8px; right:8px; display:flex;
+        justify-content:space-between; gap:8px; pointer-events:none;
+        font-size:clamp(9px,1.7vw,13px); font-weight:1000; text-shadow:1px 2px 3px #000;
+    }
+    .cle-demo-enemy {
+        position:absolute; left:50%; top:23%; transform:translate(-50%,-50%);
+        width:clamp(28px,5vw,46px); height:clamp(28px,5vw,46px);
+        display:grid; place-items:center; border:2px solid #ff8a91; border-radius:12px;
+        background:#8b2634; box-shadow:0 0 25px rgba(255,60,75,.35); pointer-events:none;
+    }
+    .cle-demo-player {
+        position:absolute; left:50%; top:78%; transform:translate(-50%,-50%);
+        display:grid; place-items:center; width:42px; height:42px; border-radius:50%;
+        border:2px solid #fff; background:#293eff; box-shadow:0 0 20px rgba(75,120,255,.4);
+        pointer-events:none;
+    }
+    .cle-demo-caption {
+        position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+        padding:5px 9px; border-radius:8px; background:rgba(0,0,0,.45);
+        color:rgba(255,255,255,.8); font-size:12px; white-space:nowrap; pointer-events:none;
+    }
+    .cle-control {
+        position:absolute; z-index:3; display:grid; place-items:center;
+        left:50%; top:50%; transform:translate(-50%,-50%);
+        box-sizing:border-box; padding:5px; color:#fff; font-weight:1000;
+        border:2px solid rgba(255,255,255,.8); background:rgba(24,38,62,.88);
+        box-shadow:0 3px 0 rgba(0,0,0,.45); user-select:none; touch-action:none;
+        cursor:grab; text-align:center; line-height:1.1;
+    }
+    .cle-control:active { cursor:grabbing; }
+    .cle-control.cle-selected { outline:3px solid #ffe600; outline-offset:3px; z-index:5; }
+    .cle-stick { width:clamp(66px,12vw,112px); height:clamp(66px,12vw,112px); border-radius:50%; background:rgba(30,44,63,.78); font-size:12px; }
+    .cle-action { min-width:clamp(55px,9vw,82px); min-height:clamp(48px,8vw,66px); border-radius:15px; font-size:clamp(10px,1.7vw,15px); }
+    .cle-shoot { background:rgba(126,94,14,.94); border-color:#ffe36b; }
+    .cle-bomb { background:rgba(142,62,17,.94); border-color:#ffc28d; }
+    .cle-shield { background:rgba(10,93,129,.94); border-color:#91e8ff; }
+    .cle-aim {
+        width:34px; height:34px; padding:0; min-width:0; min-height:0;
+        border:2px solid #ffe600; border-radius:50%; background:rgba(255,230,0,.08);
+        color:#ffe600; box-shadow:0 0 12px rgba(255,230,0,.6); font-size:18px;
+    }
+    .cle-settings { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px 16px; }
+    .cle-selected-name { grid-column:1/-1; margin:0; color:#ffe600; font-weight:1000; }
+    .cle-range { display:grid; gap:5px; font-size:12px; font-weight:900; }
+    .cle-range input { width:100%; min-height:28px; accent-color:#ffe600; }
+    .cle-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; }
+    .cle-actions button { flex:1 1 120px; min-height:44px; }
+    .cle-save { background:#ffe600 !important; color:#111 !important; border-color:#ffe600 !important; }
+    .cle-status { min-height:1.2em; margin:0; color:#9ef4e0; font-size:12px; }
+    @media (max-width:650px), (pointer:coarse) {
+        #controlLayoutEditor { padding:5px; }
+        .cle-panel { padding:9px; gap:8px; border-radius:13px; }
+        .cle-help { font-size:12px; }
+        .cle-stage { height:min(39dvh,330px); min-height:205px; }
+        .cle-settings { gap:7px 10px; }
+        .cle-actions { gap:6px; }
+        .cle-actions button { flex:1 1 100px; padding:7px 8px; font-size:12px; }
     }
 `;
 document.head.appendChild(gameCursorStyle);
@@ -334,6 +491,15 @@ if (controlModeBtn) {
         event.preventDefault();
         touchMode = !touchMode;
         applyControlMode();
+        applyControlLayout();
+        if (gameCursor) {
+            if (touchMode && running) {
+                renderGameCursorPosition();
+                gameCursor.style.display = "block";
+            } else if (!touchMode) {
+                gameCursor.style.display = "none";
+            }
+        }
     });
 }
 
@@ -398,7 +564,12 @@ if (gameWrap && canvas) {
 
     gameWrap.addEventListener("pointermove", event => {
         if (event.pointerType !== "mouse") {
-            gameCursor.style.display = "none";
+            if (touchMode && running) {
+                renderGameCursorPosition();
+                gameCursor.style.display = "block";
+            } else {
+                gameCursor.style.display = "none";
+            }
             return;
         }
 
@@ -418,7 +589,12 @@ if (gameWrap && canvas) {
     });
 
     gameWrap.addEventListener("pointerleave", () => {
-        gameCursor.style.display = "none";
+        if (touchMode && running) {
+            renderGameCursorPosition();
+            gameCursor.style.display = "block";
+        } else {
+            gameCursor.style.display = "none";
+        }
     });
 
     // ゲーム中にも照準の表示位置を微調整できる十字ボタン。
@@ -454,6 +630,273 @@ if (gameWrap && canvas) {
     });
 }
 applyCursorSize();
+
+// 操作レイアウトをゲーム開始前に編集する「Minecraft風カスタム操作」画面。
+// 配置・サイズ・透過度はこの端末のlocalStorageに保存する。
+function applyControlLayout() {
+    if (!gameWrap) return;
+
+    const move = controlLayout.move;
+    if (touchJoystick) {
+        touchJoystick.style.setProperty("position", "absolute", "important");
+        touchJoystick.style.setProperty("left", `${move.x * 100}%`, "important");
+        touchJoystick.style.setProperty("top", `${move.y * 100}%`, "important");
+        touchJoystick.style.setProperty("right", "auto", "important");
+        touchJoystick.style.setProperty("bottom", "auto", "important");
+        touchJoystick.style.setProperty("transform", `translate(-50%, -50%) scale(${move.size})`, "important");
+        const joystickBase = window.matchMedia("(max-width: 900px) and (orientation: landscape) and (pointer: coarse)").matches
+            ? 86
+            : window.matchMedia("(max-width: 760px), (pointer: coarse)").matches ? 112 : 132;
+        touchJoystick.style.setProperty("width", `${joystickBase * move.size}px`, "important");
+        touchJoystick.style.setProperty("height", `${joystickBase * move.size}px`, "important");
+        touchJoystick.style.setProperty("opacity", String(move.opacity), "important");
+        if (joystickKnob) {
+            joystickKnob.style.setProperty("width", `${joystickBase * 0.46 * move.size}px`, "important");
+            joystickKnob.style.setProperty("height", `${joystickBase * 0.46 * move.size}px`, "important");
+        }
+    }
+
+    const buttonSpecs = {
+        shoot: { element: touchShoot, desktop: [161, 76], compact: [142, 60], landscape: [121, 48] },
+        bomb: { element: touchBomb, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] },
+        shield: { element: touchShield, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] }
+    };
+    const landscape = window.matchMedia("(max-width: 900px) and (orientation: landscape) and (pointer: coarse)").matches;
+    const compact = window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+
+    for (const [key, spec] of Object.entries(buttonSpecs)) {
+        const element = spec.element;
+        if (!element) continue;
+        const setting = controlLayout[key];
+        const [baseW, baseH] = landscape ? spec.landscape : compact ? spec.compact : spec.desktop;
+        element.style.setProperty("position", "absolute", "important");
+        element.style.setProperty("left", `${setting.x * 100}%`, "important");
+        element.style.setProperty("top", `${setting.y * 100}%`, "important");
+        element.style.setProperty("right", "auto", "important");
+        element.style.setProperty("bottom", "auto", "important");
+        element.style.setProperty("margin", "0", "important");
+        element.style.setProperty("transform", `translate(-50%, -50%) scale(${setting.size})`, "important");
+        element.style.setProperty("width", `${baseW}px`, "important");
+        element.style.setProperty("height", `${baseH}px`, "important");
+        element.style.setProperty("min-height", `${baseH}px`, "important");
+        element.style.setProperty("opacity", String(setting.opacity), "important");
+    }
+
+    if (gameCursor) {
+        if (touchMode) {
+            renderGameCursorPosition();
+            gameCursor.style.setProperty("opacity", String(controlLayout.aim.opacity), "important");
+        }
+    }
+    applyCursorSize();
+}
+
+function cloneCurrentControlLayout() {
+    return JSON.parse(JSON.stringify(controlLayout));
+}
+
+function createControlLayoutEditor() {
+    if (!gameWrap || document.getElementById("controlLayoutEditor")) return;
+
+    const startButton = document.getElementById("startBtn");
+    if (!startButton || !startButton.parentElement) return;
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.id = "controlLayoutButton";
+    openButton.textContent = "🎮 操作ボタンの配置をカスタム";
+    openButton.setAttribute("aria-haspopup", "dialog");
+    startButton.parentElement.insertBefore(openButton, startButton);
+
+    const overlay = document.createElement("div");
+    overlay.id = "controlLayoutEditor";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "cleTitle");
+    overlay.innerHTML = `
+        <div class="cle-panel">
+            <div class="cle-heading">
+                <h2 id="cleTitle">🎮 操作レイアウトを編集</h2>
+                <button type="button" id="cleClose" aria-label="閉じる">✕</button>
+            </div>
+            <p class="cle-help">スマホ版マイクラの操作設定のように、ボタンをドラッグして好きな場所へ動かせます。下のデモ画面で配置を確認してね。</p>
+            <div class="cle-stage" id="cleStage" aria-label="操作ボタンの配置プレビュー">
+                <div class="cle-demo-hud"><span>❤️ HP 4/5</span><span>WAVE 1</span><span>⭐ SCORE 1200</span></div>
+                <div class="cle-demo-enemy">👾</div>
+                <div class="cle-demo-player">🙂</div>
+                <div class="cle-demo-caption">ここをドラッグして配置</div>
+            </div>
+            <div class="cle-settings">
+                <p class="cle-selected-name" id="cleSelectedName">選択中：移動スティック</p>
+                <label class="cle-range">サイズ：<output id="cleSizeValue">100%</output>
+                    <input id="cleSize" type="range" min="55" max="170" step="5" value="100">
+                </label>
+                <label class="cle-range">透明度：<output id="cleOpacityValue">82%</output>
+                    <input id="cleOpacity" type="range" min="25" max="100" step="5" value="82">
+                </label>
+            </div>
+            <p class="cle-help">配置できるもの：移動スティック・発射・爆弾・シールド・照準。選んだボタンは黄色い枠で表示されます。</p>
+            <p class="cle-status" id="cleStatus" role="status" aria-live="polite"></p>
+            <div class="cle-actions">
+                <button type="button" class="cle-action-button" id="cleReset">↺ 初期配置</button>
+                <button type="button" class="cle-action-button" id="cleCancel">キャンセル</button>
+                <button type="button" class="cle-action-button cle-save" id="cleSave">✓ 保存して戻る</button>
+            </div>
+        </div>`;
+    gameWrap.appendChild(overlay);
+
+    const stage = overlay.querySelector("#cleStage");
+    const selectedName = overlay.querySelector("#cleSelectedName");
+    const sizeRange = overlay.querySelector("#cleSize");
+    const sizeValue = overlay.querySelector("#cleSizeValue");
+    const opacityRange = overlay.querySelector("#cleOpacity");
+    const opacityValue = overlay.querySelector("#cleOpacityValue");
+    const status = overlay.querySelector("#cleStatus");
+
+    const descriptors = [
+        { key: "move", name: "移動スティック", text: "🕹 移動", className: "cle-stick" },
+        { key: "shoot", name: "発射ボタン", text: "🔫 発射", className: "cle-action cle-shoot" },
+        { key: "bomb", name: "爆弾ボタン", text: "💣 爆弾", className: "cle-action cle-bomb" },
+        { key: "shield", name: "シールドボタン", text: "🛡 盾", className: "cle-action cle-shield" },
+        { key: "aim", name: "照準カーソル", text: "＋", className: "cle-aim" }
+    ];
+    const demoControls = new Map();
+    let draft = cloneCurrentControlLayout();
+    let selectedKey = "move";
+    let dragging = null;
+
+    function renderDemo() {
+        for (const desc of descriptors) {
+            const setting = draft[desc.key];
+            const element = demoControls.get(desc.key);
+            element.style.left = `${setting.x * 100}%`;
+            element.style.top = `${setting.y * 100}%`;
+            element.style.opacity = String(setting.opacity);
+            element.style.transform = `translate(-50%, -50%) scale(${setting.size})`;
+            element.classList.toggle("cle-selected", desc.key === selectedKey);
+        }
+        updateEditorSettings();
+    }
+
+    function updateEditorSettings() {
+        const desc = descriptors.find(item => item.key === selectedKey);
+        const setting = draft[selectedKey];
+        selectedName.textContent = `選択中：${desc ? desc.name : selectedKey}`;
+        sizeRange.value = String(Math.round(setting.size * 100));
+        sizeValue.textContent = `${Math.round(setting.size * 100)}%`;
+        opacityRange.value = String(Math.round(setting.opacity * 100));
+        opacityValue.textContent = `${Math.round(setting.opacity * 100)}%`;
+    }
+
+    function selectControl(key) {
+        if (!draft[key]) return;
+        selectedKey = key;
+        renderDemo();
+    }
+
+    for (const desc of descriptors) {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = `cle-control ${desc.className}`;
+        element.dataset.layoutKey = desc.key;
+        element.textContent = desc.text;
+        element.setAttribute("aria-label", `${desc.name}。ドラッグで移動`);
+        demoControls.set(desc.key, element);
+        stage.appendChild(element);
+    }
+
+    stage.addEventListener("pointerdown", event => {
+        const element = event.target.closest("[data-layout-key]");
+        if (!element || !stage.contains(element)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const key = element.dataset.layoutKey;
+        selectControl(key);
+        dragging = { key, pointerId: event.pointerId };
+        try { element.setPointerCapture(event.pointerId); } catch (_) {}
+    }, { passive: false });
+
+    stage.addEventListener("pointermove", event => {
+        if (!dragging || event.pointerId !== dragging.pointerId) return;
+        event.preventDefault();
+        const rect = stage.getBoundingClientRect();
+        draft[dragging.key].x = Math.max(0.06, Math.min(0.94, (event.clientX - rect.left) / rect.width));
+        draft[dragging.key].y = Math.max(0.08, Math.min(0.92, (event.clientY - rect.top) / rect.height));
+        renderDemo();
+    }, { passive: false });
+
+    const stopDragging = event => {
+        if (dragging && (!event || event.pointerId === dragging.pointerId)) dragging = null;
+    };
+    stage.addEventListener("pointerup", stopDragging);
+    stage.addEventListener("pointercancel", stopDragging);
+    stage.addEventListener("lostpointercapture", stopDragging);
+
+    sizeRange.addEventListener("input", () => {
+        draft[selectedKey].size = Math.max(0.55, Math.min(1.70, Number(sizeRange.value) / 100));
+        renderDemo();
+    });
+    opacityRange.addEventListener("input", () => {
+        draft[selectedKey].opacity = Math.max(0.25, Math.min(1, Number(opacityRange.value) / 100));
+        renderDemo();
+    });
+
+    function openEditor() {
+        draft = cloneCurrentControlLayout();
+        selectedKey = "move";
+        status.textContent = "ボタンを指でドラッグして動かしてね。";
+        renderDemo();
+        overlay.style.display = "flex";
+        overlay.setAttribute("aria-hidden", "false");
+        overlay.querySelector("#cleClose").focus({ preventScroll: true });
+    }
+
+    function closeEditor(restore) {
+        dragging = null;
+        if (restore) {
+            draft = cloneCurrentControlLayout();
+            renderDemo();
+        }
+        overlay.style.display = "none";
+        overlay.setAttribute("aria-hidden", "true");
+        openButton.focus({ preventScroll: true });
+    }
+
+    openButton.addEventListener("click", openEditor);
+    overlay.querySelector("#cleClose").addEventListener("click", () => closeEditor(true));
+    overlay.querySelector("#cleCancel").addEventListener("click", () => closeEditor(true));
+    overlay.querySelector("#cleReset").addEventListener("click", () => {
+        draft = copyDefaultControlLayout();
+        selectedKey = "move";
+        status.textContent = "初期配置に戻しました。保存するまで実際の操作には反映されません。";
+        renderDemo();
+    });
+    overlay.querySelector("#cleSave").addEventListener("click", () => {
+        controlLayout = normalizeControlLayout(draft);
+        try {
+            localStorage.setItem(CONTROL_LAYOUT_STORAGE_KEY, JSON.stringify(controlLayout));
+            status.textContent = "配置をこの端末に保存しました。";
+        } catch (error) {
+            console.warn("操作レイアウトを保存できませんでした。", error);
+            status.textContent = "このブラウザでは保存できませんでしたが、今回のページ内では配置を使います。";
+        }
+        applyControlLayout();
+        closeEditor(false);
+    });
+
+    // Escキーでも編集画面を閉じる。配置は保存済みのものを維持する。
+    overlay.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            closeEditor(true);
+        }
+    });
+
+    renderDemo();
+}
+
+createControlLayoutEditor();
+applyControlLayout();
 
 const faceImage =
     new Image();
@@ -768,7 +1211,10 @@ function resize() {
 
 window.addEventListener(
     "resize",
-    resize
+    () => {
+        resize();
+        if (typeof applyControlLayout === "function") applyControlLayout();
+    }
 );
 
 resize();
@@ -1136,6 +1582,11 @@ function startGame() {
     }
 
     running = true;
+    applyControlLayout();
+    if (gameCursor && touchMode) {
+        renderGameCursorPosition();
+        gameCursor.style.display = "block";
+    }
     document.getElementById("start").style.display = "none";
     document.getElementById("quitGameBtn").style.display = "block";
     if (pauseGameBtn) pauseGameBtn.style.display = "block";
@@ -1221,6 +1672,7 @@ function quitGame() {
     }
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     running = false;
+    if (gameCursor) gameCursor.style.display = "none";
     const quitBtn = document.getElementById("quitGameBtn");
     if (quitBtn) quitBtn.style.display = "none";
     document.getElementById("bossBar").style.display = "none";
