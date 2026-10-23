@@ -1317,3 +1317,59 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
     #fullscreenBtn { top: 62px !important; }
     #pauseGameBtn { top: 88px !important; }
 }
+/* 出撃画面をスクロール可能にする */
+#start {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    box-sizing: border-box !important;
+    padding: max(8px, env(safe-area-inset-top)) 8px
+             calc(16px + env(safe-area-inset-bottom)) !important;
+}
+
+/* パネルの高さ制限を解除 */
+#start .panel {
+    width: min(94%, 620px) !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    margin: 8px auto 16px !important;
+    padding-bottom: 24px !important;
+    flex: 0 0 auto !important;
+}
+
+/* 出撃ボタンを固定表示から通常表示に変更 */
+#start #startBtn {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    display: block !important;
+    width: min(90%, 360px) !important;
+    margin: 16px auto 8px !important;
+    scroll-margin-bottom: 16px;
+}
+
+#start #startBtn:active {
+    transform: translateY(4px) !important;
+}
+
+/* 高さが小さいパソコンにも対応 */
+@media (max-height: 700px) {
+    #start .panel {
+        padding: 16px 16px 24px !important;
+        border-radius: 16px;
+    }
+
+    #start .panel > p {
+        margin: 7px 0 !important;
+    }
+}
