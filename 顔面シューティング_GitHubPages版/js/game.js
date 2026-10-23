@@ -6159,3 +6159,86 @@ void initializeSharedAuth();
 
     void loadAdminGameplayConfig();
 })();
+/* =============================================================
+   FACE SHOOTER FREE-PLAN ADMIN SITE LINK
+   使い方: このファイルの全文を、既存の js/game.js の一番最後へ追加。
+   管理者としてログインしている場合だけ、出撃画面に管理サイトへのリンクを表示。
+   Firebase Cloud Functions / 有料プランは不要。
+   ============================================================= */
+(() => {
+    "use strict";
+
+    const START_BUTTON_ID = "startBtn";
+    const ADMIN_LINK_ID = "adminSiteLink";
+
+    function ensureAdminLink() {
+        const startButton = document.getElementById(START_BUTTON_ID);
+        if (!startButton) {
+            console.warn("管理サイトリンク: 出撃ボタン #startBtn が見つかりません。");
+            return null;
+        }
+
+        let link = document.getElementById(ADMIN_LINK_ID);
+        if (!link) {
+            link = document.createElement("a");
+            link.id = ADMIN_LINK_ID;
+            link.href = "./admin.html";
+            link.textContent = "🛠 管理サイトを開く";
+            link.setAttribute("aria-label", "管理者専用サイトを開く");
+            link.style.cssText = [
+                "display:none",
+                "width:100%",
+                "box-sizing:border-box",
+                "margin:10px 0 0",
+                "padding:12px 16px",
+                "border:1px solid #65e7ff",
+                "border-radius:10px",
+                "background:linear-gradient(135deg,#12314a,#174d66)",
+                "color:#ffffff",
+                "font:700 15px system-ui,sans-serif",
+                "text-align:center",
+                "text-decoration:none",
+                "cursor:pointer",
+                "box-shadow:0 0 14px rgba(101,231,255,.16)"
+            ].join(";");
+            startButton.insertAdjacentElement("afterend", link);
+        }
+        return link;
+    }
+
+    async function refreshAdminLink() {
+        const link = ensureAdminLink();
+        if (!link) return;
+
+        // 認証情報が利用できない場合は、誤って表示しない。
+        link.style.display = "none";
+        if (typeof firebaseReady === "undefined" || !firebaseReady ||
+            typeof auth === "undefined" || !auth ||
+            typeof db === "undefined" || !db ||
+            typeof doc !== "function" || typeof getDoc !== "function") {
+            return;
+        }
+
+        try {
+            await auth.authStateReady();
+            const user = auth.currentUser;
+            if (!user) return;
+
+            // Firestore の admins/{UID} を確認。role は owner または admin のみ許可。
+            const adminSnapshot = await getDoc(doc(db, "admins", user.uid));
+            const role = adminSnapshot.exists() ? adminSnapshot.data()?.role : "";
+            link.style.display = (role === "owner" || role === "admin") ? "block" : "none";
+        } catch (error) {
+            // 権限を確認できない場合は非表示にし、管理リンクだけで権限を与えない。
+            link.style.display = "none";
+            console.warn("管理サイトリンクの権限確認に失敗しました。Firestore Rules と admins/{UID} を確認してください。", error);
+        }
+    }
+
+    // 出撃画面が描画されたら確認し、認証状態が変わった際も再チェックする。
+    ensureAdminLink();
+    if (typeof auth !== "undefined" && auth && typeof auth.onAuthStateChanged === "function") {
+        auth.onAuthStateChanged(() => { void refreshAdminLink(); });
+    }
+    void refreshAdminLink();
+})();
