@@ -25,6 +25,31 @@ let cursorSize = document.getElementById("cursorSize");
 let cursorSizeValue = document.getElementById("cursorSizeValue");
 let cursorSizeLevel = Number(cursorSize?.value) || 32;
 let gameCursor = null;
+let cursorOffsetX = 0;
+let cursorOffsetY = 0;
+let cursorBaseX = 0;
+let cursorBaseY = 0;
+let cursorOffsetReadout = null;
+
+function clampCursorOffset(value) {
+    return Math.max(-160, Math.min(160, value));
+}
+
+function renderGameCursorPosition() {
+    if (!gameCursor) return;
+    gameCursor.style.left = `${cursorBaseX + cursorOffsetX}px`;
+    gameCursor.style.top = `${cursorBaseY + cursorOffsetY}px`;
+    if (cursorOffsetReadout) {
+        cursorOffsetReadout.textContent = `X ${cursorOffsetX} / Y ${cursorOffsetY}`;
+    }
+}
+
+function shiftCursor(dx, dy) {
+    cursorOffsetX = clampCursorOffset(cursorOffsetX + dx);
+    cursorOffsetY = clampCursorOffset(cursorOffsetY + dy);
+    renderGameCursorPosition();
+}
+
 
 // 既存HTML/CSSを編集せず、タイトル画面にカーソルサイズ設定を追加する。
 const sensitivityPanel = document.getElementById("sensitivityPanel");
@@ -52,7 +77,23 @@ if (sensitivityPanel && !cursorSize) {
     cursorHint.textContent = "照準の大きさを12〜80pxで変更できます。";
     cursorHint.style.cssText = "margin:4px 0 0;color:#cbd5ff;font-size:11px";
 
-    sensitivityPanel.append(cursorSizeLabel, cursorSize, cursorHint);
+    const sizePresets = document.createElement("div");
+    sizePresets.className = "cursorSizePresets";
+    sizePresets.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:8px";
+    for (const size of [20, 32, 48, 64, 80]) {
+        const preset = document.createElement("button");
+        preset.type = "button";
+        preset.textContent = `${size}px`;
+        preset.style.cssText = "flex:1;min-width:48px;min-height:40px;border:1px solid #ffe600;border-radius:8px;background:#252a40;color:white;font-weight:900;cursor:pointer;touch-action:manipulation";
+        preset.addEventListener("click", () => {
+            cursorSize.value = String(size);
+            cursorSizeLevel = size;
+            applyCursorSize();
+        });
+        sizePresets.appendChild(preset);
+    }
+
+    sensitivityPanel.append(cursorSizeLabel, cursorSize, cursorHint, sizePresets);
 }
 
 // 元々「カーソル感度」と表記されていた項目はタッチ移動感度なので、表示を正確にする。
@@ -69,6 +110,7 @@ function applyCursorSize() {
     if (gameCursor) {
         gameCursor.style.width = `${cursorSizeLevel}px`;
         gameCursor.style.height = `${cursorSizeLevel}px`;
+        gameCursor.style.borderWidth = cursorSizeLevel >= 56 ? "3px" : "2px";
     }
     if (cursorSizeValue) cursorSizeValue.textContent = `${Math.round(cursorSizeLevel)}px`;
 }
@@ -106,6 +148,71 @@ gameCursorStyle.textContent = `
     }
     #gameCursor::after {
         top:50%; left:-25%; height:2px; width:150%; transform:translateY(-50%);
+    }
+    #cursorAdjustPanel {
+        position:absolute; z-index:70; left:10px; bottom:82px;
+        display:grid; grid-template-columns:42px 42px 42px;
+        grid-template-rows:auto 42px 42px 42px; gap:5px; align-items:center;
+        padding:9px; border:1px solid rgba(255,230,0,.8); border-radius:12px;
+        background:rgba(5,8,24,.9); color:white; box-shadow:0 4px 16px rgba(0,0,0,.45);
+        font:800 11px system-ui,sans-serif;
+    }
+    #cursorAdjustPanel .cursorAdjustTitle { grid-column:1/4;text-align:center;color:#ffe600;font-size:12px; }
+    #cursorAdjustPanel .cursorOffsetReadout { grid-column:1/4;text-align:center;color:#dbe9ff;font-size:10px; }
+    #cursorAdjustPanel button {
+        min-width:42px; min-height:42px; padding:4px; border:1px solid #fff;
+        border-radius:8px; background:#222943; color:#fff; font-size:18px;
+        font-weight:1000; cursor:pointer; touch-action:manipulation;
+    }
+    #cursorAdjustPanel button[data-reset] { font-size:10px; background:#ffe600;color:#111; }
+    #bossSupplyNotice {
+        position:absolute; z-index:26; left:50%; bottom:148px; transform:translateX(-50%);
+        display:none; max-width:90%; padding:10px 16px; border:2px solid #7ffcff;
+        border-radius:12px; background:rgba(2,24,43,.94); color:#fff;
+        font:1000 15px system-ui,sans-serif; text-align:center; pointer-events:none;
+        box-shadow:0 0 18px rgba(77,255,255,.55);
+    }
+
+    /* Smartphone: larger tap targets, less clutter, and a scrollable title panel. */
+    @media (max-width: 760px), (pointer: coarse) {
+        #start { align-items:center; padding:6px; }
+        #start > .panel {
+            width:calc(100% - 8px); max-width:620px;
+            max-height:calc(100dvh - 12px); overflow-y:auto; overscroll-behavior:contain;
+            padding:13px; border-width:2px; border-radius:16px; box-shadow:0 5px 0 #000;
+        }
+        #start > .panel h1 { font-size:clamp(23px,6vw,36px); margin-bottom:8px; }
+        #start > .panel > p { font-size:14px; line-height:1.45; margin:8px 0; }
+        #authPanel, #leaderboardPanel { width:100%; margin:8px auto; padding:9px; }
+        #authPanel h2, #leaderboardPanel h2 { font-size:16px; }
+        #authPanel button, #authPanel a, #faceImageControls button,
+        #start .mainButton, #adminPanel button, #sensitivityPanel button {
+            min-height:44px; touch-action:manipulation;
+        }
+        #leaderboardList { max-height:132px; overflow:auto; }
+        #sensitivityPanel { width:100%; font-size:13px; }
+        #sensitivityPanel input[type=range] { min-height:28px; }
+        .profileActions { gap:7px; }
+        .profileActions a, .profileActions button { min-height:44px; flex:1; }
+        #cursorAdjustPanel { display:none !important; }
+        #bossSupplyNotice { bottom:132px; font-size:13px; padding:8px 10px; }
+        #touchJoystick { width:112px; height:112px; }
+        #joystickKnob { width:52px; height:52px; }
+        #touchActions { grid-template-columns:68px 68px; grid-template-rows:60px 60px; gap:6px; }
+        #touchShoot { width:142px; min-height:60px; }
+        #touchActions .touchAction { min-height:60px; border-radius:15px; font-size:12px; }
+        #touchHelp { max-width:46%; left:50%; bottom:6px; font-size:10px; text-align:center; }
+    }
+    @media screen and (max-width: 900px) and (orientation: landscape) and (pointer: coarse) {
+        #start > .panel { max-height:calc(100dvh - 6px); padding:9px 10px; }
+        #start > .panel > p { font-size:12px; margin:5px 0; }
+        #start #leaderboardList { max-height:68px; }
+        #touchJoystick { width:86px; height:86px; left:10px; bottom:9px; }
+        #joystickKnob { width:40px; height:40px; }
+        #touchActions { grid-template-columns:58px 58px; grid-template-rows:48px 48px; gap:5px; right:10px; bottom:9px; }
+        #touchShoot { width:121px; min-height:48px; }
+        #touchActions .touchAction { min-height:48px; font-size:10px; padding:3px; }
+        #bossSupplyNotice { bottom:75px; }
     }
 `;
 document.head.appendChild(gameCursorStyle);
@@ -304,13 +411,46 @@ if (gameWrap && canvas) {
             return;
         }
 
-        gameCursor.style.left = `${x}px`;
-        gameCursor.style.top = `${y}px`;
+        cursorBaseX = x;
+        cursorBaseY = y;
+        renderGameCursorPosition();
         gameCursor.style.display = "block";
     });
 
     gameWrap.addEventListener("pointerleave", () => {
         gameCursor.style.display = "none";
+    });
+
+    // ゲーム中にも照準の表示位置を微調整できる十字ボタン。
+    const cursorAdjustPanel = document.createElement("div");
+    cursorAdjustPanel.id = "cursorAdjustPanel";
+    cursorAdjustPanel.innerHTML = `
+        <div class="cursorAdjustTitle">🎯 照準位置の微調整</div>
+        <div class="cursorOffsetReadout" id="cursorOffsetReadout">X 0 / Y 0</div>
+        <span></span><button type="button" data-dx="0" data-dy="-8" aria-label="照準を上へ">▲</button><span></span>
+        <button type="button" data-dx="-8" data-dy="0" aria-label="照準を左へ">◀</button>
+        <button type="button" data-reset="1">中央</button>
+        <button type="button" data-dx="8" data-dy="0" aria-label="照準を右へ">▶</button>
+        <span></span><button type="button" data-dx="0" data-dy="8" aria-label="照準を下へ">▼</button><span></span>
+    `;
+    gameWrap.appendChild(cursorAdjustPanel);
+    cursorOffsetReadout = cursorAdjustPanel.querySelector("#cursorOffsetReadout");
+    cursorAdjustPanel.querySelectorAll("button").forEach(button => {
+        button.addEventListener("pointerdown", event => {
+            event.preventDefault();
+            event.stopPropagation();
+        });
+        button.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (button.hasAttribute("data-reset")) {
+                cursorOffsetX = 0;
+                cursorOffsetY = 0;
+                renderGameCursorPosition();
+            } else {
+                shiftCursor(Number(button.dataset.dx) || 0, Number(button.dataset.dy) || 0);
+            }
+        });
     });
 }
 applyCursorSize();
@@ -1416,6 +1556,12 @@ function dropItem(x, y, elite = false) {
     else if (roll < .96) type = ITEM_TYPES[9];
     else type = ITEM_TYPES[9];
 
+    // 回復系はHPが減っている場合だけ出現。満タンなら有用な非回復アイテムに置き換える。
+    if (hp >= 5 && (type.id === "heal" || type.id === "heal2")) {
+        const alternatives = ITEM_TYPES.filter(entry => entry.id !== "heal" && entry.id !== "heal2");
+        type = alternatives[Math.floor(Math.random() * alternatives.length)];
+    }
+
     items.push({
         x, y,
         vy: 55 + Math.random() * 25,
@@ -1427,6 +1573,48 @@ function dropItem(x, y, elite = false) {
         phase: Math.random() * Math.PI * 2
     });
 }
+
+function spawnBossSupply() {
+    if (!boss) return;
+
+    const ids = ["power", "shield", "bomb", "rapid", "pierce", "magnet", "double"];
+    if (hp < 5) ids.push("heal");
+    if (hp <= 3) ids.push("heal2");
+
+    const id = ids[Math.floor(Math.random() * ids.length)];
+    const type = ITEM_TYPES.find(entry => entry.id === id) || ITEM_TYPES[2];
+    const minX = Math.min(100, W * .18);
+    const maxX = Math.max(minX + 1, W - minX);
+
+    items.push({
+        x: minX + Math.random() * (maxX - minX),
+        y: Math.max(205, boss.y + boss.size * .75),
+        vy: 34,
+        type: type.id,
+        label: `補給：${type.label}`,
+        icon: type.icon,
+        color: "#45f5ff",
+        life: 18,
+        phase: Math.random() * Math.PI * 2,
+        bossSupply: true
+    });
+
+    let notice = document.getElementById("bossSupplyNotice");
+    if (!notice && gameWrap) {
+        notice = document.createElement("div");
+        notice.id = "bossSupplyNotice";
+        notice.setAttribute("role", "status");
+        notice.setAttribute("aria-live", "polite");
+        gameWrap.appendChild(notice);
+    }
+    if (notice) {
+        notice.textContent = `📦 補給チャンス！ ${type.label} が出現！ 回収しよう`;
+        notice.style.display = "block";
+        bossSupplyNoticeTimer = 3.2;
+    }
+}
+
+let bossSupplyNoticeTimer = 0;
 
 function collectItem(item) {
     switch (item.type) {
@@ -1486,7 +1674,8 @@ function updateItems(dt) {
             }
         }
 
-        if (Math.hypot(player.x - item.x, player.y - item.y) < 42) {
+        const pickupRadius = item.bossSupply ? 52 : 42;
+        if (Math.hypot(player.x - item.x, player.y - item.y) < pickupRadius) {
             collectItem(item);
             item.life = -1;
         }
@@ -1586,7 +1775,10 @@ function startBoss() {
         level: bossLevel,
         name: names[Math.min(bossLevel - 1, names.length - 1)],
         phase: 0,
-        gimmickCount: 0
+        gimmickCount: 0,
+        attackCount: 0,
+        supplyTimer: 7 + Math.random() * 2.5,
+        supplyCount: 0
     };
 
     gimmick = null;
@@ -1607,9 +1799,9 @@ function spawnGimmick() {
     if (!boss || gimmick) return;
 
     const level = boss.level;
-    const basic = ["weak", "moving", "shield"];
-    const advanced = ["weak", "moving", "shield", "clock", "ring", "decoy", "clone", "overheat"];
-    const extreme = ["weak", "moving", "shield", "clock", "ring", "decoy", "rain", "cross", "clone", "overheat", "bombcore"];
+    const basic = ["weak", "moving", "shield", "pulse"];
+    const advanced = ["weak", "moving", "shield", "pulse", "clock", "ring", "decoy", "clone", "overheat"];
+    const extreme = ["weak", "moving", "shield", "pulse", "clock", "ring", "decoy", "rain", "cross", "clone", "overheat", "bombcore"];
     const pool = level === 1 ? basic : level === 2 ? advanced : extreme;
     // 各ボスの最初のギミックは確実にシールド解除にする
     const type = (boss.gimmickCount === 0)
@@ -1627,7 +1819,8 @@ function spawnGimmick() {
         cross:    { title: "⚠ 十字ギミック", text: "十字の中心を10回撃て！", hp: 10, life: 6 },
         clone:    { title: "🟣 分身ギミック", text: "3体の分身から本物だけを3回撃て！", hp: 3, life: 10 },
         overheat: { title: "🔥 オーバーヒート", text: "熱ゲージを下げてボスをオーバーヒートさせろ！", hp: 12, life: 10 },
-        bombcore: { title: "💣 爆弾コア", text: "緑コア3個だけを撃て！赤を撃つと失敗！", hp: 3, life: 9 }
+        bombcore: { title: "💣 爆弾コア", text: "緑コア3個だけを撃て！赤を撃つと失敗！", hp: 3, life: 9 },
+        pulse:    { title: "🟢 タイミングギミック", text: "緑に光っている間だけ撃て！赤で撃つと反撃！", hp: 7, life: 11 }
     }[type];
 
     gimmick = {
@@ -1645,7 +1838,8 @@ function spawnGimmick() {
         targets: [],
         actualIndex: 0,
         heat: 100,
-        maxHeat: 100
+        maxHeat: 100,
+        open: false
     };
 
     if (type === "clone") {
@@ -1683,6 +1877,20 @@ function spawnGimmick() {
 
 function hitGimmick(targetIndex = -1) {
     if (!gimmick || !boss) return;
+
+    // タイミングギミック：緑に光っている時間だけ有効。赤い間に撃つと反撃される。
+    if (gimmick.type === "pulse" && !gimmick.open) {
+        score = Math.max(0, score - 50);
+        const angle = Math.atan2(player.y - gimmick.y, player.x - gimmick.x);
+        enemyBullets.push({
+            x: gimmick.x, y: gimmick.y,
+            vx: Math.cos(angle) * (220 + boss.level * 18),
+            vy: Math.sin(angle) * (220 + boss.level * 18),
+            r: 7, life: 4, kind: "boss"
+        });
+        boom(gimmick.x, gimmick.y);
+        return;
+    }
 
     // 分身: 本物だけが正解
     if (gimmick.type === "clone") {
@@ -1751,6 +1959,21 @@ function updateBoss(dt) {
     boss.attackTimer -= dt;
     boss.gimmickCooldown -= dt;
     boss.phase += dt;
+
+    // ボス戦中に一定時間ごとに補給を投下。HPが減っている時だけ回復が候補に入る。
+    boss.supplyTimer -= dt;
+    if (boss.supplyTimer <= 0) {
+        spawnBossSupply();
+        boss.supplyCount++;
+        boss.supplyTimer = boss.enraged ? 9.5 + Math.random() * 2 : 12 + Math.random() * 3;
+    }
+    if (bossSupplyNoticeTimer > 0) {
+        bossSupplyNoticeTimer -= dt;
+        if (bossSupplyNoticeTimer <= 0) {
+            const notice = document.getElementById("bossSupplyNotice");
+            if (notice) notice.style.display = "none";
+        }
+    }
 
     // ボスごとに移動が激しくなる
     const moveSpeed = 70 + wave * 2 + boss.level * 35;
@@ -1825,6 +2048,18 @@ function updateBoss(dt) {
 
         if (gimmick.type === "overheat") {
             gimmick.heat = Math.min(100, gimmick.heat + dt * 2.2);
+        }
+
+        // タイミングギミックは約1.8秒周期で短い攻撃チャンスが開く。
+        if (gimmick.type === "pulse") {
+            const isOpen = (gimmick.pulse % 1.8) < 0.62;
+            if (isOpen !== gimmick.open) {
+                gimmick.open = isOpen;
+                const title = document.getElementById("gimmickTitle");
+                const text = document.getElementById("gimmickText");
+                if (title) title.textContent = isOpen ? "🟢 攻撃チャンス！" : "🔴 反撃状態";
+                if (text) text.textContent = isOpen ? "緑のコアを今すぐ撃て！" : "赤い間に撃つと反撃弾！";
+            }
         }
 
         // 弾幕ギミック
@@ -2107,128 +2342,101 @@ function updateEnemies(dt) {
 
 
 function bossAttack() {
+    if (!boss) return;
 
-    if (!boss)
-        return;
+    const level = Math.max(1, boss.level || 1);
+    const enraged = !!boss.enraged;
+    const aimedAngle = Math.atan2(player.y - boss.y, player.x - boss.x);
+    const speedBase = (235 + Math.min(wave, 40) * 1.2 + level * 22) * (enraged ? 1.08 : 1);
 
-
-    /*
-        通常3方向弾
-    */
-
-    const base =
-        Math.atan2(
-
-            player.y -
-            boss.y,
-
-            player.x -
-            boss.x
-
-        );
-
-
-    for (
-        let i = -1;
-        i <= 1;
-        i++
-    ) {
-
-        const angle =
-            base +
-            i * .17;
-
-
+    const fire = (angle, speed = speedBase, radius = 7, x = boss.x, y = boss.y) => {
         enemyBullets.push({
-
-            x:
-                boss.x,
-
-            y:
-                boss.y,
-
-            vx:
-                Math.cos(
-                    angle
-                ) *
-                300,
-
-            vy:
-                Math.sin(
-                    angle
-                ) *
-                300,
-
-            r:
-                8,
-
-            life:
-                5,
-
-            kind:
-                "boss"
-
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: radius,
+            life: 5.5,
+            kind: "boss"
         });
+    };
 
-    }
-
-
-    /*
-        たまに追加弾幕
-    */
-
-    if (
-        Math.random() < .3
-    ) {
-
-        for (
-            let i = 0;
-            i < 8;
-            i++
-        ) {
-
-            const angle =
-                i *
-                Math.PI *
-                2 /
-                8;
-
-
-            enemyBullets.push({
-
-                x:
-                    boss.x,
-
-                y:
-                    boss.y,
-
-                vx:
-                    Math.cos(
-                        angle
-                    ) *
-                    150,
-
-                vy:
-                    Math.sin(
-                        angle
-                    ) *
-                    150,
-
-                r:
-                    7,
-
-                life:
-                    5,
-
-                kind:
-                    "boss"
-
-            });
-
+    const ring = (count, speed, rotation = 0) => {
+        for (let i = 0; i < count; i++) {
+            fire(rotation + i * Math.PI * 2 / count, speed, level >= 3 ? 8 : 7);
         }
+    };
 
+    // パターンを順番に切り替え、同じ3方向弾ばかりにならないようにする。
+    const patternCount = level >= 3 ? 6 : level === 2 ? 5 : 4;
+    const patternIndex = (boss.attackCount || 0) % patternCount;
+    boss.attackCount = (boss.attackCount || 0) + 1;
+
+    switch (patternIndex) {
+        case 0: { // プレイヤー狙いの扇状弾
+            const count = level >= 3 ? 9 : level >= 2 ? 7 : 5;
+            const spread = level >= 2 ? 0.62 : 0.44;
+            for (let i = 0; i < count; i++) {
+                const ratio = count === 1 ? 0 : i / (count - 1) - 0.5;
+                fire(aimedAngle + ratio * spread, speedBase, 7);
+            }
+            break;
+        }
+        case 1: { // 全方向リング弾
+            const count = level >= 3 ? 16 : level === 2 ? 12 : 9;
+            ring(count, 145 + level * 18, boss.phase * 0.22);
+            break;
+        }
+        case 2: { // 回転するスパイラル弾
+            const count = level >= 3 ? 10 : 7;
+            const rotation = boss.phase * (enraged ? 1.5 : 0.9);
+            for (let i = 0; i < count; i++) {
+                const angle = rotation + i * Math.PI * 2 / count;
+                fire(angle, 125 + level * 19 + (i % 3) * 24, 6);
+            }
+            break;
+        }
+        case 3: { // 狙い撃ちの三連バースト
+            for (let i = -1; i <= 1; i++) {
+                fire(aimedAngle + i * 0.12, speedBase + 35, 8);
+            }
+            if (enraged) {
+                fire(aimedAngle - 0.06, speedBase + 75, 6);
+                fire(aimedAngle + 0.06, speedBase + 75, 6);
+            }
+            break;
+        }
+        case 4: { // 上部から降る雨弾。後半ボス用
+            const count = level >= 3 ? 11 : 8;
+            for (let i = 0; i < count; i++) {
+                const x = 35 + (W - 70) * (i + 0.5) / count;
+                const drift = Math.max(-90, Math.min(90, (player.x - x) * 0.16));
+                enemyBullets.push({
+                    x, y: boss.y + 12,
+                    vx: drift,
+                    vy: 175 + level * 23 + (i % 3) * 15,
+                    r: 7,
+                    life: 5,
+                    kind: "boss"
+                });
+            }
+            break;
+        }
+        case 5: { // 画面下方向へ広がる掃射
+            const count = 11;
+            const startAngle = Math.PI / 2 - 0.95;
+            const endAngle = Math.PI / 2 + 0.95;
+            for (let i = 0; i < count; i++) {
+                const angle = startAngle + (endAngle - startAngle) * i / (count - 1);
+                fire(angle, 165 + level * 20, 7);
+            }
+            break;
+        }
     }
 
+    // HP半分以下では、一部のパターンに追撃リングを足して緊張感を上げる。
+    if (enraged && boss.attackCount % 3 === 0) {
+        ring(level >= 3 ? 12 : 8, 135 + level * 16, boss.phase * 0.4);
+    }
 }
 
 
@@ -2276,6 +2484,9 @@ function defeatBoss() {
     boss = null;
 
     gimmick = null;
+    const supplyNotice = document.getElementById("bossSupplyNotice");
+    if (supplyNotice) supplyNotice.style.display = "none";
+    bossSupplyNoticeTimer = 0;
 
     enemyBullets = [];
 
@@ -3210,22 +3421,29 @@ function draw() {
         const pulse = 1 + Math.sin(item.phase) * .10;
         ctx.scale(pulse, pulse);
         ctx.fillStyle = item.color;
-        ctx.shadowBlur = 16;
-        ctx.shadowColor = item.color;
+        ctx.shadowBlur = item.bossSupply ? 26 : 16;
+        ctx.shadowColor = item.bossSupply ? "#45f5ff" : item.color;
         ctx.beginPath();
-        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.arc(0, 0, item.bossSupply ? 28 : 22, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = "#111";
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = item.bossSupply ? "#ffffff" : "#111";
+        ctx.lineWidth = item.bossSupply ? 5 : 4;
         ctx.stroke();
+        if (item.bossSupply) {
+            ctx.strokeStyle = "#45f5ff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, 34, 0, Math.PI * 2);
+            ctx.stroke();
+        }
         ctx.fillStyle = "white";
         ctx.font = "900 13px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(item.icon || "?", 0, 0);
         ctx.font = "900 10px sans-serif";
-        ctx.fillText(item.label, 0, 36);
+        ctx.fillText(item.label, 0, item.bossSupply ? 44 : 36);
         ctx.restore();
     }
 
@@ -3598,9 +3816,9 @@ function draw() {
                 drawCore(t.x, t.y, color, "circle", t.real ? "✓" : "×");
             });
         } else {
-            const color = gimmick.type === "shield" ? "#168cff" : gimmick.type === "overheat" ? "#ff5a18" : "#ffe600";
-            const shape = gimmick.type === "shield" ? "hex" : gimmick.type === "overheat" ? "circle" : "diamond";
-            const label = gimmick.type === "shield" ? "🛡" : gimmick.type === "overheat" ? "🔥" : "×";
+            const color = gimmick.type === "shield" ? "#168cff" : gimmick.type === "overheat" ? "#ff5a18" : gimmick.type === "pulse" ? (gimmick.open ? "#35ff70" : "#ff334d") : "#ffe600";
+            const shape = gimmick.type === "shield" ? "hex" : (gimmick.type === "overheat" || gimmick.type === "pulse") ? "circle" : "diamond";
+            const label = gimmick.type === "shield" ? "🛡" : gimmick.type === "overheat" ? "🔥" : gimmick.type === "pulse" ? (gimmick.open ? "GO" : "WAIT") : "×";
             drawCore(gimmick.x, gimmick.y, color, shape, label);
         }
 
