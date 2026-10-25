@@ -1,0 +1,725 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+
+    background:
+        radial-gradient(
+            circle at 50% 0%,
+            #27315e,
+            #080b17 60%
+        );
+
+    color: white;
+
+    font-family:
+        system-ui,
+        "Yu Gothic",
+        sans-serif;
+
+    min-height: 100vh;
+}
+
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+#loginRequired {
+
+    min-height: 100vh;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    align-items: center;
+
+    gap: 12px;
+
+    text-align: center;
+
+    padding: 20px;
+}
+
+#loginRequired h1 {
+
+    font-size: 42px;
+
+    margin: 0;
+
+    color: #ffe600;
+
+    text-shadow:
+        0 3px 0 #000,
+        0 0 20px #ffe600;
+}
+
+#loginRequired h2 {
+
+    margin: 0;
+
+    font-size: 28px;
+}
+
+
+/* =========================================================
+   APP
+========================================================= */
+
+#app {
+    display: none;
+}
+
+header {
+
+    position: sticky;
+
+    top: 0;
+
+    z-index: 50;
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    gap: 15px;
+
+    padding: 15px 20px;
+
+    background:
+        rgba(5, 8, 20, 0.95);
+
+    border-bottom:
+        2px solid rgba(255,255,255,.15);
+
+    backdrop-filter:
+        blur(10px);
+}
+
+.title {
+
+    font-weight: 1000;
+
+    font-size: 24px;
+
+    color: #ffe600;
+}
+
+.subtitle {
+
+    font-size: 12px;
+
+    letter-spacing: 4px;
+
+    color: #9ca3af;
+}
+
+.backButton,
+.mainButton,
+.subButton {
+
+    display: inline-block;
+
+    text-decoration: none;
+
+    color: white;
+
+    font-weight: 900;
+
+    padding: 11px 16px;
+
+    border-radius: 10px;
+
+    border: 2px solid #64748b;
+
+    background: #182238;
+}
+
+.mainButton {
+
+    background: #2563eb;
+
+    border-color: #60a5fa;
+}
+
+.backButton:hover,
+.mainButton:hover,
+.subButton:hover {
+
+    filter: brightness(1.2);
+
+}
+
+
+/* =========================================================
+   MAIN
+========================================================= */
+
+main {
+
+    width: min(1100px, 94%);
+
+    margin: 25px auto 60px;
+
+}
+
+
+/* =========================================================
+   POINT
+========================================================= */
+
+.pointPanel {
+
+    text-align: center;
+
+    padding: 20px;
+
+    border:
+        2px solid #ffe600;
+
+    border-radius: 18px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(35,40,75,.95),
+            rgba(10,14,28,.95)
+        );
+
+    box-shadow:
+        0 8px 30px rgba(0,0,0,.4);
+}
+
+.pointLabel {
+
+    color: #9ca3af;
+
+    font-weight: 900;
+
+    letter-spacing: 3px;
+}
+
+.pointValue {
+
+    font-size: clamp(38px, 8vw, 70px);
+
+    font-weight: 1000;
+
+    color: #ffe600;
+
+    text-shadow:
+        0 3px 0 #000,
+        0 0 25px rgba(255,230,0,.6);
+}
+
+.pointHelp {
+
+    color: #cbd5e1;
+
+    font-size: 13px;
+}
+
+
+/* =========================================================
+   PANELS
+========================================================= */
+
+.gachaPanel,
+.resultPanel,
+.collectionPanel {
+
+    margin-top: 22px;
+
+    padding: 20px;
+
+    border-radius: 18px;
+
+    border:
+        2px solid rgba(255,255,255,.16);
+
+    background:
+        rgba(12,17,35,.92);
+
+    box-shadow:
+        0 8px 25px rgba(0,0,0,.3);
+}
+
+section h2 {
+
+    margin-top: 0;
+
+    text-align: center;
+
+}
+
+
+/* =========================================================
+   GACHA ANIMATION
+========================================================= */
+
+.gachaAnimation {
+
+    position: relative;
+
+    height: 330px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    overflow: hidden;
+
+    border-radius: 18px;
+
+    background:
+        radial-gradient(
+            circle,
+            #303b77,
+            #080b18 65%
+        );
+
+    border:
+        2px solid #334155;
+}
+
+.gachaRing {
+
+    position: absolute;
+
+    width: 250px;
+
+    height: 250px;
+
+    border-radius: 50%;
+
+    border:
+        4px solid #ffe600;
+
+    box-shadow:
+        0 0 20px #ffe600,
+        inset 0 0 30px rgba(255,230,0,.3);
+
+    animation:
+        rotateRing 5s linear infinite;
+
+    opacity: .45;
+}
+
+@keyframes rotateRing {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+
+}
+
+.gachaFace {
+
+    position: relative;
+
+    z-index: 2;
+
+    width: 160px;
+
+    height: 160px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 20px;
+
+    background:
+        rgba(0,0,0,.35);
+
+    border:
+        4px solid #64748b;
+
+    font-size: 65px;
+
+    font-weight: 1000;
+
+    overflow: hidden;
+}
+
+.gachaFace img {
+
+    width: 100%;
+
+    height: 100%;
+
+    object-fit: contain;
+}
+
+.gachaRarity {
+
+    position: relative;
+
+    z-index: 3;
+
+    margin-top: 15px;
+
+    font-size: 28px;
+
+    font-weight: 1000;
+
+    text-shadow:
+        0 3px 0 #000;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.gachaButtons {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, 1fr);
+
+    gap: 15px;
+
+    margin-top: 18px;
+}
+
+.gachaButton {
+
+    min-height: 75px;
+
+    border:
+        2px solid #60a5fa;
+
+    border-radius: 14px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #2456a6,
+            #102850
+        );
+
+    color: white;
+
+    cursor: pointer;
+
+    font-weight: 1000;
+
+    font-size: 22px;
+}
+
+.gachaButton.ten {
+
+    border-color: #facc15;
+
+    background:
+        linear-gradient(
+            180deg,
+            #8a6110,
+            #3b2705
+        );
+}
+
+.gachaButton small {
+
+    display: block;
+
+    margin-top: 4px;
+
+    font-size: 13px;
+
+    color: #dbeafe;
+}
+
+.gachaButton:hover {
+
+    filter: brightness(1.25);
+
+}
+
+.gachaButton:disabled {
+
+    opacity: .45;
+
+    cursor: not-allowed;
+}
+
+
+/* =========================================================
+   MESSAGE
+========================================================= */
+
+.message {
+
+    min-height: 24px;
+
+    margin-top: 12px;
+
+    text-align: center;
+
+    font-weight: 900;
+
+    color: #facc15;
+}
+
+
+/* =========================================================
+   RESULTS
+========================================================= */
+
+.resultGrid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(120px, 1fr)
+        );
+
+    gap: 12px;
+}
+
+.resultCard,
+.faceCard {
+
+    position: relative;
+
+    padding: 10px;
+
+    border:
+        2px solid #475569;
+
+    border-radius: 14px;
+
+    background:
+        #111827;
+
+    text-align: center;
+
+    cursor: pointer;
+
+    transition:
+        transform .15s,
+        filter .15s;
+}
+
+.resultCard:hover,
+.faceCard:hover {
+
+    transform:
+        translateY(-3px);
+
+    filter:
+        brightness(1.15);
+}
+
+.faceImage {
+
+    width: 100px;
+
+    height: 100px;
+
+    margin: auto;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 12px;
+
+    overflow: hidden;
+
+    background: #020617;
+}
+
+.faceImage img {
+
+    width: 100%;
+
+    height: 100%;
+
+    object-fit: contain;
+}
+
+.faceName {
+
+    margin-top: 7px;
+
+    font-weight: 1000;
+}
+
+.rarity {
+
+    font-weight: 1000;
+
+    margin-top: 4px;
+}
+
+.selected {
+
+    border-color: #ffe600;
+
+    box-shadow:
+        0 0 18px rgba(255,230,0,.5);
+}
+
+.ownedBadge {
+
+    position: absolute;
+
+    right: 7px;
+
+    top: 7px;
+
+    padding: 3px 7px;
+
+    border-radius: 7px;
+
+    background: #16a34a;
+
+    font-size: 10px;
+
+    font-weight: 1000;
+}
+
+
+/* =========================================================
+   ANIMATION
+========================================================= */
+
+.gachaSpin {
+
+    animation:
+        gachaSpin .65s
+        infinite alternate;
+}
+
+@keyframes gachaSpin {
+
+    from {
+
+        transform:
+            scale(.9)
+            rotate(-5deg);
+
+    }
+
+    to {
+
+        transform:
+            scale(1.08)
+            rotate(5deg);
+
+    }
+
+}
+
+.gachaReveal {
+
+    animation:
+        gachaReveal .6s ease-out;
+}
+
+@keyframes gachaReveal {
+
+    0% {
+
+        transform:
+            scale(.3);
+
+        opacity: 0;
+
+    }
+
+    70% {
+
+        transform:
+            scale(1.15);
+
+        opacity: 1;
+
+    }
+
+    100% {
+
+        transform:
+            scale(1);
+
+    }
+
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 650px) {
+
+    header {
+
+        padding: 10px;
+
+    }
+
+    .title {
+
+        font-size: 19px;
+
+    }
+
+    main {
+
+        width: 96%;
+
+    }
+
+    .gachaAnimation {
+
+        height: 270px;
+
+    }
+
+    .gachaFace {
+
+        width: 130px;
+
+        height: 130px;
+
+    }
+
+    .gachaButtons {
+
+        grid-template-columns:
+            1fr;
+
+    }
+
+}
