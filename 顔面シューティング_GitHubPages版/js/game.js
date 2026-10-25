@@ -1,5 +1,4 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
-import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
