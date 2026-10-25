@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>FACE SHOOTER - 顔ガチャ</title>
+
+<link
+    rel="stylesheet"
+    href="./css/gacha.css"
+>
+
+</head>
+
+<body>
+
+<div id="loginRequired">
+
+    <h1>FACE SHOOTER</h1>
+
+    <h2>顔ガチャ</h2>
+
+    <p>
+        ガチャを利用するにはログインしてください。
+    </p>
+
+    <a
+        href="./login.html"
+        class="mainButton"
+    >
+        ログイン
+    </a>
+
+    <a
+        href="./game.html"
+        class="subButton"
+    >
+        ゲームへ戻る
+    </a>
+
+</div>
+
+
+<div id="app">
+
+    <header>
+
+        <div>
+
+            <div class="title">
+                FACE SHOOTER
+            </div>
+
+            <div class="subtitle">
+                FACE GACHA
+            </div>
+
+        </div>
+
+        <a
+            href="./game.html"
+            class="backButton"
+        >
+            ゲームへ戻る
+        </a>
+
+    </header>
+
+
+    <main>
+
+        <!-- ポイント -->
+
+        <section class="pointPanel">
+
+            <div class="pointLabel">
+                GACHA POINT
+            </div>
+
+            <div
+                id="pointValue"
+                class="pointValue"
+            >
+                0
+            </div>
+
+            <div class="pointHelp">
+                試合で獲得したスコアがガチャポイントになります
+            </div>
+
+        </section>
+
+
+        <!-- ガチャ -->
+
+        <section class="gachaPanel">
+
+            <h2>
+                FACE GACHA
+            </h2>
+
+            <div
+                id="gachaAnimation"
+                class="gachaAnimation"
+            >
+
+                <div class="gachaRing"></div>
+
+                <div
+                    id="gachaFace"
+                    class="gachaFace"
+                >
+                    ?
+                </div>
+
+                <div
+                    id="gachaRarity"
+                    class="gachaRarity"
+                >
+                    READY
+                </div>
+
+            </div>
+
+
+            <div class="gachaButtons">
+
+                <button
+                    id="singleButton"
+                    class="gachaButton"
+                >
+                    <span>1回</span>
+                    <small id="singleCost">
+                        1000 P
+                    </small>
+                </button>
+
+                <button
+                    id="tenButton"
+                    class="gachaButton ten"
+                >
+                    <span>10連</span>
+                    <small id="tenCost">
+                        9000 P
+                    </small>
+                </button>
+
+            </div>
+
+
+            <div
+                id="gachaMessage"
+                class="message"
+            ></div>
+
+        </section>
+
+
+        <!-- 結果 -->
+
+        <section
+            id="resultPanel"
+            class="resultPanel"
+        >
+
+            <h2>
+                ガチャ結果
+            </h2>
+
+            <div
+                id="resultGrid"
+                class="resultGrid"
+            ></div>
+
+        </section>
+
+
+        <!-- 所持顔 -->
+
+        <section class="collectionPanel">
+
+            <h2>
+                FACE COLLECTION
+            </h2>
+
+            <div
+                id="collectionGrid"
+                class="collectionGrid"
+            ></div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script
+    type="module"
+    src="./js/gacha.js"
+></script>
+
+</body>
+
+</html>
