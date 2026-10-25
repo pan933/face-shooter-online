@@ -1,4 +1,5 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
+import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
@@ -4960,6 +4961,7 @@ async function recordCurrentRun() {
         const firebaseUser = auth?.currentUser;
         if (!firebaseReady || !firebaseUser || !currentUser || !db) return;
         const scoreValue = Math.max(0, Math.floor(Number(score) || 0));
+        await addMatchPoints(scoreValue);
         const waveValue = Math.max(1, Math.floor(Number(wave) || 1));
         if (scoreValue <= 0 && waveValue <= 1) {
             await renderLeaderboard();
