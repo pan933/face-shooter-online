@@ -6244,3 +6244,64 @@ void initializeSharedAuth();
     }
     void refreshAdminLink();
 })();
+/* ==================================================
+   顔ガチャボタン
+================================================== */
+
+(function addFaceGachaButton() {
+    const authPanel = document.getElementById("authPanel");
+    if (!authPanel) return;
+
+    // 二重追加防止
+    if (document.getElementById("faceGachaButton")) return;
+
+    const button = document.createElement("button");
+    button.id = "faceGachaButton";
+    button.type = "button";
+    button.textContent = "🎭 顔ガチャ";
+    button.style.cssText = `
+        display:block;
+        width:100%;
+        margin:10px 0;
+        min-height:46px;
+        padding:10px 14px;
+        border:2px solid #ffe600;
+        border-radius:12px;
+        background:linear-gradient(135deg,#312400,#7a5b00);
+        color:#fff;
+        font-size:16px;
+        font-weight:900;
+        cursor:pointer;
+        box-shadow:0 4px 0 #000;
+    `;
+
+    button.addEventListener("click", () => {
+        if (!auth?.currentUser || guestMode) {
+            alert("顔ガチャを利用するにはログインしてください。");
+            return;
+        }
+
+        window.location.href = "./gacha.html";
+    });
+
+    authPanel.appendChild(button);
+
+    // ゲスト時はボタンを薄くする
+    function updateGachaButton() {
+        const loggedIn = !!auth?.currentUser && !guestMode;
+
+        button.disabled = !loggedIn;
+        button.style.opacity = loggedIn ? "1" : "0.45";
+        button.textContent = loggedIn
+            ? "🎭 顔ガチャ"
+            : "🔒 顔ガチャ（ログイン必要）";
+    }
+
+    updateGachaButton();
+
+    if (auth) {
+        auth.onAuthStateChanged?.(() => {
+            updateGachaButton();
+        });
+    }
+})();
