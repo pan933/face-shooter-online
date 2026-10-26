@@ -131,35 +131,57 @@ async function initialize() {
 
     try {
 
-        showMessage(
-            "読み込み中..."
-        );
+        showMessage("顔データを読み込み中...");
 
-        faces =
-            await discoverFaces();
+        // 顔画像を自動検出
+        faces = await discoverFaces();
 
-        /*
-         * face2.png は初期顔。
-         * face_1.pngなどとは別枠。
-         */
+        // 初期顔 face2.png
         faces.unshift({
-
             id: INITIAL_FACE,
-
             name: "初期FACE",
-
-            image:
-                "./images/faces/face2.png",
-
+            image: "./images/faces/face2.png",
             rarity: "N",
-
             buffs: {}
-
         });
 
-        faceData =
-            await loadFaceData();
+        if (!faces.length) {
+            throw new Error(
+                "ガチャ対象の顔画像が見つかりません。"
+            );
+        }
 
+        showMessage("ユーザーデータを読み込み中...");
+
+        // Firestoreのユーザーデータ
+        faceData = await loadFaceData();
+
+        if (!faceData) {
+            throw new Error(
+                "顔データを取得できませんでした。"
+            );
+        }
+
+        // 念のため初期値を補正
+        if (!Array.isArray(faceData.ownedFaces)) {
+            faceData.ownedFaces = [INITIAL_FACE];
+        }
+
+        if (!faceData.ownedFaces.includes(INITIAL_FACE)) {
+            faceData.ownedFaces.push(INITIAL_FACE);
+        }
+
+        if (!faceData.selectedFace) {
+            faceData.selectedFace = INITIAL_FACE;
+        }
+
+        if (typeof faceData.points !== "number") {
+            faceData.points = 0;
+        }
+
+        showMessage("ガチャ設定を読み込み中...");
+
+        // ガチャ設定
         await loadSettings();
 
         updateUI();
@@ -170,10 +192,51 @@ async function initialize() {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Gacha initialize failed:",
+            error
+        );
 
-        showMessage(
-            "読み込みに失敗しました。"
+        let message =
+            "ガチャの読み込みに失敗しました。";
+
+        if (error?.code === "permission-denied") {
+
+            message =
+                "Firestoreの権限エラーです。";
+
+        } else if (
+            error?.code === "failed-precondition"
+        ) {
+
+            message =
+                "Firestoreの設定エラーです。";
+
+        } else if (
+            error?.code === "unavailable"
+        ) {
+
+            message =
+                "Firestoreに接続できません。";
+
+        } else if (error?.message) {
+
+            message =
+                `読み込みエラー: ${error.message}`;
+
+        }
+
+        showMessage(message);
+
+        // コンソールにも詳細を残す
+        console.error(
+            "Gacha error code:",
+            error?.code
+        );
+
+        console.error(
+            "Gacha error message:",
+            error?.message
         );
 
     }
