@@ -517,8 +517,6 @@ applyControlMode();
 const FACE_GUEST = "face.png";
 const FACE_REGISTERED = "./images/faces/face2.png";
 
-const faceImage = new Image();
-
 function getGachaFaceImage(faceId) {
     if (!faceId || faceId === "face2") {
         return FACE_REGISTERED;
