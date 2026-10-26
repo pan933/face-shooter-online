@@ -6536,3 +6536,128 @@ void initializeSharedAuth();
         });
     }
 })();
+/* =============================================================
+   FACE SHOOTER ADMIN WEB DEBUG BRIDGE
+   admin.html -> game.html
+   ============================================================= */
+
+(() => {
+    "use strict";
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        params.get("adminDebug") !== "1"
+    ) {
+        return;
+    }
+
+    const selectedWave =
+        Math.max(
+            1,
+            Math.floor(
+                Number(
+                    params.get("adminWave")
+                ) || 1
+            )
+        );
+
+    const bossTest =
+        params.get("adminBoss") === "1";
+
+    /*
+     * 既存のゲーム内管理変数を利用
+     */
+    if (
+        typeof adminStartWave !== "undefined"
+    ) {
+        adminStartWave =
+            selectedWave;
+    }
+
+    if (
+        typeof adminForceBoss !== "undefined"
+    ) {
+        adminForceBoss =
+            bossTest;
+    }
+
+    /*
+     * 既存のゲーム内管理UIにも反映
+     */
+    const waveInput =
+        document.getElementById(
+            "adminWave"
+        );
+
+    if (waveInput) {
+        waveInput.value =
+            String(selectedWave);
+    }
+
+    /*
+     * Firebase認証やゲーム初期化が終わるまで待つ。
+     */
+    let tries = 0;
+
+    const timer =
+        setInterval(() => {
+            tries++;
+
+            /*
+             * ゲームが開始可能になったら起動
+             */
+            if (
+                typeof startGame === "function"
+            ) {
+                clearInterval(timer);
+
+                /*
+                 * 既存のadminStartWaveを使う
+                 */
+                if (
+                    typeof adminStartWave !==
+                    "undefined"
+                ) {
+                    adminStartWave =
+                        selectedWave;
+                }
+
+                if (
+                    typeof adminForceBoss !==
+                    "undefined"
+                ) {
+                    adminForceBoss =
+                        bossTest;
+                }
+
+                startGame();
+
+                console.info(
+                    "[ADMIN DEBUG]",
+                    "WAVE:",
+                    selectedWave,
+                    "BOSS:",
+                    bossTest
+                );
+
+                return;
+            }
+
+            /*
+             * 10秒待っても無理なら終了
+             */
+            if (tries > 100) {
+                clearInterval(timer);
+
+                console.warn(
+                    "[ADMIN DEBUG] startGame() が見つかりません。"
+                );
+            }
+
+        }, 100);
+
+})();
