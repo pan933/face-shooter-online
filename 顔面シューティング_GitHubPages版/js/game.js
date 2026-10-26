@@ -1594,8 +1594,12 @@ function togglePause() {
     else pauseGame();
 }
 
-function quitGame() {
-    recordCurrentRun();
+async function quitGame() {
+    try {
+        await recordCurrentRun();
+    } catch (error) {
+        console.error("ゲーム結果の保存に失敗:", error);
+    }
     hideQuitConfirm();
     paused = false;
     clearHeldInputs();
