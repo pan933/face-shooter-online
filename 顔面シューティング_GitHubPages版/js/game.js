@@ -2,7 +2,10 @@ import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
-import { addMatchPoints } from "./face-system.js";
+import {
+    addMatchPoints,
+    loadFaceData
+} from "./face-system.js";
 
 
 
@@ -512,7 +515,21 @@ applyControlMode();
 ================================================== */
 
 const FACE_GUEST = "face.png";
-const FACE_REGISTERED = "face2.png";
+const FACE_REGISTERED = "./images/faces/face2.png";
+
+const faceImage = new Image();
+
+function getGachaFaceImage(faceId) {
+    if (!faceId || faceId === "face2") {
+        return FACE_REGISTERED;
+    }
+
+    if (/^face_\d+$/.test(faceId)) {
+        return `./images/faces/${faceId}.png`;
+    }
+
+    return FACE_REGISTERED;
+}
 
 
 const canvas =
@@ -839,17 +856,50 @@ faceImage.src = FACE_GUEST;
 
 // ゲストは face.png、登録ユーザーは face2.png を使用する。
 // face2.png が未配置・読み込み失敗の場合は face.png に戻す。
-function setFaceForMode(isGuest) {
+async function setFaceForMode(isGuest) {
     faceImage.onerror = null;
+
+    // ゲストは今まで通り face.png
     if (isGuest) {
         faceImage.src = FACE_GUEST;
         return;
     }
-    faceImage.onerror = () => {
+
+    // ログインユーザーはガチャで選択中のFACEを取得
+    try {
+        const data = await loadFaceData();
+
+        const selectedFace = data?.selectedFace || "face2";
+        const imagePath = getGachaFaceImage(selectedFace);
+
+        console.log(
+            "[FACE] 使用中:",
+            selectedFace,
+            "画像:",
+            imagePath
+        );
+
+        faceImage.onerror = () => {
+            console.warn(
+                "[FACE] 選択したFACEの画像を読み込めません:",
+                imagePath
+            );
+
+            faceImage.onerror = null;
+            faceImage.src = FACE_REGISTERED;
+        };
+
+        faceImage.src = imagePath;
+
+    } catch (error) {
+        console.warn(
+            "[FACE] ガチャデータ取得失敗。初期FACEを使用します。",
+            error
+        );
+
         faceImage.onerror = null;
-        faceImage.src = FACE_GUEST;
-    };
-    faceImage.src = FACE_REGISTERED;
+        faceImage.src = FACE_REGISTERED;
+    }
 }
 
 
