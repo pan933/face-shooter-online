@@ -4952,44 +4952,163 @@ async function renderLeaderboard() {
 }
 
 async function recordCurrentRun() {
-    // ゲストのスコアは保存・送信しない。共通ランキングから完全に独立。
+    // ゲストはランキング・ガチャポイントともに保存しない
     if (guestMode) return;
-    if (runRecorded) return runRecordPromise || undefined;
+
+    if (runRecorded) {
+        return runRecordPromise || undefined;
+    }
+
     runRecorded = true;
+
     runRecordPromise = (async () => {
         const firebaseUser = auth?.currentUser;
-        if (!firebaseReady || !firebaseUser || !currentUser || !db) return;
-        const scoreValue = Math.max(0, Math.floor(Number(score) || 0));
-        await addMatchPoints(scoreValue);
-        const waveValue = Math.max(1, Math.floor(Number(wave) || 1));
-        if (scoreValue <= 0 && waveValue <= 1) {
-            await renderLeaderboard();
+
+        if (!firebaseReady || !firebaseUser || !currentUser || !db) {
             return;
         }
+
+        const scoreValue = Math.max(
+            0,
+            Math.floor(Number(score) || 0)
+        );
+
+        const waveValue = Math.max(
+            1,
+            Math.floor(Number(wave) || 1)
+        );
+
+        /*
+         * ==========================================
+         * ガチャポイント
+         *
+         * ポイント追加に失敗しても
+         * ランキング保存には影響させない
+         * ==========================================
+         */
         try {
-            const scoreRef = doc(db, "leaderboard", firebaseUser.uid);
-            const oldSnapshot = await getDoc(scoreRef);
-            const old = oldSnapshot.exists() ? oldSnapshot.data() : null;
-            const isBetter = !old || scoreValue > (Number(old.score) || 0) ||
-                (scoreValue === (Number(old.score) || 0) && waveValue > (Number(old.wave) || 1));
-            if (isBetter) {
-                await setDoc(scoreRef, {
-                    uid: firebaseUser.uid,
-                    username: currentUser.username || "player",
-                    displayName: currentUser.displayName || currentUser.username || "Player",
-                    score: scoreValue,
-                    wave: waveValue,
-                    updatedAt: serverTimestamp()
-                });
+            await addMatchPoints(scoreValue);
+            console.log(
+                "ガチャポイント追加:",
+                scoreValue
+            );
+        } catch (error) {
+            console.warn(
+                "ガチャポイントの追加に失敗しました。",
+                error
+            );
+        }
+
+        /*
+         * ==========================================
+         * スコアがない場合
+         * ==========================================
+         */
+        if (
+            scoreValue <= 0 &&
+            waveValue <= 1
+        ) {
+            try {
+                await renderLeaderboard();
+            } catch (error) {
+                console.warn(
+                    "ランキング表示更新に失敗:",
+                    error
+                );
             }
+
+            return;
+        }
+
+        /*
+         * ==========================================
+         * ランキング保存
+         * ==========================================
+         */
+        try {
+            const scoreRef = doc(
+                db,
+                "leaderboard",
+                firebaseUser.uid
+            );
+
+            const oldSnapshot =
+                await getDoc(scoreRef);
+
+            const old =
+                oldSnapshot.exists()
+                    ? oldSnapshot.data()
+                    : null;
+
+            const oldScore =
+                Number(old?.score) || 0;
+
+            const oldWave =
+                Number(old?.wave) || 1;
+
+            const isBetter =
+                !old ||
+                scoreValue > oldScore ||
+                (
+                    scoreValue === oldScore &&
+                    waveValue > oldWave
+                );
+
+            if (isBetter) {
+                await setDoc(
+                    scoreRef,
+                    {
+                        uid:
+                            firebaseUser.uid,
+
+                        username:
+                            currentUser.username ||
+                            "player",
+
+                        displayName:
+                            currentUser.displayName ||
+                            currentUser.username ||
+                            "Player",
+
+                        score:
+                            scoreValue,
+
+                        wave:
+                            waveValue,
+
+                        updatedAt:
+                            serverTimestamp()
+                    }
+                );
+            }
+
+        } catch (error) {
+            console.error(
+                "ランキング保存に失敗:",
+                error
+            );
+
+            showLeaderboardError(
+                error.code === "permission-denied"
+                    ? "ランキング保存が拒否されました。Firestoreのルールを確認してください。"
+                    : "ランキングを保存できませんでした。"
+            );
+        }
+
+        /*
+         * ランキング表示の更新も独立させる
+         */
+        try {
             await renderLeaderboard();
         } catch (error) {
-            console.error("Shared score save failed:", error);
-            showLeaderboardError(error.code === "permission-denied"
-                ? "記録保存が拒否されました。Firestoreのルールを確認してください。"
-                : "記録をクラウドに保存できませんでした。接続を確認してください。");
+            console.warn(
+                "ランキング更新に失敗:",
+                error
+            );
         }
+
     })();
+
     return runRecordPromise;
 }
 
