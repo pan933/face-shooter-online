@@ -1614,9 +1614,13 @@ function quitGame() {
     document.getElementById("start").style.display = "flex";
 }
 
-function gameOver() {
+async function gameOver() {
+    try {
+        await recordCurrentRun();
+    } catch (error) {
+        console.error("ゲーム結果の保存に失敗:", error);
+    }
 
-    recordCurrentRun();
     running = false;
     paused = false;
     clearHeldInputs();
