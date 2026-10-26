@@ -291,3 +291,686 @@ $("refreshAllBtn").addEventListener("click", async () => {
 });
 $("logoutBtn").addEventListener("click", async () => { await signOut(auth); window.location.href = "./login.html"; });
 void start();
+/* =============================================================
+   FACE SHOOTER ADMIN EXTENSION
+   既存管理画面に追加する管理機能
+   ============================================================= */
+
+(() => {
+  "use strict";
+
+  const $x = id => document.getElementById(id);
+
+  const EXT_DEFAULTS = {
+    adminStartWave: 1,
+    adminBossWave: 5,
+    adminBossTest: false,
+
+    matchPointMultiplier: 1,
+
+    forceItemDrop: false,
+
+    gachaEnabled: true,
+    gachaSingleCost: 100,
+    gachaTenCost: 900
+  };
+
+  let extConfig = { ...EXT_DEFAULTS };
+
+  function extToast(message, error = false) {
+    const el = $x("toast");
+
+    if (el) {
+      el.textContent = message;
+      el.classList.toggle("error", error);
+      el.style.display = "block";
+
+      setTimeout(() => {
+        el.style.display = "none";
+      }, 5000);
+
+      return;
+    }
+
+    alert(message);
+  }
+
+  function num(value, fallback, min = 0, max = 999999999) {
+    const n = Number(value);
+
+    if (!Number.isFinite(n)) {
+      return fallback;
+    }
+
+    return Math.max(min, Math.min(max, n));
+  }
+
+  async function loadExtensionConfig() {
+    try {
+      const snap = await getDoc(
+        doc(db, "adminSettings", "gameplay")
+      );
+
+      if (snap.exists()) {
+        extConfig = {
+          ...EXT_DEFAULTS,
+          ...snap.data()
+        };
+      }
+
+      fillExtensionForm();
+
+    } catch (error) {
+      console.error(
+        "追加管理設定の読み込みに失敗:",
+        error
+      );
+    }
+  }
+
+  function fillExtensionForm() {
+    const values = {
+      extAdminStartWave: extConfig.adminStartWave,
+      extAdminBossWave: extConfig.adminBossWave,
+      extPointMultiplier: extConfig.matchPointMultiplier,
+      extSingleCost: extConfig.gachaSingleCost,
+      extTenCost: extConfig.gachaTenCost
+    };
+
+    for (const [id, value] of Object.entries(values)) {
+      const el = $x(id);
+
+      if (el) {
+        el.value = String(value);
+      }
+    }
+
+    const gachaEnabled = $x("extGachaEnabled");
+
+    if (gachaEnabled) {
+      gachaEnabled.checked =
+        extConfig.gachaEnabled !== false;
+    }
+
+    const forceDrop = $x("extForceItemDrop");
+
+    if (forceDrop) {
+      forceDrop.checked =
+        extConfig.forceItemDrop === true;
+    }
+  }
+
+  function createField(
+    parent,
+    labelText,
+    id,
+    value,
+    options = {}
+  ) {
+    const wrap = document.createElement("label");
+
+    wrap.style.cssText = `
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin:8px 0;
+    `;
+
+    const label = document.createElement("span");
+
+    label.textContent = labelText;
+
+    label.style.cssText = `
+      font-weight:800;
+    `;
+
+    const input = document.createElement("input");
+
+    input.id = id;
+    input.type = options.type || "number";
+    input.value = value;
+
+    if (options.min !== undefined) {
+      input.min = options.min;
+    }
+
+    if (options.max !== undefined) {
+      input.max = options.max;
+    }
+
+    if (options.step !== undefined) {
+      input.step = options.step;
+    }
+
+    input.style.cssText = `
+      width:100%;
+      box-sizing:border-box;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.06);
+      color:inherit;
+      font:inherit;
+    `;
+
+    wrap.append(label, input);
+    parent.appendChild(wrap);
+
+    return input;
+  }
+
+  function createButton(parent, text, callback, danger = false) {
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.textContent = text;
+
+    button.style.cssText = `
+      min-height:44px;
+      padding:10px 14px;
+      margin:4px;
+      border-radius:10px;
+      border:1px solid ${danger ? "#ff6b6b" : "#65e7ff"};
+      background:${danger
+        ? "rgba(160,30,30,.35)"
+        : "rgba(20,70,95,.55)"};
+      color:#fff;
+      font-weight:800;
+      cursor:pointer;
+    `;
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+
+      try {
+        await callback();
+      } catch (error) {
+        console.error(error);
+
+        extToast(
+          `操作に失敗しました: ${
+            error.code || error.message || error
+          }`,
+          true
+        );
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    parent.appendChild(button);
+
+    return button;
+  }
+
+  function createExtensionPanel() {
+    if ($x("faceShooterAdminExtension")) {
+      return;
+    }
+
+    const main =
+      $x("adminPanel") ||
+      document.querySelector("main");
+
+    if (!main) {
+      console.warn(
+        "追加管理パネルの挿入先が見つかりません。"
+      );
+      return;
+    }
+
+    const panel = document.createElement("section");
+
+    panel.id = "faceShooterAdminExtension";
+
+    panel.style.cssText = `
+      margin-top:20px;
+      padding:18px;
+      border:1px solid rgba(101,231,255,.22);
+      border-radius:16px;
+      background:rgba(10,20,32,.72);
+      box-shadow:0 10px 30px rgba(0,0,0,.18);
+    `;
+
+    panel.innerHTML = `
+      <div style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-bottom:14px;
+      ">
+        <div>
+          <h2 style="margin:0 0 4px;">
+            🛠 追加ゲーム管理
+          </h2>
+
+          <p style="
+            margin:0;
+            opacity:.72;
+            font-size:13px;
+          ">
+            WAVE・ボステスト・ポイント・アイテム・ガチャを管理
+          </p>
+        </div>
+
+        <span style="
+          padding:6px 10px;
+          border-radius:999px;
+          background:rgba(101,231,255,.1);
+          border:1px solid rgba(101,231,255,.25);
+          font-size:12px;
+        ">
+          ADMIN EXTENSION
+        </span>
+      </div>
+
+      <div style="
+        display:grid;
+        grid-template-columns:
+          repeat(auto-fit,minmax(220px,1fr));
+        gap:14px;
+      ">
+
+        <div style="
+          padding:14px;
+          border-radius:12px;
+          background:rgba(255,255,255,.035);
+        ">
+          <h3 style="margin-top:0;">
+            🎮 デバッグ起動
+          </h3>
+
+          <p style="opacity:.7;font-size:13px;">
+            指定WAVEからゲームを起動できます。
+          </p>
+
+          <div id="extDebugFields"></div>
+
+          <div style="
+            display:flex;
+            flex-wrap:wrap;
+            gap:4px;
+            margin-top:8px;
+          " id="extWaveButtons"></div>
+
+          <div id="extDebugButtons"></div>
+        </div>
+
+        <div style="
+          padding:14px;
+          border-radius:12px;
+          background:rgba(255,255,255,.035);
+        ">
+          <h3 style="margin-top:0;">
+            🎁 ゲームポイント・アイテム
+          </h3>
+
+          <div id="extPointFields"></div>
+
+          <label style="
+            display:flex;
+            align-items:center;
+            gap:9px;
+            margin:12px 0;
+          ">
+            <input
+              type="checkbox"
+              id="extForceItemDrop"
+            >
+            <span>アイテムを強制ドロップ</span>
+          </label>
+
+          <div id="extPointButtons"></div>
+        </div>
+
+        <div style="
+          padding:14px;
+          border-radius:12px;
+          background:rgba(255,255,255,.035);
+        ">
+          <h3 style="margin-top:0;">
+            🎭 ガチャ設定
+          </h3>
+
+          <label style="
+            display:flex;
+            align-items:center;
+            gap:9px;
+            margin:12px 0;
+          ">
+            <input
+              type="checkbox"
+              id="extGachaEnabled"
+            >
+            <span>顔ガチャを有効にする</span>
+          </label>
+
+          <div id="extGachaFields"></div>
+
+          <div id="extGachaButtons"></div>
+        </div>
+
+      </div>
+
+      <div style="
+        margin-top:14px;
+        padding:12px;
+        border-radius:10px;
+        background:rgba(255,190,70,.08);
+        border:1px solid rgba(255,190,70,.18);
+        font-size:12px;
+        opacity:.82;
+      ">
+        ※ ガチャポイント本体の保存形式は現在の
+        <code>face-system.js</code> に合わせて扱います。
+        この画面では共通設定を保存します。
+      </div>
+    `;
+
+    const existingGameSettings =
+      $x("gameSettings");
+
+    if (existingGameSettings) {
+      existingGameSettings.after(panel);
+    } else {
+      main.prepend(panel);
+    }
+
+    const debugFields =
+      $x("extDebugFields");
+
+    createField(
+      debugFields,
+      "開始WAVE",
+      "extAdminStartWave",
+      extConfig.adminStartWave,
+      {
+        min: 1,
+        max: 999,
+        step: 1
+      }
+    );
+
+    createField(
+      debugFields,
+      "ボスWAVE",
+      "extAdminBossWave",
+      extConfig.adminBossWave,
+      {
+        min: 5,
+        max: 999,
+        step: 5
+      }
+    );
+
+    const waveButtons =
+      $x("extWaveButtons");
+
+    for (const wave of [1, 5, 10, 15, 20, 25]) {
+      createButton(
+        waveButtons,
+        `WAVE ${wave}`,
+        async () => {
+          $x("extAdminStartWave").value = wave;
+        }
+      );
+    }
+
+    createButton(
+      $x("extDebugButtons"),
+      "🚀 指定WAVEから出撃",
+      async () => {
+        const wave = Math.max(
+          1,
+          Math.floor(
+            Number(
+              $x("extAdminStartWave").value
+            ) || 1
+          )
+        );
+
+        await saveExtensionConfig({
+          adminStartWave: wave,
+          adminBossTest: false
+        });
+
+        launchGameDebug(wave, false);
+      }
+    );
+
+    createButton(
+      $x("extDebugButtons"),
+      "☠️ ボスを即テスト",
+      async () => {
+        let wave = Math.max(
+          5,
+          Math.floor(
+            Number(
+              $x("extAdminBossWave").value
+            ) || 5
+          )
+        );
+
+        wave =
+          Math.ceil(wave / 5) * 5;
+
+        $x("extAdminBossWave").value =
+          wave;
+
+        await saveExtensionConfig({
+          adminStartWave: wave,
+          adminBossWave: wave,
+          adminBossTest: true
+        });
+
+        launchGameDebug(wave, true);
+      }
+    );
+
+    const pointFields =
+      $x("extPointFields");
+
+    createField(
+      pointFields,
+      "ガチャポイント倍率",
+      "extPointMultiplier",
+      extConfig.matchPointMultiplier,
+      {
+        min: 0,
+        max: 100,
+        step: 0.1
+      }
+    );
+
+    createField(
+      $x("extGachaFields"),
+      "1回ガチャ必要ポイント",
+      "extSingleCost",
+      extConfig.gachaSingleCost,
+      {
+        min: 0,
+        max: 9999999,
+        step: 1
+      }
+    );
+
+    createField(
+      $x("extGachaFields"),
+      "10連必要ポイント",
+      "extTenCost",
+      extConfig.gachaTenCost,
+      {
+        min: 0,
+        max: 99999999,
+        step: 1
+      }
+    );
+
+    createButton(
+      $x("extPointButtons"),
+      "💾 ポイント・アイテム設定を保存",
+      async () => {
+        await saveExtensionConfig({
+          matchPointMultiplier: num(
+            $x("extPointMultiplier").value,
+            1,
+            0,
+            100
+          ),
+
+          forceItemDrop:
+            $x("extForceItemDrop").checked
+        });
+      }
+    );
+
+    createButton(
+      $x("extGachaButtons"),
+      "💾 ガチャ設定を保存",
+      async () => {
+        await saveExtensionConfig({
+          gachaEnabled:
+            $x("extGachaEnabled").checked,
+
+          gachaSingleCost: num(
+            $x("extSingleCost").value,
+            100,
+            0,
+            9999999
+          ),
+
+          gachaTenCost: num(
+            $x("extTenCost").value,
+            900,
+            0,
+            99999999
+          )
+        });
+      }
+    );
+
+    createButton(
+      $x("extGachaButtons"),
+      "↩ ガチャ設定を初期値に戻す",
+      async () => {
+        if (
+          !confirm(
+            "ガチャ設定を初期値に戻しますか？"
+          )
+        ) {
+          return;
+        }
+
+        await saveExtensionConfig({
+          gachaEnabled:
+            EXT_DEFAULTS.gachaEnabled,
+
+          gachaSingleCost:
+            EXT_DEFAULTS.gachaSingleCost,
+
+          gachaTenCost:
+            EXT_DEFAULTS.gachaTenCost
+        });
+
+        fillExtensionForm();
+      },
+      true
+    );
+  }
+
+  async function saveExtensionConfig(changes) {
+    const gameplayRef =
+      doc(db, "adminSettings", "gameplay");
+
+    const current =
+      await getDoc(gameplayRef);
+
+    const base =
+      current.exists()
+        ? current.data()
+        : {};
+
+    const next = {
+      ...base,
+      ...changes,
+      updatedBy: currentUser.uid,
+      updatedAt: serverTimestamp()
+    };
+
+    await setDoc(
+      gameplayRef,
+      next
+    );
+
+    extConfig = {
+      ...extConfig,
+      ...changes
+    };
+
+    await audit(
+      "save_admin_extension",
+      null,
+      changes
+    );
+
+    extToast(
+      "追加管理設定を保存しました。"
+    );
+
+    await loadAudit();
+  }
+
+  function launchGameDebug(wave, boss) {
+    const params =
+      new URLSearchParams();
+
+    params.set(
+      "adminDebug",
+      "1"
+    );
+
+    params.set(
+      "adminWave",
+      String(wave)
+    );
+
+    params.set(
+      "adminBoss",
+      boss ? "1" : "0"
+    );
+
+    window.open(
+      `./game.html?${params.toString()}`,
+      "_blank"
+    );
+  }
+
+  async function initExtension() {
+    if (!firebaseReady || !auth || !db) {
+      return;
+    }
+
+    createExtensionPanel();
+
+    await loadExtensionConfig();
+  }
+
+  /*
+   * 元のstart()が認証を完了するまで待つ。
+   */
+  const wait = setInterval(() => {
+    if (
+      typeof currentUser !== "undefined" &&
+      currentUser &&
+      typeof db !== "undefined" &&
+      db
+    ) {
+      clearInterval(wait);
+
+      void initExtension();
+    }
+  }, 100);
+
+})();
