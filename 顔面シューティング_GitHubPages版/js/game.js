@@ -5206,18 +5206,73 @@ if (logoutBtn) logoutBtn.addEventListener("click", async () => {
 });
 
 const gameoverLeaderboardBtn = document.getElementById("gameoverLeaderboardBtn");
-if (gameoverLeaderboardBtn) gameoverLeaderboardBtn.addEventListener("click", async () => {
-    await recordCurrentRun();
-    running = false;
-    paused = false;
-    document.getElementById("gameover").style.display = "none";
-    document.getElementById("start").style.display = "flex";
-    if (pauseGameBtn) pauseGameBtn.style.display = "none";
-    const quitBtn = document.getElementById("quitGameBtn");
-    if (quitBtn) quitBtn.style.display = "none";
-    updateAuthUI();
-    await renderLeaderboard();
-});
+if (gameoverLeaderboardBtn) {
+    gameoverLeaderboardBtn.addEventListener(
+        "click",
+        async () => {
+
+            try {
+                await recordCurrentRun();
+            } catch (error) {
+                console.warn(
+                    "ゲーム結果の保存処理でエラー:",
+                    error
+                );
+            }
+
+            /*
+             * 保存処理が失敗しても
+             * ランキング画面へ進める
+             */
+            running = false;
+            paused = false;
+
+            if (pauseOverlay) {
+                pauseOverlay.style.display = "none";
+                pauseOverlay.setAttribute(
+                    "aria-hidden",
+                    "true"
+                );
+            }
+
+            if (pauseGameBtn) {
+                pauseGameBtn.style.display = "none";
+                pauseGameBtn.classList.remove("paused");
+                pauseGameBtn.textContent =
+                    "⏸ 一時停止";
+            }
+
+            const quitBtn =
+                document.getElementById(
+                    "quitGameBtn"
+                );
+
+            if (quitBtn) {
+                quitBtn.style.display = "none";
+            }
+
+            const gameover =
+                document.getElementById(
+                    "gameover"
+                );
+
+            if (gameover) {
+                gameover.style.display = "none";
+            }
+
+            const start =
+                document.getElementById(
+                    "start"
+                );
+
+            if (start) {
+                start.style.display = "flex";
+            }
+
+            await renderLeaderboard();
+        }
+    );
+}
 
 /* ==================================================
    START / RETRY
