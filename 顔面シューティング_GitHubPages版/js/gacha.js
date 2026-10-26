@@ -252,45 +252,55 @@ async function loadSettings() {
 
     try {
 
-        const ref =
-            doc(
-                db,
-                "gameSettings",
-                "faceGacha"
+        const ref = doc(
+            db,
+            "gameSettings",
+            "faceGacha"
+        );
+
+        const snapshot = await getDoc(ref);
+
+        // 設定がまだ作られていなくても
+        // デフォルト値で動作する
+        if (!snapshot.exists()) {
+
+            console.warn(
+                "gameSettings/faceGacha がありません。デフォルト設定を使用します。"
             );
 
-        const snapshot =
-            await getDoc(ref);
+            settings = {
+                singleCost: 1000,
+                tenCost: 9000
+            };
 
-        if (!snapshot.exists()) {
             return;
         }
 
-        const data =
-            snapshot.data();
+        const data = snapshot.data();
 
-        settings.singleCost =
-            Math.max(
-                1,
-                Number(
-                    data.singleCost
-                ) || 1000
-            );
+        settings.singleCost = Math.max(
+            1,
+            Number(data.singleCost) || 1000
+        );
 
-        settings.tenCost =
-            Math.max(
-                1,
-                Number(
-                    data.tenCost
-                ) || 9000
-            );
+        settings.tenCost = Math.max(
+            1,
+            Number(data.tenCost) || 9000
+        );
 
     } catch (error) {
 
         console.warn(
-            "ガチャ設定の読み込みに失敗",
+            "ガチャ設定の読み込みに失敗しました。デフォルト設定を使用します。",
             error
         );
+
+        // 設定読み込みだけ失敗しても
+        // ガチャ自体は止めない
+        settings = {
+            singleCost: 1000,
+            tenCost: 9000
+        };
 
     }
 
