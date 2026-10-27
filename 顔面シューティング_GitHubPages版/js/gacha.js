@@ -39,6 +39,22 @@ let gachaEnabled = true;
 
 
 // ==================================================
+// スキル重複必要数
+//
+// Tsum Tsumのように、同じ顔を入手すると
+// スキル成長ポイントが貯まる。
+// ==================================================
+
+const SKILL_DUPLICATE_REQUIREMENTS = [
+    2,   // Lv1 → Lv2
+    3,   // Lv2 → Lv3
+    4,   // Lv3 → Lv4
+    6,   // Lv4 → Lv5
+    12   // Lv5 → Lv6
+];
+
+
+// ==================================================
 // DOM
 // ==================================================
 
@@ -596,7 +612,8 @@ async function updatePointDisplay(
 // ==================================================
 
 function renderSingleResult(
-    face
+    face,
+    duplicateInfo = null
 ) {
 
     if (
@@ -605,6 +622,45 @@ function renderSingleResult(
     ) {
 
         return;
+
+    }
+
+
+    let extraText = "";
+
+
+    if (duplicateInfo) {
+
+        if (
+            duplicateInfo.leveledUp
+        ) {
+
+            extraText = `
+                <p class="skill-result-levelup">
+                    🎉 スキルLv${duplicateInfo.newLevel}！
+                </p>
+            `;
+
+        } else {
+
+            extraText = `
+                <p class="skill-result-progress">
+                    スキル成長
+                    ${duplicateInfo.progress}
+                    /
+                    ${duplicateInfo.required}
+                </p>
+            `;
+
+        }
+
+    } else {
+
+        extraText = `
+            <p class="skill-result-new">
+                ✨ 新しい顔を獲得！
+            </p>
+        `;
 
     }
 
@@ -631,6 +687,8 @@ function renderSingleResult(
                 ${Number(face.probability).toFixed(2)}%
             </p>
 
+            ${extraText}
+
         </div>
 
     `;
@@ -643,7 +701,8 @@ function renderSingleResult(
 // ==================================================
 
 function renderTenResults(
-    results
+    results,
+    duplicateInfos = []
 ) {
 
     if (
@@ -658,40 +717,92 @@ function renderTenResults(
     resultGrid.innerHTML =
         results
             .map(
-                face => `
+                (face, index) => {
 
-                    <div class="gacha-result-card">
+                    const duplicateInfo =
+                        duplicateInfos[index];
 
-                        <img
-                            src="${escapeHtml(
-                                face.imageUrl
-                            )}"
-                            alt="${escapeHtml(
-                                face.name
-                            )}"
-                        >
 
-                        <div class="result-rarity">
-                            ${escapeHtml(
-                                face.rarity
-                            )}
+                    let extraText = "";
+
+
+                    if (
+                        duplicateInfo
+                    ) {
+
+                        if (
+                            duplicateInfo.leveledUp
+                        ) {
+
+                            extraText = `
+                                <p class="skill-result-levelup">
+                                    🎉 スキルLv${duplicateInfo.newLevel}！
+                                </p>
+                            `;
+
+                        } else {
+
+                            extraText = `
+                                <p class="skill-result-progress">
+                                    スキル
+                                    ${duplicateInfo.progress}
+                                    /
+                                    ${duplicateInfo.required}
+                                </p>
+                            `;
+
+                        }
+
+                    } else {
+
+                        extraText = `
+                            <p class="skill-result-new">
+                                ✨ NEW
+                            </p>
+                        `;
+
+                    }
+
+
+                    return `
+
+                        <div class="gacha-result-card">
+
+                            <img
+                                src="${escapeHtml(
+                                    face.imageUrl
+                                )}"
+                                alt="${escapeHtml(
+                                    face.name
+                                )}"
+                            >
+
+                            <div class="result-rarity">
+                                ${escapeHtml(
+                                    face.rarity
+                                )}
+                            </div>
+
+                            <h3>
+                                ${escapeHtml(
+                                    face.name
+                                )}
+                            </h3>
+
+                            <p>
+                                排出率
+                                ${Number(
+                                    face.probability
+                                ).toFixed(2)}%
+                            </p>
+
+                            ${extraText}
+
                         </div>
 
-                        <h3>
-                            ${escapeHtml(
-                                face.name
-                            )}
-                        </h3>
+                    `;
 
-                        <p>
-                            ${Number(
-                                face.probability
-                            ).toFixed(2)}%
-                        </p>
-
-                    </div>
-
-                `
+                }
             )
             .join("");
 
@@ -699,7 +810,209 @@ function renderTenResults(
 
 
 // ==================================================
+// 必要な重複数
+// ==================================================
+
+function getRequiredDuplicates(level) {
+
+    if (
+        level >= 6
+    ) {
+
+        return Infinity;
+
+    }
+
+
+    return (
+        SKILL_DUPLICATE_REQUIREMENTS[
+            level - 1
+        ] || 12
+    );
+
+}
+
+
+// ==================================================
+// スキルデータ補正
+// ==================================================
+
+function normalizeFaceSkill(skill) {
+
+    const data = skill || {};
+
+
+    return {
+
+        level:
+            Math.max(
+                1,
+                Math.min(
+                    6,
+                    Number(data.level) || 1
+                )
+            ),
+
+        progress:
+            Math.max(
+                0,
+                Number(data.progress) || 0
+            ),
+
+        totalKills:
+            Math.max(
+                0,
+                Number(data.totalKills) || 0
+            ),
+
+        tickets:
+            Math.max(
+                0,
+                Number(data.tickets) || 0
+            ),
+
+        duplicateProgress:
+            Math.max(
+                0,
+                Number(data.duplicateProgress) || 0
+            )
+
+    };
+
+}
+
+
+// ==================================================
+// 重複顔 → スキル成長
+// ==================================================
+
+function applyDuplicateSkill(
+    face
+) {
+
+    const skill =
+        normalizeFaceSkill(
+            face.skill
+        );
+
+
+    // --------------------------------------------------
+    // 最大Lv
+    // --------------------------------------------------
+
+    if (
+        skill.level >= 6
+    ) {
+
+        return {
+
+            changed: false,
+
+            maxLevel: true,
+
+            level:
+                skill.level,
+
+            progress:
+                skill.duplicateProgress,
+
+            required:
+                Infinity,
+
+            newLevel:
+                skill.level,
+
+            skill
+
+        };
+
+    }
+
+
+    // --------------------------------------------------
+    // 重複分を追加
+    // --------------------------------------------------
+
+    skill.duplicateProgress += 1;
+
+
+    let leveledUp = false;
+
+
+    // --------------------------------------------------
+    // Lvアップ判定
+    // --------------------------------------------------
+
+    while (
+        skill.level < 6
+    ) {
+
+        const required =
+            getRequiredDuplicates(
+                skill.level
+            );
+
+
+        if (
+            skill.duplicateProgress <
+            required
+        ) {
+
+            break;
+
+        }
+
+
+        skill.duplicateProgress -=
+            required;
+
+        skill.level += 1;
+
+        leveledUp = true;
+
+    }
+
+
+    return {
+
+        changed: true,
+
+        maxLevel:
+            skill.level >= 6,
+
+        leveledUp,
+
+        level:
+            skill.level,
+
+        newLevel:
+            skill.level,
+
+        progress:
+            skill.duplicateProgress,
+
+        required:
+            skill.level >= 6
+                ? Infinity
+                : getRequiredDuplicates(
+                    skill.level
+                ),
+
+        skill
+
+    };
+
+}
+
+
+// ==================================================
 // 顔を所持一覧へ追加
+//
+// NEW:
+//   新規顔 → 所持
+//
+// DUPLICATE:
+//   重複顔 → スキル成長
 // ==================================================
 
 async function addFacesToCollection(
@@ -713,7 +1026,7 @@ async function addFacesToCollection(
         results.length === 0
     ) {
 
-        return;
+        return [];
 
     }
 
@@ -731,12 +1044,12 @@ async function addFacesToCollection(
         )
     ) {
 
-        return;
+        return [];
 
     }
 
 
-    let changed = false;
+    const duplicateInfos = [];
 
 
     for (
@@ -744,15 +1057,19 @@ async function addFacesToCollection(
         of results
     ) {
 
-        const exists =
-            faceData.faces.some(
+        const existing =
+            faceData.faces.find(
                 item =>
                     item.id === face.id
             );
 
 
+        // ==================================================
+        // 新規顔
+        // ==================================================
+
         if (
-            !exists
+            !existing
         ) {
 
             faceData.faces.push({
@@ -773,28 +1090,88 @@ async function addFacesToCollection(
                     face.probability,
 
                 obtainedAt:
-                    Date.now()
+                    Date.now(),
+
+                skill: {
+
+                    level: 1,
+
+                    progress: 0,
+
+                    totalKills: 0,
+
+                    tickets: 0,
+
+                    duplicateProgress: 0
+
+                }
 
             });
 
 
-            changed = true;
+            duplicateInfos.push(null);
+
+            continue;
 
         }
 
-    }
+
+        // ==================================================
+        // 重複
+        // ==================================================
+
+        existing.skill =
+            normalizeFaceSkill(
+                existing.skill
+            );
 
 
-    if (
-        changed
-    ) {
+        const result =
+            applyDuplicateSkill(
+                existing
+            );
 
-        await saveFaceData(
-            uid,
-            faceData
+
+        existing.skill =
+            result.skill;
+
+
+        duplicateInfos.push({
+
+            leveledUp:
+                result.leveledUp,
+
+            newLevel:
+                result.newLevel,
+
+            progress:
+                result.progress,
+
+            required:
+                result.required,
+
+            maxLevel:
+                result.maxLevel
+
+        });
+
+
+        console.log(
+            "[GACHA] 重複顔 → スキル成長:",
+            face.id,
+            result
         );
 
     }
+
+
+    await saveFaceData(
+        uid,
+        faceData
+    );
+
+
+    return duplicateInfos;
 
 }
 
@@ -929,10 +1306,15 @@ async function drawSingle() {
         // 所持顔保存
         // ------------------------------
 
-        await addFacesToCollection(
-            user.uid,
-            [face]
-        );
+        const duplicateInfos =
+            await addFacesToCollection(
+                user.uid,
+                [face]
+            );
+
+
+        const duplicateInfo =
+            duplicateInfos[0];
 
 
         // ------------------------------
@@ -940,13 +1322,46 @@ async function drawSingle() {
         // ------------------------------
 
         renderSingleResult(
-            face
+            face,
+            duplicateInfo
         );
 
 
-        showMessage(
-            `${face.rarity}「${face.name}」を獲得！`
-        );
+        if (
+            duplicateInfo?.leveledUp
+        ) {
+
+            showMessage(
+                `${face.rarity}「${face.name}」のスキルがLv${duplicateInfo.newLevel}になった！`
+            );
+
+        } else if (
+            duplicateInfo
+        ) {
+
+            if (
+                duplicateInfo.maxLevel
+            ) {
+
+                showMessage(
+                    `${face.rarity}「${face.name}」はスキルLv6です！`
+                );
+
+            } else {
+
+                showMessage(
+                    `${face.rarity}「${face.name}」が重複！ スキル成長！`
+                );
+
+            }
+
+        } else {
+
+            showMessage(
+                `${face.rarity}「${face.name}」を獲得！`
+            );
+
+        }
 
 
         await updatePointDisplay(
@@ -1118,10 +1533,11 @@ async function drawTen() {
         // 所持顔保存
         // ------------------------------
 
-        await addFacesToCollection(
-            user.uid,
-            results
-        );
+        const duplicateInfos =
+            await addFacesToCollection(
+                user.uid,
+                results
+            );
 
 
         // ------------------------------
@@ -1129,13 +1545,49 @@ async function drawTen() {
         // ------------------------------
 
         renderTenResults(
-            results
+            results,
+            duplicateInfos
         );
 
 
-        showMessage(
-            "10連ガチャ完了！"
-        );
+        const levelUpCount =
+            duplicateInfos.filter(
+                info =>
+                    info &&
+                    info.leveledUp
+            ).length;
+
+
+        const duplicateCount =
+            duplicateInfos.filter(
+                info =>
+                    info
+            ).length;
+
+
+        if (
+            levelUpCount > 0
+        ) {
+
+            showMessage(
+                `10連完了！ スキルLvアップ ${levelUpCount}件！`
+            );
+
+        } else if (
+            duplicateCount > 0
+        ) {
+
+            showMessage(
+                `10連完了！ 重複 ${duplicateCount}件がスキル成長！`
+            );
+
+        } else {
+
+            showMessage(
+                "10連ガチャ完了！"
+            );
+
+        }
 
 
         await updatePointDisplay(
@@ -1160,6 +1612,7 @@ async function drawTen() {
         await updatePointDisplay(
             user.uid
         );
+
 
     } finally {
 
