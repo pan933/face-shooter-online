@@ -1,7 +1,4 @@
-import {
-    auth,
-    db
-} from "./firebase-config.js";
+import { auth, db } from "./firebase-config.js";
 
 import {
     onAuthStateChanged
@@ -10,391 +7,323 @@ import {
 import {
     doc,
     getDoc,
-    setDoc,
     runTransaction,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 import {
-    discoverFaces,
-    buildFace,
     loadFaceData,
     saveFaceData,
     formatBuffs,
-    RARITIES,
-    getFaceRarity,
     INITIAL_FACE
 } from "./face-system.js";
 
 
-/* =========================================================
-   DOM
-========================================================= */
-
-const loginRequired =
-    document.getElementById("loginRequired");
-
-const app =
-    document.getElementById("app");
-
-const pointValue =
-    document.getElementById("pointValue");
-
-const singleButton =
-    document.getElementById("singleButton");
-
-const tenButton =
-    document.getElementById("tenButton");
-
-const singleCost =
-    document.getElementById("singleCost");
-
-const tenCost =
-    document.getElementById("tenCost");
-
-const gachaMessage =
-    document.getElementById("gachaMessage");
-
-const gachaFace =
-    document.getElementById("gachaFace");
-
-const gachaRarity =
-    document.getElementById("gachaRarity");
-
-const resultGrid =
-    document.getElementById("resultGrid");
-
-const collectionGrid =
-    document.getElementById("collectionGrid");
-
-
-/* =========================================================
-   STATE
-========================================================= */
-
-let currentUser = null;
-
-let faceData = null;
-
-let faces = [];
+// ==================================================
+// ガチャ設定
+// ==================================================
 
 let settings = {
-
     singleCost: 1000,
-
     tenCost: 9000
-
 };
 
-let busy = false;
+
+// 管理画面で設定された顔
+let gachaFaces = [];
 
 
-/* =========================================================
-   AUTH
-========================================================= */
-
-onAuthStateChanged(
-    auth,
-    async user => {
-
-        currentUser = user;
-
-        if (!user) {
-
-            loginRequired.style.display =
-                "flex";
-
-            app.style.display =
-                "none";
-
-            return;
-
-        }
-
-        loginRequired.style.display =
-            "none";
-
-        app.style.display =
-            "block";
-
-        await initialize();
-
-    }
-);
+// 設定読み込み完了
+let gachaReady = false;
 
 
-/* =========================================================
-   初期化
-========================================================= */
+// ==================================================
+// DOM
+// ==================================================
 
-async function initialize() {
+const singleButton =
+    document.getElementById(
+        "singleButton"
+    );
 
-    try {
+const tenButton =
+    document.getElementById(
+        "tenButton"
+    );
 
-        showMessage("顔データを読み込み中...");
 
-        // 顔画像を自動検出
-        faces = await discoverFaces();
+// 読み込み中は押せない
+if (singleButton) {
+    singleButton.disabled = true;
+}
 
-        // 初期顔 face2.png
-        faces.unshift({
-            id: INITIAL_FACE,
-            name: "初期FACE",
-            image: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
-            rarity: "N",
-            buffs: {}
-        });
-
-        if (!faces.length) {
-            throw new Error(
-                "ガチャ対象の顔画像が見つかりません。"
-            );
-        }
-
-        showMessage("ユーザーデータを読み込み中...");
-
-        // Firestoreのユーザーデータ
-        faceData = await loadFaceData();
-
-        if (!faceData) {
-            throw new Error(
-                "顔データを取得できませんでした。"
-            );
-        }
-
-        // 念のため初期値を補正
-        if (!Array.isArray(faceData.ownedFaces)) {
-            faceData.ownedFaces = [INITIAL_FACE];
-        }
-
-        if (!faceData.ownedFaces.includes(INITIAL_FACE)) {
-            faceData.ownedFaces.push(INITIAL_FACE);
-        }
-
-        if (!faceData.selectedFace) {
-            faceData.selectedFace = INITIAL_FACE;
-        }
-
-        if (typeof faceData.points !== "number") {
-            faceData.points = 0;
-        }
-
-        showMessage("ガチャ設定を読み込み中...");
-
-        // ガチャ設定
-        await loadSettings();
-
-        updateUI();
-
-        renderCollection();
-
-        showMessage("");
-
-    } catch (error) {
-
-        console.error(
-            "Gacha initialize failed:",
-            error
-        );
-
-        let message =
-            "ガチャの読み込みに失敗しました。";
-
-        if (error?.code === "permission-denied") {
-
-            message =
-                "Firestoreの権限エラーです。";
-
-        } else if (
-            error?.code === "failed-precondition"
-        ) {
-
-            message =
-                "Firestoreの設定エラーです。";
-
-        } else if (
-            error?.code === "unavailable"
-        ) {
-
-            message =
-                "Firestoreに接続できません。";
-
-        } else if (error?.message) {
-
-            message =
-                `読み込みエラー: ${error.message}`;
-
-        }
-
-        showMessage(message);
-
-        // コンソールにも詳細を残す
-        console.error(
-            "Gacha error code:",
-            error?.code
-        );
-
-        console.error(
-            "Gacha error message:",
-            error?.message
-        );
-
-    }
-
+if (tenButton) {
+    tenButton.disabled = true;
 }
 
 
-/* =========================================================
-   設定
-========================================================= */
+// ==================================================
+// ガチャ設定読み込み
+// ==================================================
 
 async function loadSettings() {
 
     try {
 
-        const ref = doc(
-            db,
-            "gameSettings",
-            "faceGacha"
-        );
-
-        const snapshot = await getDoc(ref);
-
-        // 設定がまだ作られていなくても
-        // デフォルト値で動作する
-        if (!snapshot.exists()) {
-
-            console.warn(
-                "gameSettings/faceGacha がありません。デフォルト設定を使用します。"
+        const snapshot =
+            await getDoc(
+                doc(
+                    db,
+                    "adminSettings",
+                    "gameplay"
+                )
             );
 
-            settings = {
-                singleCost: 1000,
-                tenCost: 9000
-            };
 
-            return;
+        if (
+            snapshot.exists()
+        ) {
+
+            const data =
+                snapshot.data();
+
+
+            // ガチャ料金
+            settings.singleCost =
+                Number(
+                    data.gachaSingleCost
+                ) || 1000;
+
+
+            settings.tenCost =
+                Number(
+                    data.gachaTenCost
+                ) || 9000;
+
+
+            // ガチャ有効 / 無効
+            if (
+                data.gachaEnabled === false
+            ) {
+
+                showMessage(
+                    "現在、顔ガチャは無効になっています。"
+                );
+
+                disableButtons();
+
+                return;
+
+            }
+
+
+            // ========================================
+            // 顔データ
+            // ========================================
+
+            if (
+                Array.isArray(
+                    data.gachaFaces
+                )
+            ) {
+
+                gachaFaces =
+                    data.gachaFaces
+                        .map(
+                            face => ({
+
+                                id:
+                                    String(
+                                        face.id || ""
+                                    ),
+
+                                name:
+                                    String(
+                                        face.name ||
+                                        face.id ||
+                                        "無名"
+                                    ),
+
+                                imageUrl:
+                                    String(
+                                        face.imageUrl ||
+                                        ""
+                                    ),
+
+                                rarity:
+                                    String(
+                                        face.rarity ||
+                                        "N"
+                                    ),
+
+                                probability:
+                                    Number(
+                                        face.probability
+                                    ) || 0
+
+                            })
+                        )
+                        .filter(
+                            face =>
+                                face.id &&
+                                face.imageUrl &&
+                                face.probability > 0
+                        );
+
+            }
+
+
+            // Firestoreにまだ設定がない場合
+            // 既存のface-system.jsの顔を使用
+            if (
+                gachaFaces.length === 0
+            ) {
+
+                console.warn(
+                    "[GACHA] gachaFacesがありません。"
+                );
+
+                showMessage(
+                    "ガチャに使用できる顔が設定されていません。"
+                );
+
+                disableButtons();
+
+                return;
+
+            }
+
+
+            // 確率合計を確認
+            const total =
+                getProbabilityTotal();
+
+
+            if (
+                total <= 0
+            ) {
+
+                showMessage(
+                    "ガチャ確率が設定されていません。"
+                );
+
+                disableButtons();
+
+                return;
+
+            }
+
+
+            gachaReady = true;
+
+
+            updateCostDisplay();
+
+
+            if (singleButton) {
+                singleButton.disabled = false;
+            }
+
+            if (tenButton) {
+                tenButton.disabled = false;
+            }
+
+
+            console.log(
+                "[GACHA] 顔一覧:",
+                gachaFaces
+            );
+
+            console.log(
+                "[GACHA] 確率合計:",
+                total
+            );
+
         }
 
-        const data = snapshot.data();
-
-        settings.singleCost = Math.max(
-            1,
-            Number(data.singleCost) || 1000
-        );
-
-        settings.tenCost = Math.max(
-            1,
-            Number(data.tenCost) || 9000
-        );
 
     } catch (error) {
 
-        console.warn(
-            "ガチャ設定の読み込みに失敗しました。デフォルト設定を使用します。",
+        console.error(
+            "[GACHA] 設定読み込み失敗:",
             error
         );
 
-        // 設定読み込みだけ失敗しても
-        // ガチャ自体は止めない
-        settings = {
-            singleCost: 1000,
-            tenCost: 9000
-        };
+
+        showMessage(
+            "ガチャ設定の読み込みに失敗しました。"
+        );
+
+
+        disableButtons();
 
     }
 
 }
 
 
-/* =========================================================
-   UI
-========================================================= */
+// ==================================================
+// 確率合計
+// ==================================================
 
-function updateUI() {
+function getProbabilityTotal() {
 
-    if (!faceData) {
-        return;
-    }
-
-    pointValue.textContent =
-        Number(
-            faceData.points || 0
-        ).toLocaleString();
-
-    singleCost.textContent =
-        `${settings.singleCost.toLocaleString()} P`;
-
-    tenCost.textContent =
-        `${settings.tenCost.toLocaleString()} P`;
-
-    singleButton.disabled =
-        busy ||
-        faceData.points <
-        settings.singleCost;
-
-    tenButton.disabled =
-        busy ||
-        faceData.points <
-        settings.tenCost;
+    return gachaFaces.reduce(
+        (sum, face) =>
+            sum +
+            (
+                Number(
+                    face.probability
+                ) || 0
+            ),
+        0
+    );
 
 }
 
 
-/* =========================================================
-   メッセージ
-========================================================= */
-
-function showMessage(text) {
-
-    gachaMessage.textContent =
-        text;
-
-}
-
-
-/* =========================================================
-   ガチャ抽選
-========================================================= */
+// ==================================================
+// 個別確率抽選
+// ==================================================
 
 function randomFace() {
 
-    const pool =
-        faces.filter(
-            face => face.id !== INITIAL_FACE
-        );
-
-    if (!pool.length) {
-
+    if (
+        gachaFaces.length === 0
+    ) {
         return null;
-
     }
 
-    let total =
-        pool.reduce(
-            (sum, face) => {
 
-                return sum +
-                    RARITIES[
-                        face.rarity
-                    ].weight;
+    const total =
+        getProbabilityTotal();
 
-            },
-            0
-        );
+
+    if (
+        total <= 0
+    ) {
+        return null;
+    }
+
 
     let random =
         Math.random() *
         total;
 
-    for (const face of pool) {
+
+    for (
+        const face of gachaFaces
+    ) {
 
         random -=
-            RARITIES[
-                face.rarity
-            ].weight;
+            Number(
+                face.probability
+            ) || 0;
 
-        if (random <= 0) {
+
+        if (
+            random <= 0
+        ) {
 
             return face;
 
@@ -402,80 +331,364 @@ function randomFace() {
 
     }
 
-    return pool[
-        pool.length - 1
+
+    // 浮動小数点誤差対策
+    return gachaFaces[
+        gachaFaces.length - 1
     ];
 
 }
 
 
-/* =========================================================
-   ポイント消費 + 結果追加
-========================================================= */
+// ==================================================
+// 10連
+// ==================================================
 
-async function performPull(count) {
+function randomTenFaces() {
 
-    if (busy) {
+    const results = [];
+
+
+    for (
+        let i = 0;
+        i < 10;
+        i++
+    ) {
+
+        const face =
+            randomFace();
+
+
+        if (face) {
+            results.push(face);
+        }
+
+    }
+
+
+    return results;
+
+}
+
+
+// ==================================================
+// コスト表示
+// ==================================================
+
+function updateCostDisplay() {
+
+    const singleCostElement =
+        document.getElementById(
+            "singleCost"
+        );
+
+    const tenCostElement =
+        document.getElementById(
+            "tenCost"
+        );
+
+
+    if (
+        singleCostElement
+    ) {
+
+        singleCostElement.textContent =
+            settings.singleCost.toLocaleString();
+
+    }
+
+
+    if (
+        tenCostElement
+    ) {
+
+        tenCostElement.textContent =
+            settings.tenCost.toLocaleString();
+
+    }
+
+}
+
+
+// ==================================================
+// ボタン無効化
+// ==================================================
+
+function disableButtons() {
+
+    if (singleButton) {
+        singleButton.disabled = true;
+    }
+
+    if (tenButton) {
+        tenButton.disabled = true;
+    }
+
+}
+
+
+// ==================================================
+// メッセージ
+// ==================================================
+
+function showMessage(
+    message
+) {
+
+    const element =
+        document.getElementById(
+            "gachaMessage"
+        );
+
+
+    if (element) {
+
+        element.textContent =
+            message;
+
+    }
+
+}
+
+
+// ==================================================
+// 結果表示
+// ==================================================
+
+function renderResult(
+    face
+) {
+
+    if (!face) {
         return;
     }
 
-    const cost =
-        count === 10
-            ? settings.tenCost
-            : settings.singleCost;
+
+    const result =
+        document.getElementById(
+            "gachaResult"
+        );
+
+
+    if (!result) {
+        return;
+    }
+
+
+    result.innerHTML = `
+
+        <div
+            class="gacha-result-card"
+        >
+
+            <img
+                src="${escapeHtml(face.imageUrl)}"
+                alt="${escapeHtml(face.name)}"
+                style="
+                    max-width:220px;
+                    max-height:220px;
+                    object-fit:contain;
+                    border-radius:12px;
+                "
+            >
+
+            <h3>
+                ${escapeHtml(face.name)}
+            </h3>
+
+            <p>
+                レア度:
+                <strong>
+                    ${escapeHtml(face.rarity)}
+                </strong>
+            </p>
+
+            <p>
+                排出率:
+                ${Number(face.probability).toFixed(2)}%
+            </p>
+
+        </div>
+
+    `;
+
+}
+
+
+// ==================================================
+// 10連結果表示
+// ==================================================
+
+function renderTenResults(
+    results
+) {
+
+    const result =
+        document.getElementById(
+            "gachaResult"
+        );
+
+
+    if (!result) {
+        return;
+    }
+
+
+    result.innerHTML = `
+
+        <div
+            class="gacha-ten-results"
+            style="
+                display:grid;
+                grid-template-columns:
+                    repeat(
+                        auto-fit,
+                        minmax(120px,1fr)
+                    );
+                gap:12px;
+            "
+        >
+
+            ${results.map(
+                face => `
+
+                    <div
+                        class="gacha-result-card"
+                    >
+
+                        <img
+                            src="${escapeHtml(face.imageUrl)}"
+                            alt="${escapeHtml(face.name)}"
+                            style="
+                                width:100%;
+                                aspect-ratio:1;
+                                object-fit:contain;
+                                border-radius:10px;
+                            "
+                        >
+
+                        <strong>
+                            ${escapeHtml(face.rarity)}
+                        </strong>
+
+                        <div>
+                            ${escapeHtml(face.name)}
+                        </div>
+
+                    </div>
+
+                `
+            ).join("")}
+
+        </div>
+
+    `;
+
+}
+
+
+// ==================================================
+// 1回引く
+// ==================================================
+
+async function drawSingle() {
 
     if (
-        Number(faceData.points || 0)
-        < cost
+        !gachaReady
     ) {
+        return;
+    }
+
+
+    const user =
+        auth.currentUser;
+
+
+    if (!user) {
 
         showMessage(
-            "ポイントが足りません。"
+            "ログインしてください。"
         );
 
         return;
 
     }
 
-    busy = true;
 
-    updateUI();
+    if (
+        singleButton
+    ) {
+
+        singleButton.disabled =
+            true;
+
+    }
+
 
     try {
 
-        /*
-         * Firestore transactionでポイント消費。
-         *
-         * 同時に別端末からガチャしても
-         * ポイントが二重に使われにくくする。
-         */
-        const ref =
-            doc(
-                db,
-                "faceGacha",
-                currentUser.uid
+        const face =
+            randomFace();
+
+
+        if (!face) {
+
+            throw new Error(
+                "抽選対象がありません。"
             );
 
-        let results = [];
+        }
 
+
+        /*
+         * ポイント消費
+         *
+         * 既存のFirestore構造に合わせて
+         * pointsフィールドを使用
+         */
         await runTransaction(
             db,
             async transaction => {
 
-                const snapshot =
-                    await transaction.get(ref);
-
-                let data =
-                    snapshot.exists()
-                        ? snapshot.data()
-                        : {};
-
-                let points =
-                    Number(
-                        data.points || 0
+                const userRef =
+                    doc(
+                        db,
+                        "users",
+                        user.uid
                     );
 
-                if (points < cost) {
+
+                const snapshot =
+                    await transaction.get(
+                        userRef
+                    );
+
+
+                if (
+                    !snapshot.exists()
+                ) {
+
+                    throw new Error(
+                        "ユーザーデータがありません。"
+                    );
+
+                }
+
+
+                const data =
+                    snapshot.data();
+
+
+                const points =
+                    Number(
+                        data.points
+                    ) || 0;
+
+
+                if (
+                    points <
+                    settings.singleCost
+                ) {
 
                     throw new Error(
                         "ポイントが足りません。"
@@ -483,90 +696,77 @@ async function performPull(count) {
 
                 }
 
-                points -= cost;
 
-                results =
-                    Array.from(
-                        { length: count },
-                        () => randomFace()
-                    ).filter(Boolean);
-
-                const owned =
-                    Array.isArray(
-                        data.ownedFaces
-                    )
-                        ? [
-                            ...data.ownedFaces
-                        ]
-                        : [INITIAL_FACE];
-
-                for (
-                    const face
-                    of results
-                ) {
-
-                    if (
-                        !owned.includes(
-                            face.id
-                        )
-                    ) {
-
-                        owned.push(
-                            face.id
-                        );
-
-                    }
-
-                }
-
-                transaction.set(
-
-                    ref,
-
+                transaction.update(
+                    userRef,
                     {
 
-                        points,
-
-                        ownedFaces:
-                            owned,
-
-                        selectedFace:
-                            data.selectedFace
-                            || INITIAL_FACE,
+                        points:
+                            points -
+                            settings.singleCost,
 
                         updatedAt:
                             serverTimestamp()
 
-                    },
-
-                    {
-                        merge: true
                     }
-
                 );
 
             }
         );
 
 
-        /*
-         * ローカルデータを更新
-         */
-        faceData.points -= cost;
+        // ========================================
+        // 顔データ保存
+        // ========================================
 
-        for (
-            const face
-            of results
+        const faceData =
+            await loadFaceData(
+                user.uid
+            );
+
+
+        if (
+            faceData &&
+            Array.isArray(
+                faceData.faces
+            )
         ) {
 
-            if (
-                !faceData.ownedFaces.includes(
-                    face.id
-                )
-            ) {
+            const exists =
+                faceData.faces.some(
+                    item =>
+                        item.id === face.id
+                );
 
-                faceData.ownedFaces.push(
-                    face.id
+
+            if (!exists) {
+
+                faceData.faces.push({
+
+                    id:
+                        face.id,
+
+                    name:
+                        face.name,
+
+                    imageUrl:
+                        face.imageUrl,
+
+                    rarity:
+                        face.rarity,
+
+                    probability:
+                        face.probability,
+
+                    obtainedAt:
+                        Date.now()
+
+                });
+
+
+                await saveFaceData(
+                    user.uid,
+                    faceData
                 );
 
             }
@@ -574,407 +774,351 @@ async function performPull(count) {
         }
 
 
-        await showResults(
-            results
+        renderResult(
+            face
         );
 
-        renderCollection();
 
-        updateUI();
+        showMessage(
+            `${face.rarity}「${face.name}」を獲得！`
+        );
+
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "[GACHA] 1回抽選エラー:",
+            error
+        );
+
 
         showMessage(
             error.message ||
             "ガチャに失敗しました。"
         );
 
-        updateUI();
 
     } finally {
 
-        busy = false;
+        if (
+            singleButton &&
+            gachaReady
+        ) {
 
-        updateUI();
+            singleButton.disabled =
+                false;
+
+        }
 
     }
 
 }
 
 
-/* =========================================================
-   結果表示
-========================================================= */
+// ==================================================
+// 10連
+// ==================================================
 
-async function showResults(results) {
+async function drawTen() {
 
-    resultGrid.innerHTML = "";
+    if (
+        !gachaReady
+    ) {
+        return;
+    }
 
-    if (!results.length) {
+
+    const user =
+        auth.currentUser;
+
+
+    if (!user) {
 
         showMessage(
-            "ガチャ対象の顔がありません。"
+            "ログインしてください。"
         );
 
         return;
 
     }
 
-    if (results.length === 1) {
 
-        await playSingleAnimation(
-            results[0]
-        );
-
-    } else {
-
-        gachaFace.innerHTML = "?";
-
-        gachaRarity.textContent =
-            "10 PULL";
-
-        showMessage(
-            "10連結果！"
-        );
-
-        for (
-            const face
-            of results
-        ) {
-
-            addResultCard(face);
-
-            await delay(120);
-
-        }
-
+    if (tenButton) {
+        tenButton.disabled = true;
     }
 
-}
+
+    try {
+
+        const results =
+            randomTenFaces();
 
 
-/* =========================================================
-   1回演出
-========================================================= */
+        if (
+            results.length !== 10
+        ) {
 
-async function playSingleAnimation(face) {
-
-    gachaFace.classList.remove(
-        "gachaReveal"
-    );
-
-    gachaFace.classList.add(
-        "gachaSpin"
-    );
-
-    gachaFace.innerHTML = "?";
-
-    gachaRarity.textContent =
-        "DRAW...";
-
-    await delay(1200);
-
-    gachaFace.classList.remove(
-        "gachaSpin"
-    );
-
-    gachaFace.innerHTML = "";
-
-    const img =
-        document.createElement("img");
-
-    img.src =
-        face.image;
-
-    gachaFace.appendChild(
-        img
-    );
-
-    gachaRarity.textContent =
-        face.rarity;
-
-    gachaRarity.style.color =
-        RARITIES[
-            face.rarity
-        ].color;
-
-    gachaFace.style.borderColor =
-        RARITIES[
-            face.rarity
-        ].color;
-
-    gachaFace.classList.add(
-        "gachaReveal"
-    );
-
-    showMessage(
-        `${face.name} を獲得！`
-    );
-
-    addResultCard(face);
-
-}
-
-
-/* =========================================================
-   結果カード
-========================================================= */
-
-function addResultCard(face) {
-
-    const card =
-        document.createElement("div");
-
-    card.className =
-        "resultCard";
-
-    card.style.borderColor =
-        RARITIES[
-            face.rarity
-        ].color;
-
-    const image =
-        document.createElement("div");
-
-    image.className =
-        "faceImage";
-
-    const img =
-        document.createElement("img");
-
-    img.src =
-        face.image;
-
-    image.appendChild(
-        img
-    );
-
-
-    const name =
-        document.createElement("div");
-
-    name.className =
-        "faceName";
-
-    name.textContent =
-        face.name;
-
-
-    const rarity =
-        document.createElement("div");
-
-    rarity.className =
-        "rarity";
-
-    rarity.textContent =
-        face.rarity;
-
-    rarity.style.color =
-        RARITIES[
-            face.rarity
-        ].color;
-
-
-    card.append(
-        image,
-        name,
-        rarity
-    );
-
-    resultGrid.appendChild(
-        card
-    );
-
-}
-
-
-/* =========================================================
-   コレクション
-========================================================= */
-
-function renderCollection() {
-
-    collectionGrid.innerHTML = "";
-
-    for (
-        const face
-        of faces
-    ) {
-
-        const owned =
-            faceData.ownedFaces
-                .includes(face.id);
-
-        const selected =
-            faceData.selectedFace
-            === face.id;
-
-        if (!owned) {
-            continue;
-        }
-
-        const card =
-            document.createElement("div");
-
-        card.className =
-            "faceCard";
-
-        if (selected) {
-
-            card.classList.add(
-                "selected"
+            throw new Error(
+                "抽選対象がありません。"
             );
 
         }
 
-        card.style.borderColor =
-            RARITIES[
-                face.rarity
-            ].color;
 
+        await runTransaction(
+            db,
+            async transaction => {
 
-        const badge =
-            document.createElement("div");
-
-        badge.className =
-            "ownedBadge";
-
-        badge.textContent =
-            selected
-                ? "使用中"
-                : "所持";
-
-
-        const image =
-            document.createElement("div");
-
-        image.className =
-            "faceImage";
-
-        const img =
-            document.createElement("img");
-
-        img.src =
-            face.image;
-
-        image.appendChild(
-            img
-        );
-
-
-        const name =
-            document.createElement("div");
-
-        name.className =
-            "faceName";
-
-        name.textContent =
-            face.name;
-
-
-        const rarity =
-            document.createElement("div");
-
-        rarity.className =
-            "rarity";
-
-        rarity.textContent =
-            face.rarity;
-
-        rarity.style.color =
-            RARITIES[
-                face.rarity
-            ].color;
-
-
-        card.append(
-            badge,
-            image,
-            name,
-            rarity
-        );
-
-
-        card.addEventListener(
-            "click",
-            async () => {
-
-                try {
-
-                    faceData.selectedFace =
-                        face.id;
-
-                    await saveFaceData(
-                        faceData
+                const userRef =
+                    doc(
+                        db,
+                        "users",
+                        user.uid
                     );
 
-                    renderCollection();
 
-                    showMessage(
-                        `${face.name} を使用する顔に設定しました。`
+                const snapshot =
+                    await transaction.get(
+                        userRef
                     );
 
-                } catch (error) {
 
-                    console.error(error);
+                if (
+                    !snapshot.exists()
+                ) {
 
-                    showMessage(
-                        "顔の変更に失敗しました。"
+                    throw new Error(
+                        "ユーザーデータがありません。"
                     );
 
                 }
+
+
+                const data =
+                    snapshot.data();
+
+
+                const points =
+                    Number(
+                        data.points
+                    ) || 0;
+
+
+                if (
+                    points <
+                    settings.tenCost
+                ) {
+
+                    throw new Error(
+                        "ポイントが足りません。"
+                    );
+
+                }
+
+
+                transaction.update(
+                    userRef,
+                    {
+
+                        points:
+                            points -
+                            settings.tenCost,
+
+                        updatedAt:
+                            serverTimestamp()
+
+                    }
+                );
 
             }
         );
 
 
-        collectionGrid.appendChild(
-            card
+        // ========================================
+        // 全結果を保存
+        // ========================================
+
+        const faceData =
+            await loadFaceData(
+                user.uid
+            );
+
+
+        if (
+            faceData &&
+            Array.isArray(
+                faceData.faces
+            )
+        ) {
+
+            for (
+                const face
+                of results
+            ) {
+
+                const exists =
+                    faceData.faces.some(
+                        item =>
+                            item.id ===
+                            face.id
+                    );
+
+
+                if (!exists) {
+
+                    faceData.faces.push({
+
+                        id:
+                            face.id,
+
+                        name:
+                            face.name,
+
+                        imageUrl:
+                            face.imageUrl,
+
+                        rarity:
+                            face.rarity,
+
+                        probability:
+                            face.probability,
+
+                        obtainedAt:
+                            Date.now()
+
+                    });
+
+                }
+
+            }
+
+
+            await saveFaceData(
+                user.uid,
+                faceData
+            );
+
+        }
+
+
+        renderTenResults(
+            results
         );
+
+
+        showMessage(
+            "10連ガチャ完了！"
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "[GACHA] 10連抽選エラー:",
+            error
+        );
+
+
+        showMessage(
+            error.message ||
+            "ガチャに失敗しました。"
+        );
+
+
+    } finally {
+
+        if (
+            tenButton &&
+            gachaReady
+        ) {
+
+            tenButton.disabled =
+                false;
+
+        }
 
     }
 
 }
 
 
-/* =========================================================
-   ボタン
-========================================================= */
+// ==================================================
+// ボタンイベント
+// ==================================================
 
-singleButton.addEventListener(
-    "click",
-    () => {
+if (singleButton) {
 
-        performPull(1);
-
-    }
-);
-
-
-tenButton.addEventListener(
-    "click",
-    () => {
-
-        performPull(10);
-
-    }
-);
-
-
-/* =========================================================
-   Utility
-========================================================= */
-
-function delay(ms) {
-
-    return new Promise(
-        resolve =>
-            setTimeout(
-                resolve,
-                ms
-            )
+    singleButton.addEventListener(
+        "click",
+        drawSingle
     );
 
 }
+
+
+if (tenButton) {
+
+    tenButton.addEventListener(
+        "click",
+        drawTen
+    );
+
+}
+
+
+// ==================================================
+// HTMLエスケープ
+// ==================================================
+
+function escapeHtml(value) {
+
+    return String(
+        value ?? ""
+    )
+        .replaceAll(
+            "&",
+            "&amp;"
+        )
+        .replaceAll(
+            "<",
+            "&lt;"
+        )
+        .replaceAll(
+            ">",
+            "&gt;"
+        )
+        .replaceAll(
+            '"',
+            "&quot;"
+        )
+        .replaceAll(
+            "'",
+            "&#039;"
+        );
+
+}
+
+
+// ==================================================
+// ログイン後に設定読み込み
+// ==================================================
+
+onAuthStateChanged(
+    auth,
+    user => {
+
+        if (!user) {
+
+            gachaReady = false;
+
+            disableButtons();
+
+            return;
+
+        }
+
+
+        void loadSettings();
+
+    }
+);
