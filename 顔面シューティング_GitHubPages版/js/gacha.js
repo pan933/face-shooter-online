@@ -140,7 +140,7 @@ async function initialize() {
         faces.unshift({
             id: INITIAL_FACE,
             name: "初期FACE",
-            image: "./images/faces/face2.png",
+            image: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
             rarity: "N",
             buffs: {}
         });
