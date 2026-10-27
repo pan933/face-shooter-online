@@ -8,217 +8,43 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 
-/* =========================================================
-   FACE SYSTEM
-========================================================= */
-
-export const FACE_BASE_PATH = "https://res.cloudinary.com/i0ptpjzc/image/upload/";
-
-export const CLOUDINARY_FACE_URLS = {
-    face_1: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
-    face_2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
-    face_3: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
-    face_4: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
-    face2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png"
-};
+// ==================================================
+// 初期顔
+// ==================================================
 
 export const INITIAL_FACE = "face2";
 
 
-/* =========================================================
-   30種類のバフ
-========================================================= */
+// ==================================================
+// Cloudinary
+// ==================================================
 
-export const FACE_BUFFS = {
+export const CLOUDINARY_FACE_URLS = {
 
-    bulletSpeed: {
-        name: "弾速UP",
-        unit: "%",
-        max: 30
-    },
+    face_1:
+        "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
 
-    bulletSize: {
-        name: "弾サイズUP",
-        unit: "%",
-        max: 30
-    },
+    face_2:
+        "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
 
-    bulletDamage: {
-        name: "弾威力UP",
-        unit: "%",
-        max: 50
-    },
+    face_3:
+        "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
 
-    fireRate: {
-        name: "連射速度UP",
-        unit: "%",
-        max: 30
-    },
+    face_4:
+        "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
 
-    pierce: {
-        name: "貫通性能UP",
-        unit: "",
-        max: 3
-    },
-
-    criticalRate: {
-        name: "クリティカル率UP",
-        unit: "%",
-        max: 20
-    },
-
-    criticalDamage: {
-        name: "クリティカルダメージUP",
-        unit: "%",
-        max: 50
-    },
-
-    explosionRadius: {
-        name: "爆発範囲UP",
-        unit: "%",
-        max: 40
-    },
-
-    bossDamage: {
-        name: "ボスダメージUP",
-        unit: "%",
-        max: 50
-    },
-
-    enemyDamage: {
-        name: "雑魚ダメージUP",
-        unit: "%",
-        max: 40
-    },
-
-    maxHp: {
-        name: "最大HP+",
-        unit: "",
-        max: 3
-    },
-
-    maxHpAlt: {
-        name: "追加HP+",
-        unit: "",
-        max: 2
-    },
-
-    damageReduction: {
-        name: "ダメージ軽減",
-        unit: "%",
-        max: 20
-    },
-
-    invincibleTime: {
-        name: "無敵時間延長",
-        unit: "%",
-        max: 40
-    },
-
-    bossContactGuard: {
-        name: "ボス接触軽減",
-        unit: "%",
-        max: 30
-    },
-
-    bulletGuard: {
-        name: "敵弾ダメージ軽減",
-        unit: "%",
-        max: 30
-    },
-
-    healPower: {
-        name: "回復効果UP",
-        unit: "%",
-        max: 50
-    },
-
-    shieldTime: {
-        name: "シールド時間延長",
-        unit: "%",
-        max: 50
-    },
-
-    moveSpeed: {
-        name: "移動速度UP",
-        unit: "%",
-        max: 40
-    },
-
-    verticalSpeed: {
-        name: "上下移動速度UP",
-        unit: "%",
-        max: 40
-    },
-
-    acceleration: {
-        name: "加速性能UP",
-        unit: "%",
-        max: 30
-    },
-
-    deceleration: {
-        name: "減速性能UP",
-        unit: "%",
-        max: 30
-    },
-
-    hitbox: {
-        name: "当たり判定縮小",
-        unit: "%",
-        max: 25
-    },
-
-    itemDrop: {
-        name: "アイテム出現率UP",
-        unit: "%",
-        max: 30
-    },
-
-    healDrop: {
-        name: "回復アイテム率UP",
-        unit: "%",
-        max: 30
-    },
-
-    bombCooldown: {
-        name: "爆弾CT短縮",
-        unit: "%",
-        max: 40
-    },
-
-    bombDamage: {
-        name: "爆弾威力UP",
-        unit: "%",
-        max: 50
-    },
-
-    gimmickSpeed: {
-        name: "ギミック解除速度UP",
-        unit: "%",
-        max: 50
-    },
-
-    scoreMultiplier: {
-        name: "スコア倍率UP",
-        unit: "%",
-        max: 50
-    },
-
-    pointBonus: {
-        name: "獲得ポイントUP",
-        unit: "%",
-        max: 30
-    }
+    face2:
+        "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png"
 
 };
 
 
-/* =========================================================
-   レアリティ
-========================================================= */
+// ==================================================
+// レア度
+// ==================================================
 
 export const RARITIES = {
+
     N: {
         name: "N",
         color: "#9ca3af",
@@ -248,344 +74,413 @@ export const RARITIES = {
         color: "#f97316",
         weight: 10
     }
+
 };
 
 
-/* =========================================================
-   顔番号 → レアリティ
-========================================================= */
+// ==================================================
+// レア度取得
+// ==================================================
 
 export function getFaceRarity(number) {
+
+    number =
+        Number(number);
+
 
     if (number <= 3) {
         return "UR";
     }
 
+
     if (number <= 10) {
         return "SSR";
     }
+
 
     if (number <= 25) {
         return "SR";
     }
 
+
     if (number <= 50) {
         return "R";
     }
 
+
     return "N";
+
 }
 
 
-/* =========================================================
-   顔のバフ生成
-========================================================= */
+// ==================================================
+// 管理画面のガチャ顔を取得
+// ==================================================
 
-function seededRandom(seed) {
+export async function loadGachaFaces() {
 
-    let x = Math.sin(seed) * 10000;
+    try {
 
-    return x - Math.floor(x);
-}
-
-
-export function generateFaceBuffs(faceNumber) {
-
-    const rarity = getFaceRarity(faceNumber);
-
-    const keys = Object.keys(FACE_BUFFS);
-
-    const result = {};
-
-    let count = 1;
-
-    if (rarity === "R") {
-        count = 2;
-    }
-
-    if (rarity === "SR") {
-        count = 3;
-    }
-
-    if (rarity === "SSR") {
-        count = 4;
-    }
-
-    if (rarity === "UR") {
-        count = 5;
-    }
-
-    const used = new Set();
-
-    for (let i = 0; i < count; i++) {
-
-        let index =
-            Math.floor(
-                seededRandom(faceNumber * 100 + i * 17)
-                * keys.length
+        const snapshot =
+            await getDoc(
+                doc(
+                    db,
+                    "adminSettings",
+                    "gameplay"
+                )
             );
 
-        let key = keys[index];
 
-        while (used.has(key)) {
+        if (
+            !snapshot.exists()
+        ) {
 
-            index++;
+            return [];
 
-            if (index >= keys.length) {
-                index = 0;
-            }
-
-            key = keys[index];
         }
 
-        used.add(key);
 
-        const definition = FACE_BUFFS[key];
+        const data =
+            snapshot.data();
 
-        const multiplier =
-            rarity === "N" ? 0.35 :
-            rarity === "R" ? 0.55 :
-            rarity === "SR" ? 0.75 :
-            rarity === "SSR" ? 0.9 :
-            1.0;
 
-        let value =
-            Math.max(
-                1,
-                Math.round(definition.max * multiplier)
+        if (
+            !Array.isArray(
+                data.gachaFaces
+            )
+        ) {
+
+            return [];
+
+        }
+
+
+        return data.gachaFaces
+            .map(
+                face => ({
+
+                    id:
+                        String(
+                            face.id || ""
+                        ),
+
+                    name:
+                        String(
+                            face.name ||
+                            face.id ||
+                            "無名"
+                        ),
+
+                    imageUrl:
+                        String(
+                            face.imageUrl ||
+                            ""
+                        ),
+
+                    rarity:
+                        RARITIES[
+                            face.rarity
+                        ]
+                            ? face.rarity
+                            : "N",
+
+                    probability:
+                        Number(
+                            face.probability
+                        ) || 0
+
+                })
+            )
+            .filter(
+                face =>
+                    face.id &&
+                    face.imageUrl
             );
 
-        result[key] = value;
+    } catch (error) {
+
+        console.error(
+            "[FACE] ガチャ顔読み込み失敗:",
+            error
+        );
+
+
+        return [];
+
     }
 
-    return result;
 }
 
 
-/* =========================================================
-   顔データ生成
-========================================================= */
-
-export function buildFace(number) {
-
-    const id = `face_${number}`;
-
-    const rarity = getFaceRarity(number);
-
-    return {
-
-        id,
-
-        name: `FACE ${number}`,
-
-        image:
-            CLOUDINARY_FACE_URLS[id] || "",
-
-        rarity,
-
-        buffs:
-            generateFaceBuffs(number)
-
-    };
-}
-
-
-/* =========================================================
-   顔画像の自動検出
-========================================================= */
+// ==================================================
+// 顔データを発見
+// ==================================================
 
 export async function discoverFaces() {
 
-    const faces = [];
+    /*
+     * まず管理画面で登録された顔を使用
+     */
+    const managedFaces =
+        await loadGachaFaces();
 
-    const faceIds = [
+
+    if (
+        managedFaces.length > 0
+    ) {
+
+        return managedFaces;
+
+    }
+
+
+    /*
+     * Firestoreにまだガチャ設定がない場合は
+     * 現在のCloudinary画像を使用する。
+     *
+     * 初回移行用。
+     */
+    const fallbackIds = [
         "face_1",
         "face_2",
         "face_3",
         "face_4"
     ];
 
-    for (const id of faceIds) {
 
-        const src =
+    const faces = [];
+
+
+    for (
+        const id
+        of fallbackIds
+    ) {
+
+        const imageUrl =
             CLOUDINARY_FACE_URLS[id];
 
-        if (!src) {
+
+        if (!imageUrl) {
             continue;
         }
 
-        const exists =
-            await imageExists(src);
-
-        if (!exists) {
-            console.warn(
-                "顔画像が読み込めません:",
-                id,
-                src
-            );
-            continue;
-        }
 
         const number =
             Number(
-                id.replace("face_", "")
+                id.replace(
+                    "face_",
+                    ""
+                )
             );
 
-        faces.push(
-            buildFace(number)
-        );
+
+        faces.push({
+
+            id,
+
+            name:
+                id,
+
+            imageUrl,
+
+            rarity:
+                getFaceRarity(
+                    number
+                ),
+
+            probability:
+                0
+
+        });
+
     }
 
-    return faces;
-}
 
+    /*
+     * 初期顔も追加
+     */
+    faces.unshift({
 
-function imageExists(src) {
+        id:
+            INITIAL_FACE,
 
-    return new Promise(resolve => {
+        name:
+            "初期顔",
 
-        const img = new Image();
+        imageUrl:
+            CLOUDINARY_FACE_URLS[
+                INITIAL_FACE
+            ],
 
-        img.onload = () => resolve(true);
+        rarity:
+            "N",
 
-        img.onerror = () => resolve(false);
-
-        img.src = src;
+        probability:
+            0
 
     });
 
-}
 
-
-/* =========================================================
-   ユーザーデータ
-========================================================= */
-
-export function getFaceDocRef(uid) {
-
-    return doc(
-        db,
-        "faceGacha",
-        uid
-    );
+    return faces;
 
 }
 
 
-export function createDefaultFaceData() {
+// ==================================================
+// 顔を1つ作る
+// ==================================================
+
+export function buildFace(
+    number
+) {
+
+    const id =
+        `face_${number}`;
+
+
+    const imageUrl =
+        CLOUDINARY_FACE_URLS[id];
+
+
+    if (!imageUrl) {
+
+        return null;
+
+    }
+
 
     return {
 
-        points: 0,
+        id,
 
-        selectedFace: INITIAL_FACE,
+        name:
+            id,
 
-        ownedFaces: [
-            INITIAL_FACE
-        ],
+        imageUrl,
 
-        updatedAt: serverTimestamp()
+        rarity:
+            getFaceRarity(
+                number
+            ),
+
+        probability:
+            0
 
     };
 
 }
 
 
-/* =========================================================
-   データ読み込み
-========================================================= */
+// ==================================================
+// ユーザーの顔データ
+// ==================================================
 
-export async function loadFaceData() {
+export async function loadFaceData(
+    uid
+) {
 
-    if (!auth.currentUser) {
-
-        throw new Error(
-            "ログインが必要です。"
-        );
-
+    if (!uid) {
+        return null;
     }
 
-    const uid =
-        auth.currentUser.uid;
 
-    const ref =
-        getFaceDocRef(uid);
+    try {
 
-    const snapshot =
-        await getDoc(ref);
+        const ref =
+            doc(
+                db,
+                "users",
+                uid
+            );
 
-    if (!snapshot.exists()) {
+
+        const snapshot =
+            await getDoc(ref);
+
+
+        if (
+            !snapshot.exists()
+        ) {
+
+            return {
+
+                faces: [],
+
+                selectedFace:
+                    INITIAL_FACE
+
+            };
+
+        }
+
 
         const data =
-            createDefaultFaceData();
+            snapshot.data();
 
-        await setDoc(
-            ref,
-            data
-        );
 
         return {
+
             ...data,
-            points: 0,
-            updatedAt: null
+
+            faces:
+                Array.isArray(
+                    data.faces
+                )
+                    ? data.faces
+                    : [],
+
+            selectedFace:
+                data.selectedFace ||
+                INITIAL_FACE
+
+        };
+
+    } catch (error) {
+
+        console.error(
+            "[FACE] 顔データ読み込み失敗:",
+            error
+        );
+
+
+        return {
+
+            faces: [],
+
+            selectedFace:
+                INITIAL_FACE
+
         };
 
     }
 
-    const data =
-        snapshot.data();
-
-    if (!Array.isArray(data.ownedFaces)) {
-        data.ownedFaces = [];
-    }
-
-    if (!data.ownedFaces.includes(INITIAL_FACE)) {
-
-        data.ownedFaces.push(
-            INITIAL_FACE
-        );
-
-    }
-
-    if (!data.selectedFace) {
-
-        data.selectedFace =
-            INITIAL_FACE;
-
-    }
-
-    if (typeof data.points !== "number") {
-
-        data.points = 0;
-
-    }
-
-    return data;
-
 }
 
 
-/* =========================================================
-   データ保存
-========================================================= */
+// ==================================================
+// ユーザーの顔データ保存
+// ==================================================
 
-export async function saveFaceData(data) {
+export async function saveFaceData(
+    uid,
+    data
+) {
 
-    if (!auth.currentUser) {
-
-        throw new Error(
-            "ログインが必要です。"
-        );
-
+    if (!uid) {
+        return;
     }
 
-    const uid =
-        auth.currentUser.uid;
+
+    const ref =
+        doc(
+            db,
+            "users",
+            uid
+        );
+
 
     await setDoc(
-
-        getFaceDocRef(uid),
-
+        ref,
         {
 
             ...data,
@@ -594,147 +489,152 @@ export async function saveFaceData(data) {
                 serverTimestamp()
 
         },
-
         {
             merge: true
         }
-
     );
 
 }
 
 
-/* =========================================================
-   ポイント追加
-========================================================= */
-
-export async function addMatchPoints(points) {
-
-    if (!auth.currentUser) {
-        return;
-    }
-
-    points =
-        Math.max(
-            0,
-            Math.floor(Number(points) || 0)
-        );
-
-    if (points <= 0) {
-        return;
-    }
-
-    const data =
-        await loadFaceData();
-
-    data.points =
-        Math.max(
-            0,
-            Number(data.points || 0)
-        ) + points;
-
-    await saveFaceData(data);
-
-    return data.points;
-
-}
-
-
-/* =========================================================
-   ポイント取得
-========================================================= */
-
-export async function getFacePoints() {
-
-    const data =
-        await loadFaceData();
-
-    return Number(
-        data.points || 0
-    );
-
-}
-
-
-/* =========================================================
-   所持確認
-========================================================= */
-
-export function ownsFace(
-    data,
-    faceId
-) {
-
-    return Array.isArray(data.ownedFaces)
-        && data.ownedFaces.includes(faceId);
-
-}
-
-
-/* =========================================================
-   顔選択
-========================================================= */
-
-export async function selectFace(faceId) {
-
-    const data =
-        await loadFaceData();
-
-    if (!ownsFace(data, faceId)) {
-
-        throw new Error(
-            "この顔はまだ持っていません。"
-        );
-
-    }
-
-    data.selectedFace =
-        faceId;
-
-    await saveFaceData(data);
-
-    return data;
-
-}
-
-
-/* =========================================================
-   バフ表示
-========================================================= */
+// ==================================================
+// バフ表示
+// ==================================================
 
 export function formatBuffs(
     buffs
 ) {
 
-    if (!buffs) {
-        return [];
+    if (
+        !buffs ||
+        typeof buffs !== "object"
+    ) {
+
+        return "";
+
     }
 
-    return Object.entries(buffs)
-        .map(([key, value]) => {
 
-            const info =
-                FACE_BUFFS[key];
+    return Object.entries(
+        buffs
+    )
+        .map(
+            ([key, value]) =>
+                `${key}: ${value}`
+        )
+        .join(" / ");
 
-            if (!info) {
-                return null;
+}
+
+
+// ==================================================
+// 画像が存在するか確認
+// ==================================================
+
+export function imageExists(
+    url
+) {
+
+    return new Promise(
+        resolve => {
+
+            if (!url) {
+
+                resolve(false);
+
+                return;
+
             }
 
-            return {
 
-                key,
+            const image =
+                new Image();
 
-                name:
-                    info.name,
 
-                value,
+            image.onload =
+                () => resolve(true);
 
-                text:
-                    `${info.name} +${value}${info.unit}`
 
-            };
+            image.onerror =
+                () => resolve(false);
 
-        })
-        .filter(Boolean);
+
+            image.src =
+                url;
+
+        }
+    );
+
+}
+
+
+// ==================================================
+// 管理画面設定を監視
+// ==================================================
+
+export function watchGachaFaces(
+    callback
+) {
+
+    let lastJson = "";
+
+
+    async function check() {
+
+        try {
+
+            const faces =
+                await loadGachaFaces();
+
+
+            const json =
+                JSON.stringify(
+                    faces
+                );
+
+
+            if (
+                json !== lastJson
+            ) {
+
+                lastJson =
+                    json;
+
+
+                callback(
+                    faces
+                );
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "[FACE] ガチャ設定監視エラー:",
+                error
+            );
+
+        }
+
+    }
+
+
+    void check();
+
+
+    const timer =
+        setInterval(
+            check,
+            5000
+        );
+
+
+    return () => {
+
+        clearInterval(
+            timer
+        );
+
+    };
 
 }
