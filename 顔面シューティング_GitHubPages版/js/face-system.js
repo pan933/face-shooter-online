@@ -12,7 +12,15 @@ import {
    FACE SYSTEM
 ========================================================= */
 
-export const FACE_BASE_PATH = "./images/faces/";
+export const FACE_BASE_PATH = "https://res.cloudinary.com/i0ptpjzc/image/upload/";
+
+export const CLOUDINARY_FACE_URLS = {
+    face_1: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
+    face_2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
+    face_3: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
+    face_4: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
+    face2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png"
+};
 
 export const INITIAL_FACE = "face2";
 
@@ -371,7 +379,7 @@ export function buildFace(number) {
         name: `FACE ${number}`,
 
         image:
-            `${FACE_BASE_PATH}${id}.png`,
+            CLOUDINARY_FACE_URLS[id] || "",
 
         rarity,
 
