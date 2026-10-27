@@ -4,7 +4,8 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestam
 
 import {
     addMatchPoints,
-    loadFaceData
+    loadFaceData,
+    CLOUDINARY_FACE_URLS
 } from "./face-system.js";
 
 
