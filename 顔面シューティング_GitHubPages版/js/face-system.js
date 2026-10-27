@@ -8,7 +8,7 @@ import {
     getDoc,
     setDoc,
     serverTimestamp
-} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 import { db } from "./firebase-config.js";
 
