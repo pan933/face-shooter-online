@@ -547,3 +547,83 @@ export function watchGachaFaces(callback) {
         clearInterval(timer);
     };
 }
+// ============================================================
+// 試合ポイント追加
+// ============================================================
+//
+// game.js から使用。
+// 試合終了時などに users/{uid}.points を加算する。
+// ============================================================
+
+export async function addMatchPoints(uid, amount = 0) {
+
+    if (!uid || uid === "guest-local-only") {
+        return {
+            success: false,
+            points: 0
+        };
+    }
+
+    const add = Math.max(
+        0,
+        Math.floor(Number(amount) || 0)
+    );
+
+    if (add <= 0) {
+        return {
+            success: true,
+            points: 0
+        };
+    }
+
+    try {
+
+        const ref = doc(
+            db,
+            "users",
+            uid
+        );
+
+        const snap = await getDoc(ref);
+
+        const currentData = snap.exists()
+            ? snap.data()
+            : {};
+
+        const currentPoints = Math.max(
+            0,
+            Number(currentData.points) || 0
+        );
+
+        const newPoints = currentPoints + add;
+
+        await setDoc(
+            ref,
+            {
+                points: newPoints,
+                updatedAt: serverTimestamp()
+            },
+            {
+                merge: true
+            }
+        );
+
+        return {
+            success: true,
+            points: newPoints
+        };
+
+    } catch (error) {
+
+        console.error(
+            "[FaceSystem] 試合ポイント追加失敗:",
+            error
+        );
+
+        return {
+            success: false,
+            points: 0,
+            error
+        };
+    }
+}
