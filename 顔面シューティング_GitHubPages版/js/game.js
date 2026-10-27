@@ -862,7 +862,7 @@ async function setFaceForMode(isGuest) {
 
     // ログインユーザーはガチャで選択中のFACEを取得
     try {
-        const data = await loadFaceData();
+        const data = await loadFaceData(currentUser?.uid);
 
         const selectedFace = data?.selectedFace || "face2";
         const imagePath = getGachaFaceImage(selectedFace);
