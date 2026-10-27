@@ -398,35 +398,42 @@ export async function discoverFaces() {
 
     const faces = [];
 
-    let missCount = 0;
+    const faceIds = [
+        "face_1",
+        "face_2",
+        "face_3",
+        "face_4"
+    ];
 
-    for (let i = 1; i <= 200; i++) {
+    for (const id of faceIds) {
 
-        const path =
-            `${FACE_BASE_PATH}face_${i}.png`;
+        const src =
+            CLOUDINARY_FACE_URLS[id];
+
+        if (!src) {
+            continue;
+        }
 
         const exists =
-            await imageExists(path);
+            await imageExists(src);
 
-        if (exists) {
+        if (!exists) {
+            console.warn(
+                "顔画像が読み込めません:",
+                id,
+                src
+            );
+            continue;
+        }
 
-            faces.push(
-                buildFace(i)
+        const number =
+            Number(
+                id.replace("face_", "")
             );
 
-            missCount = 0;
-
-        } else {
-
-            missCount++;
-
-            /*
-             * 5個連続で存在しなかったら終了
-             */
-            if (missCount >= 5) {
-                break;
-            }
-        }
+        faces.push(
+            buildFace(number)
+        );
     }
 
     return faces;
