@@ -1697,36 +1697,67 @@ function escapeHtml(
 // ログイン状態
 // ==================================================
 
+// ==================================================
+// ログイン状態
+// ==================================================
+
+const loginRequired =
+    document.getElementById("loginRequired");
+
+const app =
+    document.getElementById("app");
+
+function updateLoginScreen(user) {
+
+    if (!loginRequired || !app) {
+        return;
+    }
+
+    if (user) {
+
+        // ログイン済み
+        loginRequired.style.display = "none";
+        app.style.display = "block";
+
+        console.log(
+            "[GACHA] ログイン済み:",
+            user.uid
+        );
+
+    } else {
+
+        // 未ログイン
+        loginRequired.style.display = "flex";
+        app.style.display = "none";
+
+        gachaReady = false;
+
+        disableButtons();
+
+        if (pointValue) {
+            pointValue.textContent = "0";
+        }
+
+        console.log(
+            "[GACHA] 未ログイン"
+        );
+    }
+}
+
+
 onAuthStateChanged(
     auth,
     user => {
 
-        if (
-            !user
-        ) {
+        updateLoginScreen(user);
 
-            gachaReady =
-                false;
-
-            disableButtons();
-
-            if (pointValue) {
-
-                pointValue.textContent =
-                    "0";
-
-            }
-
+        if (!user) {
             return;
-
         }
-
 
         void Promise.all([
             loadSettings(),
-            updatePointDisplay(
-                user.uid
-            )
+            updatePointDisplay(user.uid)
         ]);
 
     }
