@@ -1,7 +1,4 @@
-import {
-    auth,
-    db
-} from "./firebase-config.js";
+import { auth, db } from "./firebase-config.js";
 
 import {
     onAuthStateChanged
@@ -15,28 +12,72 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 
-const DEFAULTS = {
-    N: 60,
-    R: 25,
-    SR: 10,
-    SSR: 4,
-    UR: 1
-};
+const DEFAULT_FACES = [
+    {
+        id: "face2",
+        name: "初期顔",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
+        rarity: "N",
+        probability: 60
+    },
+    {
+        id: "face_1",
+        name: "顔1",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_2",
+        name: "顔2",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_3",
+        name: "顔3",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_4",
+        name: "顔4",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
+        rarity: "SSR",
+        probability: 4
+    }
+];
+
+
+const RARITIES = [
+    "N",
+    "R",
+    "SR",
+    "SSR",
+    "UR"
+];
 
 
 let currentUser = null;
+let faces = [];
 
 
-// ========================================
-// 管理画面にパネルを追加
-// ========================================
+// ==================================================
+// 管理画面にパネル追加
+// ==================================================
 
 function createPanel() {
 
-    // 二重作成防止
     if (
         document.getElementById(
-            "gachaProbabilityPanel"
+            "gachaFaceManager"
         )
     ) {
         return;
@@ -61,7 +102,7 @@ function createPanel() {
 
 
     panel.id =
-        "gachaProbabilityPanel";
+        "gachaFaceManager";
 
     panel.className =
         "panel";
@@ -74,131 +115,70 @@ function createPanel() {
             <div>
 
                 <p class="eyebrow">
-                    GACHA PROBABILITY
+                    GACHA FACES
                 </p>
 
                 <h2>
-                    🎲 ガチャ排出確率
+                    🎭 ガチャ顔管理
                 </h2>
 
             </div>
+
+            <button
+                id="addGachaFaceBtn"
+                class="primary"
+                type="button"
+            >
+                ＋ 顔を追加
+            </button>
 
         </div>
 
 
         <p class="muted">
-            各レアリティの排出確率を設定できます。
-            合計が100%になるようにしてください。
-            同じレアリティの顔が複数ある場合は、その中で均等に抽選されます。
+            画像ごとにレア度と排出確率を設定できます。
+            確率は画像ごとの設定がそのまま抽選に使用されます。
         </p>
 
 
         <div
-            class="config-grid"
-        >
-
-            <label>
-                N
-                <span>0〜100%</span>
-
-                <input
-                    id="gachaProbN"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                >
-
-            </label>
+            id="gachaFaceList"
+            style="
+                display:flex;
+                flex-direction:column;
+                gap:12px;
+            "
+        ></div>
 
 
-            <label>
-                R
-                <span>0〜100%</span>
-
-                <input
-                    id="gachaProbR"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                >
-
-            </label>
-
-
-            <label>
-                SR
-                <span>0〜100%</span>
-
-                <input
-                    id="gachaProbSR"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                >
-
-            </label>
-
-
-            <label>
-                SSR
-                <span>0〜100%</span>
-
-                <input
-                    id="gachaProbSSR"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                >
-
-            </label>
-
-
-            <label>
-                UR
-                <span>0〜100%</span>
-
-                <input
-                    id="gachaProbUR"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                >
-
-            </label>
-
-        </div>
-
-
-        <p
+        <div
             id="gachaProbabilityTotal"
             class="muted"
+            style="
+                margin-top:16px;
+                padding:12px;
+            "
         >
-            合計: -
-        </p>
+            合計確率: 0%
+        </div>
 
 
         <div class="form-actions">
 
             <button
-                id="saveGachaProbability"
+                id="saveGachaFacesBtn"
                 class="primary"
                 type="button"
             >
-                確率を保存
+                💾 ガチャ設定を保存
             </button>
 
-
             <button
-                id="resetGachaProbability"
+                id="resetGachaFacesBtn"
                 class="secondary"
                 type="button"
             >
-                初期値に戻す
+                初期設定に戻す
             </button>
 
         </div>
@@ -206,110 +186,485 @@ function createPanel() {
     `;
 
 
-    /*
-     * 既存のガチャ設定パネルがあれば
-     * その後ろに追加
-     */
-    const extension =
-        document.getElementById(
-            "faceShooterAdminExtension"
-        );
+    adminPanel.appendChild(
+        panel
+    );
 
 
-    if (extension) {
-
-        extension.after(
-            panel
-        );
-
-    } else {
-
-        adminPanel.appendChild(
-            panel
-        );
-
-    }
-
-
-    // 初期値読み込み
-    loadProbabilityForm();
-
-
-    // 保存
     document
         .getElementById(
-            "saveGachaProbability"
+            "addGachaFaceBtn"
         )
         .addEventListener(
             "click",
-            saveProbability
+            addFace
         );
 
 
-    // リセット
     document
         .getElementById(
-            "resetGachaProbability"
+            "saveGachaFacesBtn"
         )
         .addEventListener(
             "click",
-            resetProbability
+            saveFaces
         );
 
 
-    // 入力変更時に合計更新
-    const inputIds = [
-        "gachaProbN",
-        "gachaProbR",
-        "gachaProbSR",
-        "gachaProbSSR",
-        "gachaProbUR"
-    ];
+    document
+        .getElementById(
+            "resetGachaFacesBtn"
+        )
+        .addEventListener(
+            "click",
+            resetFaces
+        );
 
 
-    for (const id of inputIds) {
+    loadFaces();
 
-        document
-            .getElementById(id)
-            .addEventListener(
-                "input",
-                updateTotal
+}
+
+
+// ==================================================
+// Firestoreから読み込み
+// ==================================================
+
+async function loadFaces() {
+
+    try {
+
+        const ref =
+            doc(
+                db,
+                "adminSettings",
+                "gameplay"
             );
+
+
+        const snapshot =
+            await getDoc(ref);
+
+
+        if (
+            snapshot.exists() &&
+            Array.isArray(
+                snapshot.data().gachaFaces
+            )
+        ) {
+
+            faces =
+                snapshot.data().gachaFaces.map(
+                    face => ({
+                        id:
+                            String(
+                                face.id || ""
+                            ),
+
+                        name:
+                            String(
+                                face.name || "無名"
+                            ),
+
+                        imageUrl:
+                            String(
+                                face.imageUrl || ""
+                            ),
+
+                        rarity:
+                            RARITIES.includes(
+                                face.rarity
+                            )
+                                ? face.rarity
+                                : "N",
+
+                        probability:
+                            Number(
+                                face.probability
+                            ) || 0
+                    })
+                );
+
+        } else {
+
+            faces =
+                structuredClone(
+                    DEFAULT_FACES
+                );
+
+        }
+
+
+        renderFaces();
+
+
+    } catch (error) {
+
+        console.error(
+            "ガチャ顔設定の読み込み失敗:",
+            error
+        );
+
+
+        faces =
+            structuredClone(
+                DEFAULT_FACES
+            );
+
+
+        renderFaces();
 
     }
 
 }
 
 
-// ========================================
-// フォームに値を入れる
-// ========================================
+// ==================================================
+// 顔一覧表示
+// ==================================================
 
-function setValues(values) {
+function renderFaces() {
 
-    document.getElementById(
-        "gachaProbN"
-    ).value = values.N;
-
-
-    document.getElementById(
-        "gachaProbR"
-    ).value = values.R;
+    const list =
+        document.getElementById(
+            "gachaFaceList"
+        );
 
 
-    document.getElementById(
-        "gachaProbSR"
-    ).value = values.SR;
+    if (!list) {
+        return;
+    }
 
 
-    document.getElementById(
-        "gachaProbSSR"
-    ).value = values.SSR;
+    list.innerHTML = "";
 
 
-    document.getElementById(
-        "gachaProbUR"
-    ).value = values.UR;
+    if (faces.length === 0) {
+
+        list.innerHTML = `
+            <p class="muted">
+                登録されている顔がありません。
+            </p>
+        `;
+
+        updateTotal();
+
+        return;
+    }
+
+
+    faces.forEach(
+        (face, index) => {
+
+            const card =
+                document.createElement(
+                    "div"
+                );
+
+
+            card.style.cssText = `
+                display:grid;
+                grid-template-columns:
+                    90px
+                    minmax(150px,1fr)
+                    100px
+                    120px
+                    80px;
+                gap:12px;
+                align-items:center;
+                padding:12px;
+                border:1px solid rgba(255,255,255,.1);
+                border-radius:12px;
+                background:rgba(255,255,255,.03);
+            `;
+
+
+            card.innerHTML = `
+
+                <div
+                    style="
+                        width:80px;
+                        height:80px;
+                        border-radius:10px;
+                        overflow:hidden;
+                        background:#111;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                    "
+                >
+
+                    <img
+                        src="${escapeHtml(face.imageUrl)}"
+                        alt=""
+                        style="
+                            width:100%;
+                            height:100%;
+                            object-fit:cover;
+                        "
+                        onerror="
+                            this.style.display='none';
+                        "
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <input
+                        class="gacha-face-name"
+                        data-index="${index}"
+                        value="${escapeHtml(face.name)}"
+                        placeholder="画像名"
+                        style="width:100%;"
+                    >
+
+
+                    <input
+                        class="gacha-face-url"
+                        data-index="${index}"
+                        value="${escapeHtml(face.imageUrl)}"
+                        placeholder="画像URL"
+                        style="
+                            width:100%;
+                            margin-top:6px;
+                        "
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <label>
+                        レア度
+
+                        <select
+                            class="gacha-face-rarity"
+                            data-index="${index}"
+                            style="width:100%;"
+                        >
+
+                            ${RARITIES.map(
+                                rarity => `
+                                    <option
+                                        value="${rarity}"
+                                        ${
+                                            face.rarity === rarity
+                                                ? "selected"
+                                                : ""
+                                        }
+                                    >
+                                        ${rarity}
+                                    </option>
+                                `
+                            ).join("")}
+
+                        </select>
+
+                    </label>
+
+                </div>
+
+
+                <div>
+
+                    <label>
+                        排出確率 %
+
+                        <input
+                            class="gacha-face-probability"
+                            data-index="${index}"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value="${face.probability}"
+                            style="width:100%;"
+                        >
+
+                    </label>
+
+                </div>
+
+
+                <button
+                    class="secondary delete-gacha-face"
+                    data-index="${index}"
+                    type="button"
+                >
+                    🗑 削除
+                </button>
+
+            `;
+
+
+            list.appendChild(
+                card
+            );
+
+        }
+    );
+
+
+    // 名前
+    document
+        .querySelectorAll(
+            ".gacha-face-name"
+        )
+        .forEach(
+            input => {
+
+                input.addEventListener(
+                    "input",
+                    event => {
+
+                        const index =
+                            Number(
+                                event.target.dataset.index
+                            );
+
+
+                        faces[index].name =
+                            event.target.value;
+
+                    }
+                );
+
+            }
+        );
+
+
+    // URL
+    document
+        .querySelectorAll(
+            ".gacha-face-url"
+        )
+        .forEach(
+            input => {
+
+                input.addEventListener(
+                    "input",
+                    event => {
+
+                        const index =
+                            Number(
+                                event.target.dataset.index
+                            );
+
+
+                        faces[index].imageUrl =
+                            event.target.value;
+
+                    }
+                );
+
+            }
+        );
+
+
+    // レア度
+    document
+        .querySelectorAll(
+            ".gacha-face-rarity"
+        )
+        .forEach(
+            input => {
+
+                input.addEventListener(
+                    "change",
+                    event => {
+
+                        const index =
+                            Number(
+                                event.target.dataset.index
+                            );
+
+
+                        faces[index].rarity =
+                            event.target.value;
+
+                    }
+                );
+
+            }
+        );
+
+
+    // 確率
+    document
+        .querySelectorAll(
+            ".gacha-face-probability"
+        )
+        .forEach(
+            input => {
+
+                input.addEventListener(
+                    "input",
+                    event => {
+
+                        const index =
+                            Number(
+                                event.target.dataset.index
+                            );
+
+
+                        faces[index].probability =
+                            Number(
+                                event.target.value
+                            ) || 0;
+
+
+                        updateTotal();
+
+                    }
+                );
+
+            }
+        );
+
+
+    // 削除
+    document
+        .querySelectorAll(
+            ".delete-gacha-face"
+        )
+        .forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        const index =
+                            Number(
+                                button.dataset.index
+                            );
+
+
+                        if (
+                            !confirm(
+                                `${faces[index].name} を削除しますか？`
+                            )
+                        ) {
+                            return;
+                        }
+
+
+                        faces.splice(
+                            index,
+                            1
+                        );
+
+
+                        renderFaces();
+
+                    }
+                );
+
+            }
+        );
 
 
     updateTotal();
@@ -317,74 +672,23 @@ function setValues(values) {
 }
 
 
-// ========================================
-// フォームから値を取得
-// ========================================
-
-function getValues() {
-
-    return {
-
-        N:
-            Number(
-                document.getElementById(
-                    "gachaProbN"
-                ).value
-            ) || 0,
-
-
-        R:
-            Number(
-                document.getElementById(
-                    "gachaProbR"
-                ).value
-            ) || 0,
-
-
-        SR:
-            Number(
-                document.getElementById(
-                    "gachaProbSR"
-                ).value
-            ) || 0,
-
-
-        SSR:
-            Number(
-                document.getElementById(
-                    "gachaProbSSR"
-                ).value
-            ) || 0,
-
-
-        UR:
-            Number(
-                document.getElementById(
-                    "gachaProbUR"
-                ).value
-            ) || 0
-
-    };
-
-}
-
-
-// ========================================
-// 合計表示
-// ========================================
+// ==================================================
+// 合計確率
+// ==================================================
 
 function updateTotal() {
 
-    const values =
-        getValues();
-
-
     const total =
-        Object.values(values)
-            .reduce(
-                (a, b) => a + b,
-                0
-            );
+        faces.reduce(
+            (sum, face) =>
+                sum +
+                (
+                    Number(
+                        face.probability
+                    ) || 0
+                ),
+            0
+        );
 
 
     const element =
@@ -399,117 +703,162 @@ function updateTotal() {
 
 
     element.textContent =
-        `合計: ${total.toFixed(1)}%`;
+        `合計確率: ${total.toFixed(2)}%`;
 
 
-    if (
+    element.style.color =
         Math.abs(
             total - 100
-        ) < 0.01
-    ) {
-
-        element.style.color = "";
-
-    } else {
-
-        element.style.color =
-            "#ff7777";
-
-    }
+        ) < 0.001
+            ? ""
+            : "#ff7777";
 
 }
 
 
-// ========================================
-// Firestoreから設定を読み込む
-// ========================================
+// ==================================================
+// 顔を追加
+// ==================================================
 
-async function loadProbabilityForm() {
+function addFace() {
 
-    try {
-
-        const snapshot =
-            await getDoc(
-                doc(
-                    db,
-                    "adminSettings",
-                    "gameplay"
-                )
-            );
+    const id =
+        `face_${Date.now()}`;
 
 
-        const data =
-            snapshot.exists()
-                ? snapshot.data()
-                : {};
+    faces.push({
+
+        id,
+
+        name:
+            "新しい顔",
+
+        imageUrl:
+            "",
+
+        rarity:
+            "N",
+
+        probability:
+            0
+
+    });
 
 
-        const saved =
-            data.gachaProbabilities || {};
+    renderFaces();
 
 
-        setValues({
+    // 追加したところまでスクロール
+    const list =
+        document.getElementById(
+            "gachaFaceList"
+        );
 
-            ...DEFAULTS,
 
-            ...saved
+    if (list) {
 
+        list.lastElementChild?.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
         });
 
-
-    } catch (error) {
-
-        console.error(
-            "ガチャ確率設定の読み込み失敗:",
-            error
-        );
-
-
-        setValues(
-            DEFAULTS
-        );
-
     }
 
 }
 
 
-// ========================================
-// 確率を保存
-// ========================================
+// ==================================================
+// 保存
+// ==================================================
 
-async function saveProbability() {
-
-    const values =
-        getValues();
-
+async function saveFaces() {
 
     const total =
-        Object.values(values)
-            .reduce(
-                (a, b) => a + b,
-                0
-            );
+        faces.reduce(
+            (sum, face) =>
+                sum +
+                (
+                    Number(
+                        face.probability
+                    ) || 0
+                ),
+            0
+        );
 
 
-    // 100%チェック
     if (
         Math.abs(
             total - 100
-        ) > 0.01
+        ) > 0.001
     ) {
 
         alert(
-            `確率の合計を100%にしてください。\n現在: ${total.toFixed(1)}%`
+            `排出確率の合計を100%にしてください。\n現在: ${total.toFixed(2)}%`
         );
 
         return;
     }
 
 
+    for (
+        const face of faces
+    ) {
+
+        if (!face.id) {
+
+            alert(
+                "IDが空の顔があります。"
+            );
+
+            return;
+
+        }
+
+
+        if (!face.imageUrl) {
+
+            alert(
+                `「${face.name}」の画像URLが空です。`
+            );
+
+            return;
+
+        }
+
+
+        if (
+            !RARITIES.includes(
+                face.rarity
+            )
+        ) {
+
+            alert(
+                `「${face.name}」のレア度が不正です。`
+            );
+
+            return;
+
+        }
+
+
+        if (
+            Number(face.probability) < 0
+        ) {
+
+            alert(
+                `「${face.name}」の確率が不正です。`
+            );
+
+            return;
+
+        }
+
+    }
+
+
     const button =
         document.getElementById(
-            "saveGachaProbability"
+            "saveGachaFacesBtn"
         );
 
 
@@ -526,12 +875,6 @@ async function saveProbability() {
             );
 
 
-        /*
-         * 既存設定を取得してから
-         * ガチャ確率だけ更新する
-         *
-         * 他のゲーム設定は消さない
-         */
         const current =
             await getDoc(ref);
 
@@ -548,8 +891,8 @@ async function saveProbability() {
 
                 ...base,
 
-                gachaProbabilities:
-                    values,
+                gachaFaces:
+                    faces,
 
                 updatedBy:
                     currentUser.uid,
@@ -561,15 +904,28 @@ async function saveProbability() {
         );
 
 
+        // ゲーム側へ即時通知
+        window.dispatchEvent(
+            new CustomEvent(
+                "gachaFacesUpdated",
+                {
+                    detail: {
+                        faces
+                    }
+                }
+            )
+        );
+
+
         alert(
-            "ガチャ排出確率を保存しました。"
+            "ガチャ設定を保存しました。"
         );
 
 
     } catch (error) {
 
         console.error(
-            "ガチャ確率保存失敗:",
+            "ガチャ設定保存失敗:",
             error
         );
 
@@ -590,15 +946,15 @@ async function saveProbability() {
 }
 
 
-// ========================================
-// 初期値に戻す
-// ========================================
+// ==================================================
+// 初期設定へ戻す
+// ==================================================
 
-async function resetProbability() {
+async function resetFaces() {
 
     if (
         !confirm(
-            "ガチャ排出確率を初期値に戻しますか？\n\nN 60%\nR 25%\nSR 10%\nSSR 4%\nUR 1%"
+            "ガチャ設定を初期状態に戻しますか？"
         )
     ) {
 
@@ -607,19 +963,39 @@ async function resetProbability() {
     }
 
 
-    setValues(
-        DEFAULTS
-    );
+    faces =
+        structuredClone(
+            DEFAULT_FACES
+        );
 
 
-    await saveProbability();
+    renderFaces();
+
+
+    await saveFaces();
 
 }
 
 
-// ========================================
-// Firebase認証・管理者確認
-// ========================================
+// ==================================================
+// HTMLエスケープ
+// ==================================================
+
+function escapeHtml(value) {
+
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+}
+
+
+// ==================================================
+// 管理者確認
+// ==================================================
 
 onAuthStateChanged(
     auth,
@@ -649,9 +1025,7 @@ onAuthStateChanged(
             if (
                 !adminDoc.exists()
             ) {
-
                 return;
-
             }
 
 
@@ -663,15 +1037,13 @@ onAuthStateChanged(
                 role !== "admin" &&
                 role !== "owner"
             ) {
-
                 return;
-
             }
 
 
             /*
-             * admin.js側で
-             * adminPanelが表示されるまで待つ
+             * admin.jsがadminPanelを
+             * 表示するまで待つ
              */
             const wait =
                 setInterval(
@@ -702,14 +1074,9 @@ onAuthStateChanged(
                 );
 
 
-            // 10秒以上待たない
             setTimeout(
                 () => {
-
-                    clearInterval(
-                        wait
-                    );
-
+                    clearInterval(wait);
                 },
                 10000
             );
