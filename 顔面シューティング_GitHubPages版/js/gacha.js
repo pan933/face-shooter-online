@@ -69,6 +69,92 @@ const resultGrid =
 
 const pointValue =
     document.getElementById("pointValue");
+const collectionGrid =
+    document.getElementById("collectionGrid");
+
+
+// ========================================
+// 所持顔一覧の読み込み
+// ========================================
+
+async function loadCollection(uid) {
+    if (!uid || !collectionGrid) return;
+
+    collectionGrid.textContent = "所持顔を読み込み中...";
+
+    try {
+        const faceData = await loadFaceData(uid);
+
+        const faces = Array.isArray(faceData?.faces)
+            ? faceData.faces
+            : [];
+
+        renderCollection(faces);
+
+    } catch (error) {
+        console.error("[GACHA] 所持顔読み込み失敗:", error);
+
+        collectionGrid.textContent =
+            "所持顔を読み込めませんでした。ページを再読み込みしてください。";
+    }
+}
+
+
+// ========================================
+// 所持顔一覧の描画
+// ========================================
+
+function renderCollection(faces) {
+    if (!collectionGrid) return;
+
+    if (!Array.isArray(faces) || faces.length === 0) {
+        collectionGrid.textContent =
+            "所持している顔はまだありません。ガチャを引いて顔を獲得しよう！";
+        return;
+    }
+
+    collectionGrid.replaceChildren();
+
+    for (const face of faces) {
+        const card = document.createElement("article");
+        card.className = "collection-card";
+
+        const image = document.createElement("img");
+        image.src = face.imageUrl || "";
+        image.alt = face.name || face.id || "顔";
+        image.loading = "lazy";
+
+        const name = document.createElement("h3");
+        name.textContent = face.name || face.id || "無名";
+
+        const rarity = document.createElement("p");
+        rarity.textContent = face.rarity || "N";
+
+        const skill = normalizeFaceSkill(face.skill);
+
+        const skillLevel = document.createElement("p");
+        skillLevel.textContent = `スキル Lv.${skill.level}`;
+
+        const progress = document.createElement("p");
+
+        if (skill.level >= 6) {
+            progress.textContent = "スキル最大レベル";
+        } else {
+            progress.textContent =
+                `次のLvまで：${skill.duplicateProgress}/${getRequiredDuplicates(skill.level)}`;
+        }
+
+        card.append(
+            image,
+            name,
+            rarity,
+            skillLevel,
+            progress
+        );
+
+        collectionGrid.appendChild(card);
+    }
+}
 
 
 // ==================================================
@@ -1311,7 +1397,7 @@ async function drawSingle() {
                 user.uid,
                 [face]
             );
-
+        await loadCollection(user.uid);
 
         const duplicateInfo =
             duplicateInfos[0];
@@ -1538,6 +1624,7 @@ async function drawTen() {
                 user.uid,
                 results
             );
+        await loadCollection(user.uid);
 
 
         // ------------------------------
@@ -1756,9 +1843,7 @@ onAuthStateChanged(
         }
 
         void Promise.all([
-            loadSettings(),
-            updatePointDisplay(user.uid)
-        ]);
-
-    }
-);
+    loadSettings(),
+    updatePointDisplay(user.uid),
+    loadCollection(user.uid)
+]);
