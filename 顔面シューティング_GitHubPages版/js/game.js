@@ -516,18 +516,14 @@ applyControlMode();
 ================================================== */
 
 const FACE_GUEST = "face.png";
-const FACE_REGISTERED = "./images/faces/face2.png";
+const FACE_REGISTERED = CLOUDINARY_FACE_URLS.face2;
 
 function getGachaFaceImage(faceId) {
-    if (!faceId || faceId === "face2") {
+    if (!faceId) {
         return FACE_REGISTERED;
     }
 
-    if (/^face_\d+$/.test(faceId)) {
-        return `./images/faces/${faceId}.png`;
-    }
-
-    return FACE_REGISTERED;
+    return CLOUDINARY_FACE_URLS[faceId] || FACE_REGISTERED;
 }
 
 
