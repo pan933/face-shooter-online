@@ -1847,3 +1847,5 @@ onAuthStateChanged(
     updatePointDisplay(user.uid),
     loadCollection(user.uid)
 ]);
+    }
+);
