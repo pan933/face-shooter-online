@@ -506,12 +506,22 @@ canvas {
 #pvpRoomCodeDisplay { padding: 8px; border-radius: 8px; background: rgba(255,230,0,.12); color: #ffe600; font-weight: 1000; letter-spacing: .15em; text-align: center; }
 #pvpStatus { min-height: 1.3em; color: #bdefff; }
 #pvpHud {
-    position: absolute; z-index: 28; top: 72px; right: 12px; display: grid; gap: 3px;
-    max-width: min(45vw,320px); padding: 8px 11px; border: 1px solid #ff94b5;
-    border-radius: 10px; background: rgba(35,8,30,.9); color: white; text-align: right;
+    position: absolute; z-index: 28; top: 72px; left: 12px; display: grid; gap: 3px;
+    max-width: min(42vw,280px); padding: 8px 11px; border: 1px solid #ff94b5;
+    border-radius: 10px; background: rgba(35,8,30,.9); color: white; text-align: left;
     font: 900 12px system-ui,sans-serif; pointer-events: none;
 }
 #pvpHud[hidden] { display: none; }
+#pvpSyncNotice {
+    position: absolute; z-index: 45; left: 50%; bottom: 18px; transform: translateX(-50%);
+    width: max-content; max-width: min(92vw, 560px); box-sizing: border-box;
+    padding: 9px 14px; border: 1px solid #8edfff; border-radius: 11px;
+    background: rgba(5, 18, 34, .94); color: #eaf9ff; text-align: center;
+    font: 800 13px/1.4 system-ui, sans-serif; overflow-wrap: anywhere; pointer-events: none;
+}
+#pvpSyncNotice[hidden] { display: none; }
+#pvpSyncNotice[data-kind="error"] { border-color: #ff879b; color: #ffe2e7; background: rgba(48, 8, 20, .96); }
+#pvpSyncNotice[data-kind="success"] { border-color: #7cf1b4; color: #dfffee; }
 #pvpRemoteAvatar {
     position: absolute; z-index: 24; left: 50%; top: 22%; transform: translate(-50%,-50%);
     display: grid; justify-items: center; gap: 4px; width: 82px; height: 96px;

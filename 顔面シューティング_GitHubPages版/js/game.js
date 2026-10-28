@@ -5729,6 +5729,7 @@ const pvpRoomCodeDisplay = document.getElementById("pvpRoomCodeDisplay");
 const pvpStatus = document.getElementById("pvpStatus");
 const pvpHud = document.getElementById("pvpHud");
 const pvpOpponentSummary = document.getElementById("pvpOpponentSummary");
+const pvpSyncNotice = document.getElementById("pvpSyncNotice");
 const pvpRemoteAvatar = document.getElementById("pvpRemoteAvatar");
 const pvpRemoteFace = document.getElementById("pvpRemoteFace");
 const pvpRemoteFaceFallback = document.getElementById("pvpRemoteFaceFallback");
@@ -5750,7 +5751,22 @@ function setPvpStatus(message) {
 
 function setPvpMatchNotice(message) {
     setPvpStatus(message);
-    if (pvpOpponentSummary && pvpStarted) pvpOpponentSummary.textContent = message;
+    if (pvpSyncNotice) {
+        if (pvpSyncNotice.textContent !== message || pvpSyncNotice.hidden) {
+            pvpSyncNotice.textContent = message;
+            pvpSyncNotice.hidden = false;
+            pvpSyncNotice.dataset.kind = /失敗|できません|確認してください|再公開/.test(message) ? "error" : "info";
+        }
+    }
+}
+
+function setPvpSyncSuccess(message) {
+    if (!pvpSyncNotice || pvpSyncNotice.dataset.kind === "error") return;
+    if (pvpSyncNotice.textContent !== message || pvpSyncNotice.hidden) {
+        pvpSyncNotice.textContent = message;
+        pvpSyncNotice.hidden = false;
+        pvpSyncNotice.dataset.kind = "success";
+    }
 }
 
 function getPvpErrorCode(error) {
@@ -5905,6 +5921,11 @@ function beginPvpMatch() {
     if (pvpPanel) pvpPanel.hidden = true;
     if (pvpCancelButton) pvpCancelButton.hidden = true;
     if (pvpHud) pvpHud.hidden = false;
+    if (pvpSyncNotice) {
+        pvpSyncNotice.hidden = true;
+        pvpSyncNotice.textContent = "";
+        pvpSyncNotice.dataset.kind = "info";
+    }
     if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = false;
     if (pvpOpponentSummary) pvpOpponentSummary.textContent = "対戦相手を読み込み中…";
     const leaderboardButton = document.getElementById("gameoverLeaderboardBtn");
@@ -5915,7 +5936,9 @@ function beginPvpMatch() {
         snapshot => {
             const opponent = snapshot.docs.map(entry => entry.data()).find(entry => entry.uid !== auth.currentUser?.uid);
             if (!opponent) {
-                if (pvpOpponentSummary && !pvpHasSeenOpponentState) pvpOpponentSummary.textContent = "相手の対戦データを待っています…";
+                if (pvpOpponentSummary && !pvpHasSeenOpponentState && pvpOpponentSummary.textContent !== "相手の対戦データを待っています…") {
+                    pvpOpponentSummary.textContent = "相手の対戦データを待っています…";
+                }
                 return;
             }
             pvpOpponentState = opponent;
@@ -5923,8 +5946,10 @@ function beginPvpMatch() {
             const timestamp = opponent.updatedAt?.toMillis?.() || 0;
             if (timestamp > 0 && timestamp !== pvpLastOpponentUpdate) pvpLastOpponentUpdate = timestamp;
             if (pvpOpponentSummary) {
-                pvpOpponentSummary.textContent = `${opponent.displayName || "フレンド"}　SCORE ${opponent.score || 0}　WAVE ${opponent.wave || 1}　HP ${opponent.hp || 0}`;
+                const opponentSummary = `${opponent.displayName || "フレンド"}　HP ${opponent.hp || 0}`;
+                if (pvpOpponentSummary.textContent !== opponentSummary) pvpOpponentSummary.textContent = opponentSummary;
             }
+            setPvpSyncSuccess("対戦データ同期中");
             if (pvpRemoteAvatar) {
                 const opponentX = Number.isFinite(Number(opponent.x)) ? Number(opponent.x) : 0.5;
                 pvpRemoteAvatar.style.left = `${Math.max(5, Math.min(95, opponentX * 100))}%`;
@@ -6020,9 +6045,7 @@ async function syncPvpPlayerState(force = false) {
         pvpLastSentWave = currentWave;
         pvpLastSentHp = currentHp;
         pvpLastSentFaceId = activeFaceId;
-        if (!pvpHasSeenOpponentState && pvpOpponentSummary?.textContent.includes("待って")) {
-            pvpOpponentSummary.textContent = "自分のデータ送信OK。相手のデータを待っています…";
-        }
+        if (!pvpHasSeenOpponentState) setPvpSyncSuccess("自分のデータ送信OK。相手のデータ待ちです");
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
         setPvpMatchNotice(`自分のデータ送信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesをFirebase Consoleで公開してください。`);
@@ -6108,6 +6131,7 @@ async function leavePvpRoom() {
     pvpLastStateSyncAt = 0;
     if (pvpPanel) pvpPanel.hidden = false;
     if (pvpHud) pvpHud.hidden = true;
+    if (pvpSyncNotice) pvpSyncNotice.hidden = true;
     if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = true;
     if (pvpRoomCodeDisplay) pvpRoomCodeDisplay.hidden = true;
     if (pvpCreateButton) {
