@@ -104,7 +104,7 @@ async function loadCollection(uid) {
             ? faceData.faces
             : [];
 
-        renderCollection(faces);
+        renderCollection(faces, faceData.selectedFace || "face2", uid);
 
     } catch (error) {
         console.error("[GACHA] 所持顔読み込み失敗:", error);
@@ -119,7 +119,7 @@ async function loadCollection(uid) {
 // 所持顔一覧の描画
 // ========================================
 
-function renderCollection(faces) {
+function renderCollection(faces, selectedFaceId = "face2", uid = null) {
     if (!collectionGrid) return;
 
     if (!Array.isArray(faces) || faces.length === 0) {
@@ -163,12 +163,35 @@ function renderCollection(faces) {
                 `次のLvまで：${skill.duplicateProgress}/${getRequiredDuplicates(skill.level)}`;
         }
 
+        const useFaceButton = document.createElement("button");
+        useFaceButton.type = "button";
+        useFaceButton.className = "use-face-button";
+        const isSelected = face.id === selectedFaceId;
+        card.classList.toggle("is-selected-face", isSelected);
+        useFaceButton.textContent = isSelected ? "✓ ゲームで使用中" : "この顔を使う";
+        useFaceButton.disabled = isSelected || !uid;
+        useFaceButton.setAttribute("aria-pressed", String(isSelected));
+        useFaceButton.addEventListener("click", async () => {
+            useFaceButton.disabled = true;
+            useFaceButton.textContent = "保存中…";
+            try {
+                await saveFaceData(uid, { selectedFace: face.id });
+                showMessage(`${displayFace.name || "この顔"}をゲームで使う顔に設定しました。`);
+                renderCollection(faces, face.id, uid);
+            } catch (error) {
+                console.error("使用する顔を保存できませんでした。", error);
+                useFaceButton.disabled = false;
+                useFaceButton.textContent = "保存に失敗しました。再試行";
+            }
+        });
+
         card.append(
             image,
             name,
             rarity,
             skillLevel,
-            progress
+            progress,
+            useFaceButton
         );
 
         appendFaceDetails(card, displayFace);

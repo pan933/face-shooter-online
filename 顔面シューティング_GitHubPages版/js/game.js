@@ -19,15 +19,18 @@ import { loadSkill, getRequiredKills as getSkillRequiredKills, isSkillReady, con
 
 let touchMode = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 const touchJoystick = document.getElementById("touchJoystick");
+const touchDpad = document.getElementById("touchDpad");
 const joystickKnob = document.getElementById("joystickKnob");
 const touchShoot = document.getElementById("touchShoot");
 const touchBomb = document.getElementById("touchBomb");
 const touchShield = document.getElementById("touchShield");
 const touchSkill = document.getElementById("touchSkill");
 const skillBtn = document.getElementById("skillBtn");
+const skillNotice = document.getElementById("skillNotice");
 const touchBombCount = document.getElementById("touchBombCount");
 const touchShieldCount = document.getElementById("touchShieldCount");
 const controlModeBtn = document.getElementById("controlModeBtn");
+const moveControlBtn = document.getElementById("moveControlBtn");
 const cursorSensitivity = document.getElementById("cursorSensitivity");
 const cursorSensitivityValue = document.getElementById("cursorSensitivityValue");
 let cursorSensitivityLevel = 1.0;
@@ -50,6 +53,7 @@ const DEFAULT_CONTROL_LAYOUT = {
     shoot:  { x: 0.87, y: 0.77, size: 1.00, opacity: 0.96 },
     bomb:   { x: 0.80, y: 0.59, size: 1.00, opacity: 0.93 },
     shield: { x: 0.94, y: 0.59, size: 1.00, opacity: 0.93 },
+    skill:  { x: 0.87, y: 0.39, size: 0.90, opacity: 1.00 },
     aim:    { x: 0.50, y: 0.47, size: 1.00, opacity: 0.88 }
 };
 
@@ -229,7 +233,7 @@ gameCursorStyle.textContent = `
         #bossSupplyNotice { bottom:132px; font-size:13px; padding:8px 10px; }
         #touchJoystick { width:112px; height:112px; }
         #joystickKnob { width:52px; height:52px; }
-        #touchActions { grid-template-columns:68px 68px; grid-template-rows:60px 60px; gap:6px; }
+        #touchActions { grid-template-columns:68px 68px; grid-template-rows:60px 60px 60px; gap:6px; }
         #touchShoot { width:142px; min-height:60px; }
         #touchActions .touchAction { min-height:60px; border-radius:15px; font-size:12px; }
         #touchHelp { max-width:46%; left:50%; bottom:6px; font-size:10px; text-align:center; }
@@ -240,7 +244,7 @@ gameCursorStyle.textContent = `
         #start #leaderboardList { max-height:68px; }
         #touchJoystick { width:86px; height:86px; left:10px; bottom:9px; }
         #joystickKnob { width:40px; height:40px; }
-        #touchActions { grid-template-columns:58px 58px; grid-template-rows:48px 48px; gap:5px; right:10px; bottom:9px; }
+        #touchActions { grid-template-columns:58px 58px; grid-template-rows:48px 48px 48px; gap:5px; right:10px; bottom:9px; }
         #touchShoot { width:121px; min-height:48px; }
         #touchActions .touchAction { min-height:48px; font-size:10px; padding:3px; }
         #bossSupplyNotice { bottom:75px; }
@@ -334,6 +338,7 @@ gameCursorStyle.textContent = `
     .cle-shoot { background:rgba(126,94,14,.94); border-color:#ffe36b; }
     .cle-bomb { background:rgba(142,62,17,.94); border-color:#ffc28d; }
     .cle-shield { background:rgba(10,93,129,.94); border-color:#91e8ff; }
+    .cle-skill { background:rgba(125,75,12,.96); border-color:#ffe36b; }
     .cle-aim {
         width:34px; height:34px; padding:0; min-width:0; min-height:0;
         border:2px solid #ffe600; border-radius:50%; background:rgba(255,230,0,.08);
@@ -368,12 +373,19 @@ let shieldPointerId = null;
 let touchDirX = 0;
 let touchDirY = 0;
 let touchFireHeld = false;
+let touchMoveMode = "stick";
+const dpadDirections = new Set();
 
 function applyControlMode() {
     document.body.classList.toggle("touch-mode", touchMode);
+    document.body.classList.toggle("touch-dpad-mode", touchMode && touchMoveMode === "dpad");
     if (controlModeBtn) {
         controlModeBtn.textContent = touchMode ? "🎮 タッチ操作：ON" : "📱 タッチ操作：OFF";
         controlModeBtn.classList.toggle("touchOn", touchMode);
+    }
+    if (moveControlBtn) {
+        moveControlBtn.textContent = touchMoveMode === "dpad" ? "✥ 移動：方向パッド" : "🕹 移動：スティック";
+        moveControlBtn.setAttribute("aria-pressed", String(touchMoveMode === "dpad"));
     }
     if (!touchMode) {
         touchFireHeld = false;
@@ -388,7 +400,48 @@ function applyControlMode() {
 function resetJoystick() {
     touchDirX = 0;
     touchDirY = 0;
+    dpadDirections.clear();
+    touchDpad?.querySelectorAll("button.pressed").forEach(button => button.classList.remove("pressed"));
     if (joystickKnob) { joystickKnob.style.left = "50%"; joystickKnob.style.top = "50%"; }
+}
+
+moveControlBtn?.addEventListener("click", () => {
+    touchMoveMode = touchMoveMode === "stick" ? "dpad" : "stick";
+    resetJoystick();
+    applyControlMode();
+});
+
+if (touchDpad) {
+    const updateDpadVector = () => {
+        const x = (dpadDirections.has("right") ? 1 : 0) - (dpadDirections.has("left") ? 1 : 0);
+        const y = (dpadDirections.has("down") ? 1 : 0) - (dpadDirections.has("up") ? 1 : 0);
+        const length = Math.hypot(x, y) || 1;
+        touchDirX = x / length;
+        touchDirY = y / length;
+    };
+    touchDpad.querySelectorAll("button[data-dir]").forEach(button => {
+        let pointerId = null;
+        const direction = button.dataset.dir;
+        button.addEventListener("pointerdown", event => {
+            if (!touchMode || touchMoveMode !== "dpad" || !running || paused || pointerId !== null) return;
+            event.preventDefault();
+            pointerId = event.pointerId;
+            dpadDirections.add(direction);
+            button.classList.add("pressed");
+            try { button.setPointerCapture(event.pointerId); } catch (_) {}
+            updateDpadVector();
+        }, { passive: false });
+        const release = event => {
+            if (event?.pointerId !== undefined && event.pointerId !== pointerId) return;
+            pointerId = null;
+            dpadDirections.delete(direction);
+            button.classList.remove("pressed");
+            updateDpadVector();
+        };
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("lostpointercapture", release);
+    });
 }
 
 function updateJoystick(event) {
@@ -621,7 +674,8 @@ function applyControlLayout() {
     const buttonSpecs = {
         shoot: { element: touchShoot, desktop: [161, 76], compact: [142, 60], landscape: [121, 48] },
         bomb: { element: touchBomb, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] },
-        shield: { element: touchShield, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] }
+        shield: { element: touchShield, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] },
+        skill: { element: touchSkill, desktop: [108, 54], compact: [98, 48], landscape: [88, 44] }
     };
     const landscape = window.matchMedia("(max-width: 900px) and (orientation: landscape) and (pointer: coarse)").matches;
     const compact = window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
@@ -719,6 +773,7 @@ function createControlLayoutEditor() {
         { key: "shoot", name: "発射ボタン", text: "🔫 発射", className: "cle-action cle-shoot" },
         { key: "bomb", name: "爆弾ボタン", text: "💣 爆弾", className: "cle-action cle-bomb" },
         { key: "shield", name: "シールドボタン", text: "🛡 盾", className: "cle-action cle-shield" },
+        { key: "skill", name: "スキルボタン", text: "✨ スキル", className: "cle-action cle-skill" },
         { key: "aim", name: "照準カーソル", text: "＋", className: "cle-aim" }
     ];
     const demoControls = new Map();
@@ -867,7 +922,7 @@ async function setFaceForMode(isGuest) {
     // ゲストは今まで通り face.png
     if (isGuest) {
         activeFaceId = "face2";
-        activeFaceSkill = await loadSkill(activeFaceId);
+        activeFaceSkill = await loadSkill(activeFaceId) || await loadSkill("face2");
         activeSkillData = normalizeSkillData();
         updateSkillButton();
         faceImage.src = FACE_GUEST;
@@ -882,7 +937,7 @@ async function setFaceForMode(isGuest) {
         activeFaceId = selectedFace;
         const ownedFace = (data?.faces || []).find(face => face.id === selectedFace);
         activeSkillData = normalizeSkillData(ownedFace?.skill);
-        activeFaceSkill = await loadSkill(selectedFace);
+        activeFaceSkill = await loadSkill(selectedFace) || await loadSkill("face2");
         updateSkillButton();
         const imagePath = getGachaFaceImage(selectedFace);
 
@@ -933,6 +988,16 @@ function updateSkillButton() {
     }
 }
 
+function showSkillNotice(text) {
+    if (!skillNotice) return;
+    skillNotice.textContent = `✨ ${text} 発動！`;
+    skillNotice.classList.remove("show");
+    void skillNotice.offsetWidth;
+    skillNotice.classList.add("show");
+    clearTimeout(showSkillNotice.timer);
+    showSkillNotice.timer = setTimeout(() => skillNotice.classList.remove("show"), 1200);
+}
+
 function addSkillProgress(kills = 1) {
     if (guestMode || !currentUser || !activeFaceSkill) return;
     activeSkillData = normalizeSkillData({
@@ -975,6 +1040,13 @@ function damageSkillTargets(targets, damage) {
     return defeated;
 }
 
+function damageBossWithSkill(damage) {
+    if (!boss) return;
+    boss.hp -= Math.max(1, Number(damage) || 1);
+    boss.hitFlash = 0.22;
+    if (boss.hp <= 0) defeatBoss();
+}
+
 async function activateFaceSkill() {
     if (!running || paused || skillActivationBusy || !isSkillReady(activeFaceSkill, activeSkillData)) return;
     skillActivationBusy = true;
@@ -982,14 +1054,19 @@ async function activateFaceSkill() {
     try {
         const result = activeFaceSkill.activate({ player, enemies, canvas, skillLevel: activeSkillData.level });
         if (!result?.success) return;
+        showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}`);
         switch (result.type) {
             case "explosion":
                 damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - result.x, enemy.y - result.y) <= result.radius), result.damage);
+                if (boss && Math.hypot(boss.x - result.x, boss.y - result.y) <= result.radius + boss.size * .5) damageBossWithSkill(result.damage);
                 boom(result.x, result.y, true);
                 break;
             case "line_clear": {
-                const targets = enemies.filter(enemy => Math.abs(enemy.x - (result.x || player.x)) <= result.width / 2 && enemy.y < (result.y || player.y) && enemy.y > (result.y || player.y) - result.height).slice(0, result.maxTargets);
+                const attackX = result.x ?? player.x;
+                const attackY = result.y ?? player.y;
+                const targets = enemies.filter(enemy => Math.abs(enemy.x - attackX) <= result.width / 2 && enemy.y < attackY && enemy.y > attackY - result.height).slice(0, result.maxTargets);
                 damageSkillTargets(targets, result.damage);
+                if (boss && Math.abs(boss.x - attackX) <= result.width / 2 + boss.size / 2 && boss.y < attackY && boss.y > attackY - result.height - boss.size / 2) damageBossWithSkill(result.damage);
                 break;
             }
             case "power_up":
@@ -1000,8 +1077,9 @@ async function activateFaceSkill() {
                 break;
             case "time_stop":
                 damageSkillTargets([...enemies], result.damage);
+                damageBossWithSkill(result.damage);
                 enemyBullets = [];
-                shieldTime = Math.max(shieldTime, result.duration || 2);
+                timeStopTimer = Math.max(timeStopTimer, result.duration || 2);
                 break;
             case "defense":
                 hp = Math.min(5, hp + (result.heal || 0));
@@ -1011,9 +1089,11 @@ async function activateFaceSkill() {
             case "bullet_counter":
                 enemyBullets = [];
                 damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius).slice(0, result.maxBullets), result.damagePerBullet);
+                if (boss && Math.hypot(boss.x - player.x, boss.y - player.y) <= result.radius + boss.size / 2) damageBossWithSkill(result.damagePerBullet * result.maxBullets);
                 break;
             case "black_hole":
                 damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius), result.damage);
+                if (boss && Math.hypot(boss.x - player.x, boss.y - player.y) <= result.radius + boss.size / 2) damageBossWithSkill(result.damage);
                 enemyBullets = [];
                 break;
             default:
@@ -1211,6 +1291,7 @@ let shootCooldown = 0;
 let damageCooldown = 0;
 
 let shieldTime = 0;
+let timeStopTimer = 0;
 
 let bombCooldown = 0;
 
@@ -1397,6 +1478,7 @@ function resetGame() {
     damageCooldown = 0;
 
     shieldTime = 0;
+    timeStopTimer = 0;
 
     bombCooldown = 0;
 
@@ -2245,6 +2327,7 @@ function collectItem(item) {
 }
 
 function updateItems(dt) {
+    timeStopTimer = Math.max(0, timeStopTimer - dt);
     rapidTimer = Math.max(0, rapidTimer - dt);
     skillPowerTimer = Math.max(0, skillPowerTimer - dt);
     if (skillPowerTimer === 0) {
@@ -2550,6 +2633,7 @@ function hitGimmick(targetIndex = -1) {
 
 function updateBoss(dt) {
     if (!boss) return;
+    if (timeStopTimer > 0) return;
 
     boss.moveTimer += dt;
     boss.attackTimer -= dt;
@@ -2821,6 +2905,7 @@ function updateEnemyBullets(dt) {
 
 
 function updateEnemies(dt) {
+    if (timeStopTimer > 0) return;
 
     for (
         const enemy of enemies
@@ -4891,6 +4976,10 @@ window.addEventListener(
 
             useShield();
 
+        }
+
+        if (event.key === "e" || event.key === "E") {
+            void activateFaceSkill();
         }
 
 

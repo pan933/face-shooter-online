@@ -454,6 +454,34 @@ canvas {
 #controls .skillAction span, #touchSkill span { display: block; font-size: 10px; }
 @keyframes skillPulse { to { filter: brightness(1.2); transform: scale(1.06); } }
 
+#skillNotice {
+    position: fixed;
+    z-index: 180;
+    top: 42%;
+    left: 50%;
+    max-width: min(88vw, 520px);
+    padding: 12px 22px;
+    border: 2px solid #fff0a3;
+    border-radius: 999px;
+    background: linear-gradient(120deg, rgba(124,58,237,.94), rgba(8,145,178,.94));
+    color: #fff;
+    font-size: clamp(17px, 4vw, 30px);
+    font-weight: 1000;
+    text-align: center;
+    text-shadow: 0 2px 8px #111;
+    box-shadow: 0 0 34px rgba(255,228,90,.8);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(.65);
+}
+
+#skillNotice.show { animation: skillNoticePop 1.15s ease-out both; }
+@keyframes skillNoticePop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.65); }
+    18%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -65%) scale(1.08); }
+}
+
 
 /* ==================================================
    START / GAMEOVER
@@ -642,6 +670,39 @@ p {
     font-weight: 900;
     pointer-events: none;
 }
+
+#touchDpad {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    z-index: 121;
+    display: none;
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+    gap: 3px;
+    touch-action: none;
+    user-select: none;
+}
+
+#touchDpad button {
+    border: 2px solid #b7e8ff;
+    border-radius: 12px;
+    background: rgba(9,39,65,.92);
+    color: #fff;
+    font-size: 19px;
+    font-weight: 1000;
+    box-shadow: 0 3px 0 #061a2b;
+    touch-action: none;
+    user-select: none;
+}
+
+#touchDpad button:active, #touchDpad button.pressed {
+    background: #1687bd;
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #061a2b;
+}
+
+#touchDpad .dpadCenter { display: grid; place-items: center; color: rgba(255,255,255,.55); }
 
 #joystickKnob {
     position: absolute;
@@ -880,9 +941,38 @@ body.touch-mode #touchJoystick,
 body.touch-mode #touchActions,
 body.touch-mode #touchHelp { display: block !important; }
 body.touch-mode #touchActions { display: grid !important; }
+body.touch-mode #moveControlBtn { display: block !important; }
+body.touch-mode.touch-dpad-mode #touchDpad { display: grid !important; }
+body.touch-mode.touch-dpad-mode #touchJoystick { display: none !important; }
 body.touch-mode #controls .keyboard-only { opacity: .45; }
+#moveControlBtn {
+    display: none;
+    position: fixed;
+    top: 208px;
+    right: 14px;
+    z-index: 250;
+    padding: 8px 11px;
+    border: 2px solid #7dd3fc;
+    border-radius: 10px;
+    background: rgba(9,39,65,.92);
+    color: #fff;
+    font-weight: 900;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.operationHelp {
+    max-width: 580px;
+    margin: 7px auto !important;
+    padding: 8px 10px;
+    border: 1px solid rgba(125,211,252,.35);
+    border-radius: 10px;
+    background: rgba(8,47,73,.52);
+    font-size: 12px !important;
+}
 @media (max-width: 650px) {
     #controlModeBtn { display:block; top:58px; right:10px; font-size:12px; padding:7px 9px; }
+    #moveControlBtn { top:208px; right:10px; font-size:12px; padding:7px 9px; }
+    #touchDpad { left:10px; bottom:10px; grid-template-columns:repeat(3,38px); grid-template-rows:repeat(3,38px); }
 }
 
 /* START/OVERLAY MUST BE ABOVE TOUCH CONTROLS */
@@ -1296,6 +1386,7 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
         font-size: 9px !important;
         border-width: 1px !important;
     }
+    #moveControlBtn { top:142px !important; right:5px !important; padding:4px 6px !important; font-size:9px !important; border-width:1px !important; }
     #fullscreenBtn {
         top: 80px !important;
         right: 5px !important;
@@ -1333,6 +1424,9 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
     #controlModeBtn { top: 36px !important; }
     #fullscreenBtn { top: 62px !important; }
     #pauseGameBtn { top: 88px !important; }
+    #moveControlBtn { top: 114px !important; right:5px !important; padding:3px 5px !important; font-size:8px !important; }
+    #touchDpad { left:6px !important; bottom:6px !important; grid-template-columns:repeat(3,32px) !important; grid-template-rows:repeat(3,32px) !important; gap:2px !important; }
+    #touchDpad button { font-size:14px !important; border-radius:8px !important; }
 }
 /* 出撃画面をスクロール可能にする */
 #start {

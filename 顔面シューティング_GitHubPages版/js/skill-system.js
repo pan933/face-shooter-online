@@ -88,6 +88,7 @@ export function createSkillData() {
     return {
         level: 1,
         progress: 0,
+        duplicateProgress: 0,
         totalKills: 0,
         tickets: 0
     };
@@ -109,6 +110,11 @@ export function normalizeSkillData(data = {}) {
 
         progress: Number.isFinite(Number(data.progress))
             ? Math.max(0, Number(data.progress))
+            : 0,
+
+        // ガチャ重複で貯めるスキルレベル用の進捗を保持する。
+        duplicateProgress: Number.isFinite(Number(data.duplicateProgress))
+            ? Math.max(0, Number(data.duplicateProgress))
             : 0,
 
         totalKills: Number.isFinite(Number(data.totalKills))

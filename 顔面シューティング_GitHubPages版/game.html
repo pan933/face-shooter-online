@@ -25,6 +25,8 @@
 
 <canvas id="game"></canvas>
 
+<div id="skillNotice" role="status" aria-live="polite"></div>
+
 
 <!-- HUD -->
 
@@ -164,6 +166,7 @@
 </div>
 
 <button id="controlModeBtn" type="button">📱 タッチ操作：OFF</button>
+<button id="moveControlBtn" type="button" aria-pressed="false">🕹 移動：スティック</button>
 <button id="fullscreenBtn" type="button" aria-label="全画面モード">⛶ 全画面</button>
 <button id="pauseGameBtn" type="button" aria-label="一時停止">⏸ 一時停止</button>
 <button id="quitGameBtn" type="button">🏁 ゲーム終了</button>
@@ -174,6 +177,12 @@
     <div id="joystickKnob"></div>
 </div>
 
+<div id="touchDpad" role="group" aria-label="方向パッド">
+    <span></span><button type="button" data-dir="up" aria-label="上へ">▲</button><span></span>
+    <button type="button" data-dir="left" aria-label="左へ">◀</button><span class="dpadCenter">●</span><button type="button" data-dir="right" aria-label="右へ">▶</button>
+    <span></span><button type="button" data-dir="down" aria-label="下へ">▼</button><span></span>
+</div>
+
 <div id="touchActions">
     <button id="touchShoot" class="touchAction">🔫 発射</button>
     <button id="touchBomb" class="touchAction">💣 爆弾<br><span id="touchBombCount">2</span></button>
@@ -181,7 +190,7 @@
     <button id="touchSkill" class="touchAction skillAction" type="button" disabled>✨ スキル<br><span id="touchSkillGaugeText">0 / 20</span></button>
 </div>
 
-<div id="touchHelp">左：移動　右：発射・爆弾・シールド</div>
+<div id="touchHelp">左：スティック／方向パッド　右：発射・爆弾・盾・スキル</div>
 
 <!-- START -->
 
@@ -234,7 +243,14 @@
             <b>Q</b>
             シールド
 
+            <br>
+
+            <b>E</b>
+            スキル
+
         </p>
+
+        <p class="operationHelp">タッチ操作：移動方法ボタンでスティック／方向パッドを切替。スキルはゲーム画面の「スキル」ボタンから発動できます。</p>
 
         <p class="small">
 

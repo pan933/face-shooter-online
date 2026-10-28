@@ -116,6 +116,7 @@ export function createDefaultSkillData() {
     return {
         level: 1,
         progress: 0,
+        duplicateProgress: 0,
         totalKills: 0,
         tickets: 0
     };
@@ -315,6 +316,12 @@ export function normalizeSkillData(skill) {
             Math.max(
                 0,
                 Number(skill.progress) || 0
+            ),
+
+        duplicateProgress:
+            Math.max(
+                0,
+                Number(skill.duplicateProgress) || 0
             ),
 
         totalKills:
