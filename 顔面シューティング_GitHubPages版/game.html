@@ -29,8 +29,10 @@
 <div id="pvpHud" aria-live="polite" hidden>
     <strong>⚔ フレンド対戦</strong>
     <span id="pvpOpponentSummary">対戦相手を待っています…</span>
+    <span id="pvpGimmickNotice" role="status" aria-live="polite" hidden></span>
 </div>
 <div id="pvpSyncNotice" role="status" aria-live="polite" hidden></div>
+<div id="pvpLaserLane" aria-hidden="true" hidden></div>
 <div id="pvpRemoteAvatar" aria-label="対戦相手" hidden>
     <img id="pvpRemoteFace" alt="相手の選択した顔">
     <span id="pvpRemoteFaceFallback" aria-hidden="true" hidden>🙂</span>
@@ -299,7 +301,7 @@
 
         <section id="pvpPanel" aria-labelledby="pvpTitle">
             <h2 id="pvpTitle">⚔ フレンドとオンライン対戦</h2>
-            <p>相手の顔を狙って撃ち、飛んでくる弾を左右に避ける1対1の対戦です。敵やボスは出ません。HPが先に0になった方の負けです。</p>
+            <p>相手の顔を狙って撃ち、飛んでくる弾を左右に避ける1対1の対戦です。18秒ごとにレーザー・横風・連射チャンスが発生！ 敵やボスは出ず、HPが先に0になった方の負けです。</p>
             <button id="pvpCreateButton" type="button">ルームを作る</button>
             <button id="pvpCancelButton" type="button" hidden>待機をキャンセル</button>
             <label for="pvpRoomCodeInput">フレンドの合言葉</label>

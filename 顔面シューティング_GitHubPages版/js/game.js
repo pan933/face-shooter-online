@@ -62,6 +62,10 @@ let pvpIsHost = false;
 let pvpOpponentState = null;
 let pvpLastOpponentUpdate = 0;
 let pvpHasSeenOpponentState = false;
+let pvpRoundStartedAt = 0;
+let pvpLastGimmickCycleHit = -1;
+let pvpRapidFireActive = false;
+let pvpCurrentGimmick = { type: "", lane: 0.5, active: false, warning: false };
 let pvpLastStateSyncAt = 0;
 let pvpLastSentX = -1;
 let pvpLastSentScore = -1;
@@ -2059,7 +2063,7 @@ function shoot() {
 
 
     shootCooldown =
-        Math.max(.045, (rapidTimer > 0 ? .11 : .28) / skillFireRateMultiplier);
+        Math.max(.045, ((rapidTimer > 0 || (pvpStarted && pvpRapidFireActive)) ? .11 : .28) / skillFireRateMultiplier);
 
 
     bullets.push({
@@ -3834,7 +3838,10 @@ function update(dt) {
         );
 
     // PvPは敵やボスを倒すモードではなく、左右移動で相手の弾を避ける1対1の対面戦。
-    if (pvpStarted) player.y = H - 120;
+    if (pvpStarted) {
+        player.y = H - 120;
+        updatePvpGimmick(dt);
+    }
 
 
     /*
@@ -5732,6 +5739,8 @@ const pvpStatus = document.getElementById("pvpStatus");
 const pvpHud = document.getElementById("pvpHud");
 const pvpOpponentSummary = document.getElementById("pvpOpponentSummary");
 const pvpSyncNotice = document.getElementById("pvpSyncNotice");
+const pvpGimmickNotice = document.getElementById("pvpGimmickNotice");
+const pvpLaserLane = document.getElementById("pvpLaserLane");
 const pvpRemoteAvatar = document.getElementById("pvpRemoteAvatar");
 const pvpRemoteFace = document.getElementById("pvpRemoteFace");
 const pvpRemoteFaceFallback = document.getElementById("pvpRemoteFaceFallback");
@@ -5759,6 +5768,54 @@ function setPvpMatchNotice(message) {
             pvpSyncNotice.hidden = false;
             pvpSyncNotice.dataset.kind = /失敗|できません|確認してください|再公開/.test(message) ? "error" : "info";
         }
+    }
+}
+
+function updatePvpGimmick(dt) {
+    if (!pvpRoundStartedAt || !player) return;
+    const elapsed = Math.max(0, (Date.now() - pvpRoundStartedAt) / 1000);
+    const cycle = Math.floor(elapsed / 18);
+    const cycleTime = elapsed % 18;
+    const typeIndex = cycle % 3;
+    const hash = [...pvpRoomCode].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
+    const laneIndex = ((hash + cycle * 17) >>> 0) % 3;
+    const lane = (laneIndex + 1) / 4;
+    const type = ["laser", "wind", "rapid"][typeIndex];
+    const warning = cycleTime < 2;
+    const active = cycleTime >= 2 && cycleTime < 7;
+    pvpCurrentGimmick = { type, lane, active, warning };
+    pvpRapidFireActive = active && type === "rapid";
+
+    if (pvpGimmickNotice) {
+        let message = "アリーナ安定中";
+        if (type === "laser" && warning) message = "⚠ レーザー予告！ 縦の光るラインから離れよう";
+        else if (type === "laser" && active) message = "🔥 レーザー照射中！ ラインに触れるとHP減少";
+        else if (type === "wind" && warning) message = "⚠ 横風が来る！ 移動の準備をしよう";
+        else if (type === "wind" && active) message = `🌪 横風発生！ ${laneIndex === 1 ? "右" : "左"}へ流される。逆方向に移動！`;
+        else if (type === "rapid" && warning) message = "✨ オーバードライブ接近！";
+        else if (type === "rapid" && active) message = "🚀 オーバードライブ！ 連射速度アップ";
+        if (pvpGimmickNotice.textContent !== message) pvpGimmickNotice.textContent = message;
+    }
+
+    if (pvpLaserLane) {
+        const laserVisible = type === "laser" && (warning || active);
+        pvpLaserLane.hidden = !laserVisible;
+        pvpLaserLane.style.left = `${lane * 100}%`;
+        pvpLaserLane.classList.toggle("warning", laserVisible && warning);
+        pvpLaserLane.classList.toggle("active", laserVisible && active);
+    }
+
+    if (active && type === "laser" && Math.abs(player.x - lane * W) <= Math.max(32, W * .035)
+        && pvpLastGimmickCycleHit !== cycle) {
+        pvpLastGimmickCycleHit = cycle;
+        takeDamage(1);
+        if (pvpOpponentSummary) pvpOpponentSummary.textContent = `⚡ レーザー命中！ HP ${Math.max(0, hp)}`;
+    }
+
+    if (active && type === "wind") {
+        const direction = laneIndex === 1 ? 1 : -1;
+        player.x += direction * 155 * dt;
+        player.x = Math.max(45, Math.min(W - 45, player.x));
     }
 }
 
@@ -5792,6 +5849,7 @@ function watchPvpRoom() {
             }
             const room = snapshot.data();
             if (room.status === "playing" && room.guestUid) {
+                pvpRoundStartedAt = room.updatedAt?.toMillis?.() || Date.now();
                 beginPvpMatch();
             } else if (room.status === "waiting") {
                 setPvpStatus(`合言葉 ${pvpRoomCode} をフレンドに伝えてください。参加すると対戦開始します。`);
@@ -5920,6 +5978,9 @@ function beginPvpMatch() {
     pvpLastSentFaceId = "";
     pvpLastOpponentUpdate = Date.now();
     pvpHasSeenOpponentState = false;
+    pvpLastGimmickCycleHit = -1;
+    pvpRapidFireActive = false;
+    if (!pvpRoundStartedAt) pvpRoundStartedAt = Date.now();
     pvpSyncFailureCount = 0;
     pvpSyncRetryAfter = 0;
     if (pvpPanel) pvpPanel.hidden = true;
@@ -5931,6 +5992,8 @@ function beginPvpMatch() {
         pvpSyncNotice.dataset.kind = "info";
     }
     if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = false;
+    if (pvpGimmickNotice) pvpGimmickNotice.hidden = false;
+    if (pvpLaserLane) pvpLaserLane.hidden = true;
     if (pvpOpponentSummary) pvpOpponentSummary.textContent = "対戦相手を読み込み中…";
     const leaderboardButton = document.getElementById("gameoverLeaderboardBtn");
     if (leaderboardButton) leaderboardButton.hidden = true;
@@ -6085,6 +6148,9 @@ function sendPvpHit() {
 function finishPvpMatch(result) {
     if (pvpFinished) return;
     pvpFinished = true;
+    pvpRapidFireActive = false;
+    if (pvpGimmickNotice) pvpGimmickNotice.hidden = true;
+    if (pvpLaserLane) pvpLaserLane.hidden = true;
     running = false;
     paused = false;
     clearHeldInputs();
@@ -6138,12 +6204,17 @@ async function leavePvpRoom() {
     pvpLocalDead = false;
     pvpIsHost = false;
     pvpOpponentState = null;
+    pvpRoundStartedAt = 0;
+    pvpLastGimmickCycleHit = -1;
+    pvpRapidFireActive = false;
     pvpProcessedHitIds.clear();
     pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastStateSyncAt = 0;
     if (pvpPanel) pvpPanel.hidden = false;
     if (pvpHud) pvpHud.hidden = true;
     if (pvpSyncNotice) pvpSyncNotice.hidden = true;
+    if (pvpGimmickNotice) pvpGimmickNotice.hidden = true;
+    if (pvpLaserLane) pvpLaserLane.hidden = true;
     if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = true;
     if (pvpRoomCodeDisplay) pvpRoomCodeDisplay.hidden = true;
     if (pvpCreateButton) {

@@ -522,6 +522,25 @@ canvas {
 #pvpSyncNotice[hidden] { display: none; }
 #pvpSyncNotice[data-kind="error"] { border-color: #ff879b; color: #ffe2e7; background: rgba(48, 8, 20, .96); }
 #pvpSyncNotice[data-kind="success"] { border-color: #7cf1b4; color: #dfffee; }
+#pvpGimmickNotice {
+    position: static; max-width: 100%; box-sizing: border-box; padding: 5px 7px;
+    border: 1px solid rgba(255,226,122,.55); border-radius: 8px; background: rgba(26, 19, 5, .7);
+    color: #fff3bd; text-align: left; font: 900 11px/1.35 system-ui,sans-serif;
+    text-shadow: 1px 2px #111; pointer-events: none;
+}
+#pvpGimmickNotice[hidden] { display: none; }
+#pvpLaserLane {
+    position: absolute; z-index: 18; top: 15%; bottom: 12%; width: 9px;
+    transform: translateX(-50%); border-radius: 999px; pointer-events: none;
+}
+#pvpLaserLane[hidden] { display: none; }
+#pvpLaserLane.warning {
+    background: repeating-linear-gradient(180deg, rgba(255,235,69,.9) 0 12px, rgba(255,66,79,.8) 12px 24px);
+    box-shadow: 0 0 16px rgba(255,210,64,.85); opacity: .72;
+}
+#pvpLaserLane.active {
+    width: 18px; background: #fff1a6; box-shadow: 0 0 14px 7px #ff334f, 0 0 42px 15px rgba(255,20,58,.9);
+}
 #pvpRemoteAvatar {
     position: absolute; z-index: 24; left: 50%; top: 22%; transform: translate(-50%,-50%);
     display: grid; justify-items: center; gap: 4px; width: 82px; height: 96px;
