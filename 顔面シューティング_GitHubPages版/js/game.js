@@ -5753,6 +5753,10 @@ function setPvpMatchNotice(message) {
     if (pvpOpponentSummary && pvpStarted) pvpOpponentSummary.textContent = message;
 }
 
+function getPvpErrorCode(error) {
+    return String(error?.code || error?.message || "unknown").slice(0, 80);
+}
+
 function makePvpRoomCode() {
     const values = new Uint8Array(8);
     crypto.getRandomValues(values);
@@ -5946,7 +5950,7 @@ function beginPvpMatch() {
         },
         error => {
             console.error("PvP対戦相手の同期に失敗:", error);
-            setPvpMatchNotice("相手データの受信に失敗しました。Firestoreルールを再公開してください。");
+            setPvpMatchNotice(`相手データ受信失敗 (${getPvpErrorCode(error)})。Firestore Rulesと通信状態を確認してください。`);
         }
     );
     pvpHitsUnsubscribe = onSnapshot(
@@ -5968,7 +5972,7 @@ function beginPvpMatch() {
         },
         error => {
             console.error("PvP攻撃イベントの受信に失敗:", error);
-            setPvpMatchNotice("被弾データを受信できません。最新のfirestore.rulesを再公開してください。");
+            setPvpMatchNotice(`被弾データ受信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesを再公開してください。`);
         }
     );
     startGame();
@@ -6016,9 +6020,12 @@ async function syncPvpPlayerState(force = false) {
         pvpLastSentWave = currentWave;
         pvpLastSentHp = currentHp;
         pvpLastSentFaceId = activeFaceId;
+        if (!pvpHasSeenOpponentState && pvpOpponentSummary?.textContent.includes("待って")) {
+            pvpOpponentSummary.textContent = "自分のデータ送信OK。相手のデータを待っています…";
+        }
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
-        setPvpMatchNotice("自分の対戦データを送れません。最新のfirestore.rulesをFirebase Consoleで公開してください。");
+        setPvpMatchNotice(`自分のデータ送信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesをFirebase Consoleで公開してください。`);
     } finally {
         pvpSyncBusy = false;
     }
@@ -6036,7 +6043,7 @@ function sendPvpHit() {
         createdAt: serverTimestamp()
     }).catch(error => {
         console.warn("PvP攻撃を送信できませんでした:", error);
-        setPvpMatchNotice("弾の命中を送信できません。最新のfirestore.rulesを再公開してください。");
+        setPvpMatchNotice(`弾の命中送信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesを再公開してください。`);
     });
 }
 
