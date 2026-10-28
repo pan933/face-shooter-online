@@ -68,6 +68,7 @@ let pvpRapidFireActive = false;
 let pvpCurrentGimmick = { type: "", lane: 0.5, active: false, warning: false };
 let pvpLastStateSyncAt = 0;
 let pvpLastSentX = -1;
+let pvpLastSentY = -1;
 let pvpLastSentScore = -1;
 let pvpLastSentWave = -1;
 let pvpLastSentHp = -1;
@@ -3615,10 +3616,18 @@ function updateBullets(dt) {
 
         }
 
-        // PvPでは画面上部を動く相手プレイヤーにも弾が命中する。
+        if (pvpStarted && getPvpObstacles().some(obstacle =>
+            bullet.x + bullet.r >= obstacle.x && bullet.x - bullet.r <= obstacle.x + obstacle.w
+            && bullet.y + bullet.r >= obstacle.y && bullet.y - bullet.r <= obstacle.y + obstacle.h)) {
+            bullets.splice(i, 1);
+            continue;
+        }
+
+        // 障害物を通過した弾だけが、上下反転した相手位置へ命中する。
         if (pvpStarted && pvpOpponentState?.alive) {
             const remoteX = (Number.isFinite(Number(pvpOpponentState.x)) ? Number(pvpOpponentState.x) : 0.5) * W;
-            const remoteY = H * 0.22;
+            const opponentY = Number.isFinite(Number(pvpOpponentState.y)) ? Number(pvpOpponentState.y) : 0.8;
+            const remoteY = (1 - Math.max(0.5, Math.min(1, opponentY))) * H;
             if (Math.abs(bullet.x - remoteX) < 31 && Math.abs(bullet.y - remoteY) < 34) {
                 bullets.splice(i, 1);
                 sendPvpHit();
@@ -3804,6 +3813,8 @@ function update(dt) {
 
     const dx = keyboardDx !== 0 ? keyboardDx : touchDirX * cursorSensitivityLevel;
     const dy = keyboardDy !== 0 ? keyboardDy : touchDirY * cursorSensitivityLevel;
+    const previousPvpX = player.x;
+    const previousPvpY = player.y;
 
 
     player.x +=
@@ -3839,8 +3850,9 @@ function update(dt) {
 
     // PvPは敵やボスを倒すモードではなく、左右移動で相手の弾を避ける1対1の対面戦。
     if (pvpStarted) {
-        player.y = H - 120;
+        player.y = Math.max(H * .5 + 40, Math.min(H - 55, player.y));
         updatePvpGimmick(dt);
+        resolvePvpObstacleCollision(previousPvpX, previousPvpY);
     }
 
 
@@ -3947,7 +3959,6 @@ function update(dt) {
         }
 
     }
-
 
     /*
         particles
@@ -4066,6 +4077,8 @@ function draw() {
 
 
     ctx.globalAlpha = 1;
+
+    if (pvpStarted) drawPvpArena();
 
 
     /*
@@ -5819,6 +5832,75 @@ function updatePvpGimmick(dt) {
     }
 }
 
+function getPvpObstacles() {
+    const bottomHalf = [
+        { x: .13, y: .61, w: .25, h: .055 },
+        { x: .64, y: .72, w: .23, h: .055 },
+        { x: .34, y: .90, w: .30, h: .045 }
+    ];
+    const topHalf = bottomHalf.map(item => ({ ...item, y: 1 - item.y - item.h }));
+    return [...bottomHalf, ...topHalf].map(item => ({
+        x: item.x * W,
+        y: item.y * H,
+        w: item.w * W,
+        h: item.h * H
+    }));
+}
+
+function pvpPlayerOverlapsObstacle(x, y, radius) {
+    return getPvpObstacles().some(obstacle => {
+        const nearestX = Math.max(obstacle.x, Math.min(x, obstacle.x + obstacle.w));
+        const nearestY = Math.max(obstacle.y, Math.min(y, obstacle.y + obstacle.h));
+        return Math.hypot(x - nearestX, y - nearestY) < radius;
+    });
+}
+
+function resolvePvpObstacleCollision(previousX, previousY) {
+    const nextX = player.x;
+    const nextY = player.y;
+    const minY = H * .5 + 40;
+    const maxY = H - 55;
+    player.x = Math.max(45, Math.min(W - 45, previousX));
+    player.y = Math.max(minY, Math.min(maxY, previousY));
+    const candidateX = Math.max(45, Math.min(W - 45, nextX));
+    if (!pvpPlayerOverlapsObstacle(candidateX, player.y, 34)) player.x = candidateX;
+    const candidateY = Math.max(minY, Math.min(maxY, nextY));
+    if (!pvpPlayerOverlapsObstacle(player.x, candidateY, 34)) player.y = candidateY;
+}
+
+function drawPvpArena() {
+    ctx.save();
+    const dividerY = H * .5;
+    ctx.strokeStyle = "rgba(132, 220, 255, .8)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 9]);
+    ctx.beginPath();
+    ctx.moveTo(0, dividerY);
+    ctx.lineTo(W, dividerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const obstacle of getPvpObstacles()) {
+        ctx.fillStyle = "rgba(21, 43, 63, .96)";
+        ctx.strokeStyle = "#79dcff";
+        ctx.lineWidth = 2;
+        ctx.shadowColor = "rgba(53, 191, 255, .7)";
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+            ctx.roundRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h, Math.min(12, obstacle.h / 2));
+        } else {
+            ctx.rect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(184, 243, 255, .35)";
+        ctx.fillRect(obstacle.x + 8, obstacle.y + 3, Math.max(0, obstacle.w - 16), 3);
+    }
+    ctx.restore();
+}
+
 function setPvpSyncSuccess(message) {
     if (!pvpSyncNotice) return;
     if (pvpSyncNotice.textContent !== message || pvpSyncNotice.hidden) {
@@ -5974,7 +6056,7 @@ function beginPvpMatch() {
     pvpLocalDead = false;
     pvpOpponentState = null;
     pvpProcessedHitIds.clear();
-    pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
+    pvpLastSentX = pvpLastSentY = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastSentFaceId = "";
     pvpLastOpponentUpdate = Date.now();
     pvpHasSeenOpponentState = false;
@@ -6019,7 +6101,9 @@ function beginPvpMatch() {
             setPvpSyncSuccess("対戦データ同期中");
             if (pvpRemoteAvatar) {
                 const opponentX = Number.isFinite(Number(opponent.x)) ? Number(opponent.x) : 0.5;
+                const opponentY = Number.isFinite(Number(opponent.y)) ? Number(opponent.y) : 0.8;
                 pvpRemoteAvatar.style.left = `${Math.max(5, Math.min(95, opponentX * 100))}%`;
+                pvpRemoteAvatar.style.top = `${Math.max(5, Math.min(45, (1 - opponentY) * 100))}%`;
                 pvpRemoteAvatar.setAttribute("aria-label", `${opponent.displayName || "フレンド"} HP ${opponent.hp || 0}`);
             }
             if (pvpRemoteFace && opponent.faceImageUrl && pvpRemoteFace.dataset.imageUrl !== opponent.faceImageUrl) {
@@ -6084,10 +6168,12 @@ async function syncPvpPlayerState(force = false) {
     const now = Date.now();
     if (!force && now < pvpSyncRetryAfter) return;
     const x = Math.max(0, Math.min(1, (Number(player?.x) || W / 2) / Math.max(1, W)));
+    const y = Math.max(0.5, Math.min(1, (Number(player?.y) || H - 120) / Math.max(1, H)));
     const currentScore = Math.max(0, Math.floor(Number(score) || 0));
     const currentWave = Math.max(1, Math.floor(Number(wave) || 1));
     const currentHp = Math.max(0, Math.floor(Number(hp) || 0));
     const changed = Math.abs(x - pvpLastSentX) >= 0.025
+        || Math.abs(y - pvpLastSentY) >= 0.025
         || currentScore !== pvpLastSentScore
         || currentWave !== pvpLastSentWave
         || currentHp !== pvpLastSentHp
@@ -6102,6 +6188,7 @@ async function syncPvpPlayerState(force = false) {
             wave: currentWave,
             hp: currentHp,
             x,
+            y,
             faceId: String(activeFaceId || "face2").slice(0, 64),
             faceImageUrl: String(pvpLocalFaceImageUrl || faceImage?.src || FACE_REGISTERED).slice(0, 1000),
             alive: !pvpLocalDead && (running || paused),
@@ -6109,6 +6196,7 @@ async function syncPvpPlayerState(force = false) {
         }, { merge: true });
         pvpLastStateSyncAt = now;
         pvpLastSentX = x;
+        pvpLastSentY = y;
         pvpLastSentScore = currentScore;
         pvpLastSentWave = currentWave;
         pvpLastSentHp = currentHp;
@@ -6121,7 +6209,7 @@ async function syncPvpPlayerState(force = false) {
         pvpSyncFailureCount += 1;
         pvpSyncRetryAfter = Date.now() + Math.min(30000, 1000 * (2 ** Math.min(5, pvpSyncFailureCount - 1)));
         const message = error?.code === "permission-denied"
-            ? "permission-denied：Firebase側のRulesが古く、faceId / faceImageUrl を拒否しています。最新firestore.rulesをPublishしてください。"
+            ? "permission-denied：Firebase側のRulesが古く、y / faceId / faceImageUrl を拒否しています。最新firestore.rulesをPublishしてください。"
             : `自分のデータ送信失敗 (${getPvpErrorCode(error)})。通信とFirestore Rulesを確認してください。`;
         setPvpMatchNotice(message);
     } finally {
@@ -6208,7 +6296,7 @@ async function leavePvpRoom() {
     pvpLastGimmickCycleHit = -1;
     pvpRapidFireActive = false;
     pvpProcessedHitIds.clear();
-    pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
+    pvpLastSentX = pvpLastSentY = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastStateSyncAt = 0;
     if (pvpPanel) pvpPanel.hidden = false;
     if (pvpHud) pvpHud.hidden = true;
