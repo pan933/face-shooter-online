@@ -27,13 +27,13 @@
 4. Sign-in method / Sign-in providers で **Email/Password** を有効にして保存します。ここでいうメール/パスワード方式を、サイト側ではID＋パスワードの形にしています。
 5. Authenticationの設定にある **Authorized domains** に `pan933.github.io` があるか確認します。なければ追加します。
 6. **Build → Firestore Database → Create database** を開き、データベースを作成します。リージョンは日本から使うなら `asia-northeast1`（Tokyo）が候補です。リージョンは後から変更できないため確認してから作成してください。
-7. Firestoreの **Rules** タブに移動し、同梱の `firestore.rules` の内容を全部貼り付けて **Publish** します。公開読み取りはランキングだけで、プロフィールは本人のみが読み取れます。
+7. Firestoreの **Rules** タブでルールを設定します。既にログイン・管理画面などで使っているルールがある場合は、同梱の `firestore.rules` で丸ごと置き換えず、必要なルールを維持したまま不足分を追加してください。ルールを置き換えると、ログイン後のプロフィール読み込みや管理画面の読み書きが permission-denied になる場合があります。
 
 ### フレンド対戦を有効にする
 
 ゲーム画面の「フレンドとオンライン対戦」から8文字の合言葉を発行し、フレンドが同じ画面で入力するとサバイバルPvPが始まります。両方のプレイヤーがログインしている必要があります。一人用の出撃ボタンとランキングは別モードのままです。
 
-この機能はFirestoreに `pvpRooms` を作成するため、変更後の `firestore.rules` をFirebase Consoleの **Firestore Database → Rules** にもう一度貼り付けて **Publish** してください。GitHubへコードをプッシュしただけではFirebaseのルールは更新されません。対戦中は各プレイヤーが2秒ごとにスコア・ウェーブ・HPを同期します。
+この機能はFirestoreに `pvpRooms` を作成し、プレイヤーの位置と弾の命中イベントを同期します。Firebase Consoleの **Firestore Database → Rules** で、既存のログイン・プロフィール・管理画面用ルールを残したまま、同梱 `firestore.rules` の `pvpRooms` マッチ節と必要な補助関数を統合して **Publish** してください。既存ルールを丸ごと置き換えるとログイン後の機能が permission-denied になる場合があります。GitHubへのプッシュだけではFirebaseのルールは更新されません。
 
 ## 2. FirebaseのWeb設定をHTMLに入れる
 

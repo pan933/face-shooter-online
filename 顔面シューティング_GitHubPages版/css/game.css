@@ -512,6 +512,15 @@ canvas {
     font: 900 12px system-ui,sans-serif; pointer-events: none;
 }
 #pvpHud[hidden] { display: none; }
+#pvpRemoteAvatar {
+    position: absolute; z-index: 24; left: 50%; top: 22%; transform: translate(-50%,-50%);
+    display: grid; justify-items: center; gap: 2px; width: 56px; height: 56px;
+    border: 3px solid #ff638b; border-radius: 50%; background: rgba(71,12,34,.88);
+    box-shadow: 0 0 18px rgba(255,72,125,.75); color: white; pointer-events: none;
+}
+#pvpRemoteAvatar[hidden] { display: none; }
+#pvpRemoteAvatar > span { align-self: end; font-size: 26px; line-height: 1; }
+#pvpRemoteAvatar > small { max-width: 90px; overflow: hidden; padding: 1px 4px; border-radius: 5px; background: #210b17; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
 #pvpResultMessage { color: #ffe600; font-size: 16px; font-weight: 1000; }
 @keyframes skillNoticePop {
     0% { opacity: 0; transform: translate(-50%, -50%) scale(.65); }

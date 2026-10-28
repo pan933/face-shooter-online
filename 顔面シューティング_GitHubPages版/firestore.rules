@@ -41,8 +41,8 @@ service cloud.firestore {
     }
 
     function validPvpState(uid) {
-      return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'alive', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'alive', 'updatedAt'])
+      return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'alive', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'alive', 'updatedAt'])
         && request.resource.data.uid == uid
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 48
@@ -55,6 +55,9 @@ service cloud.firestore {
         && request.resource.data.hp is int
         && request.resource.data.hp >= 0
         && request.resource.data.hp <= 100
+        && request.resource.data.x is number
+        && request.resource.data.x >= 0
+        && request.resource.data.x <= 1
         && request.resource.data.alive is bool
         && request.resource.data.updatedAt == request.time;
     }
@@ -113,6 +116,25 @@ service cloud.firestore {
           && request.auth.uid == uid
           && validPvpState(uid);
         allow delete: if false;
+      }
+
+      match /hits/{hitId} {
+        allow read: if isPvpParticipant(roomId);
+        allow create: if isPvpParticipant(roomId)
+          && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
+          && request.resource.data.keys().hasAll(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt'])
+          && request.resource.data.attackerUid == request.auth.uid
+          && request.resource.data.attackerName is string
+          && request.resource.data.attackerName.size() <= 48
+          && request.resource.data.targetUid != request.auth.uid
+          && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid
+            || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid)
+          && request.resource.data.damage == 1
+          && request.resource.data.createdAt == request.time;
+        allow delete: if isPvpParticipant(roomId)
+          && resource.data.targetUid == request.auth.uid;
+        allow update: if false;
       }
     }
   }

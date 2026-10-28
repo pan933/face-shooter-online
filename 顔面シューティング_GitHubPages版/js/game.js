@@ -1,6 +1,6 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 import {
     addMatchPoints,
@@ -50,13 +50,21 @@ let skillActivationBusy = false;
 let pvpRoomCode = "";
 let pvpRoomUnsubscribe = null;
 let pvpPlayersUnsubscribe = null;
+let pvpHitsUnsubscribe = null;
 let pvpSyncTimer = null;
+let pvpSyncBusy = false;
 let pvpStarted = false;
 let pvpFinished = false;
 let pvpLocalDead = false;
 let pvpIsHost = false;
 let pvpOpponentState = null;
 let pvpLastOpponentUpdate = 0;
+let pvpLastStateSyncAt = 0;
+let pvpLastSentX = -1;
+let pvpLastSentScore = -1;
+let pvpLastSentWave = -1;
+let pvpLastSentHp = -1;
+const pvpProcessedHitIds = new Set();
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
@@ -3594,6 +3602,17 @@ function updateBullets(dt) {
 
         }
 
+        // PvPでは画面上部を動く相手プレイヤーにも弾が命中する。
+        if (pvpStarted && pvpOpponentState?.alive) {
+            const remoteX = (Number.isFinite(Number(pvpOpponentState.x)) ? Number(pvpOpponentState.x) : 0.5) * W;
+            const remoteY = H * 0.22;
+            if (Math.abs(bullet.x - remoteX) < 31 && Math.abs(bullet.y - remoteY) < 34) {
+                bullets.splice(i, 1);
+                sendPvpHit();
+                continue;
+            }
+        }
+
 
         /*
             雑魚
@@ -5694,6 +5713,8 @@ const pvpRoomCodeDisplay = document.getElementById("pvpRoomCodeDisplay");
 const pvpStatus = document.getElementById("pvpStatus");
 const pvpHud = document.getElementById("pvpHud");
 const pvpOpponentSummary = document.getElementById("pvpOpponentSummary");
+const pvpRemoteAvatar = document.getElementById("pvpRemoteAvatar");
+const pvpOpponentName = document.getElementById("pvpOpponentName");
 const pvpAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 pvpCreateButton.disabled = true;
 pvpJoinButton.disabled = true;
@@ -5840,10 +5861,12 @@ function beginPvpMatch() {
     pvpFinished = false;
     pvpLocalDead = false;
     pvpOpponentState = null;
+    pvpProcessedHitIds.clear();
     pvpLastOpponentUpdate = Date.now();
     if (pvpPanel) pvpPanel.hidden = true;
     if (pvpCancelButton) pvpCancelButton.hidden = true;
     if (pvpHud) pvpHud.hidden = false;
+    if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = false;
     if (pvpOpponentSummary) pvpOpponentSummary.textContent = "対戦相手を読み込み中…";
     const leaderboardButton = document.getElementById("gameoverLeaderboardBtn");
     if (leaderboardButton) leaderboardButton.hidden = true;
@@ -5859,6 +5882,12 @@ function beginPvpMatch() {
             if (pvpOpponentSummary) {
                 pvpOpponentSummary.textContent = `${opponent.displayName || "フレンド"}　SCORE ${opponent.score || 0}　WAVE ${opponent.wave || 1}　HP ${opponent.hp || 0}`;
             }
+            if (pvpRemoteAvatar) {
+                const opponentX = Number.isFinite(Number(opponent.x)) ? Number(opponent.x) : 0.5;
+                pvpRemoteAvatar.style.left = `${Math.max(5, Math.min(95, opponentX * 100))}%`;
+                pvpRemoteAvatar.setAttribute("aria-label", `${opponent.displayName || "フレンド"} HP ${opponent.hp || 0}`);
+            }
+            if (pvpOpponentName) pvpOpponentName.textContent = String(opponent.displayName || "フレンド").slice(0, 16);
             if (!opponent.alive && !pvpFinished) finishPvpMatch(pvpLocalDead ? "draw" : "win");
         },
         error => {
@@ -5866,29 +5895,84 @@ function beginPvpMatch() {
             setPvpStatus("対戦データを受信できません。Firestoreルールを確認してください。");
         }
     );
+    pvpHitsUnsubscribe = onSnapshot(
+        collection(db, "pvpRooms", pvpRoomCode, "hits"),
+        snapshot => {
+            for (const change of snapshot.docChanges()) {
+                if (change.type !== "added" || pvpProcessedHitIds.has(change.doc.id)) continue;
+                const hit = change.doc.data();
+                if (hit.targetUid !== auth.currentUser?.uid) continue;
+                pvpProcessedHitIds.add(change.doc.id);
+                if (pvpStarted && running && !pvpLocalDead && damageCooldown <= 0 && shieldTime <= 0) {
+                    takeDamage(1);
+                    if (pvpOpponentSummary) pvpOpponentSummary.textContent = `💥 ${hit.attackerName || "フレンド"} の弾が命中！ HP ${Math.max(0, hp)}`;
+                }
+                void deleteDoc(change.doc.ref).catch(error => console.warn("PvPの被弾記録を消せませんでした:", error));
+            }
+        },
+        error => {
+            console.error("PvP攻撃イベントの受信に失敗:", error);
+            setPvpStatus("PvP攻撃の受信権限がありません。Firebaseのfirestore.rulesを公開してください。");
+        }
+    );
     startGame();
     pvpSyncTimer = setInterval(() => {
         void syncPvpPlayerState();
         if (Date.now() - pvpLastOpponentUpdate > 15000 && !pvpFinished) finishPvpMatch("win");
-    }, 2000);
+    }, 250);
 }
 
-async function syncPvpPlayerState() {
+async function syncPvpPlayerState(force = false) {
     const uid = auth?.currentUser?.uid;
-    if (!pvpStarted || !pvpRoomCode || !uid || !db) return;
+    if (!pvpStarted || !pvpRoomCode || !uid || !db || pvpSyncBusy) return;
+    const now = Date.now();
+    const x = Math.max(0, Math.min(1, (Number(player?.x) || W / 2) / Math.max(1, W)));
+    const currentScore = Math.max(0, Math.floor(Number(score) || 0));
+    const currentWave = Math.max(1, Math.floor(Number(wave) || 1));
+    const currentHp = Math.max(0, Math.floor(Number(hp) || 0));
+    const changed = Math.abs(x - pvpLastSentX) >= 0.025
+        || currentScore !== pvpLastSentScore
+        || currentWave !== pvpLastSentWave
+        || currentHp !== pvpLastSentHp;
+    if (!force && !changed && now - pvpLastStateSyncAt < 1000) return;
+    pvpSyncBusy = true;
     try {
         await setDoc(doc(db, "pvpRooms", pvpRoomCode, "players", uid), {
             uid,
             displayName: String(currentUser?.displayName || currentUser?.username || "Player").slice(0, 48),
-            score: Math.max(0, Math.floor(Number(score) || 0)),
-            wave: Math.max(1, Math.floor(Number(wave) || 1)),
-            hp: Math.max(0, Math.floor(Number(hp) || 0)),
+            score: currentScore,
+            wave: currentWave,
+            hp: currentHp,
+            x,
             alive: !pvpLocalDead && (running || paused),
             updatedAt: serverTimestamp()
         }, { merge: true });
+        pvpLastStateSyncAt = now;
+        pvpLastSentX = x;
+        pvpLastSentScore = currentScore;
+        pvpLastSentWave = currentWave;
+        pvpLastSentHp = currentHp;
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
+    } finally {
+        pvpSyncBusy = false;
     }
+}
+
+function sendPvpHit() {
+    const uid = auth?.currentUser?.uid;
+    if (!pvpStarted || pvpFinished || !pvpRoomCode || !uid || !pvpOpponentState?.uid) return;
+    if (pvpOpponentSummary) pvpOpponentSummary.textContent = `🎯 相手に命中！ HP ${pvpOpponentState.hp || 0}`;
+    void addDoc(collection(db, "pvpRooms", pvpRoomCode, "hits"), {
+        attackerUid: uid,
+        attackerName: String(currentUser?.displayName || currentUser?.username || "Player").slice(0, 48),
+        targetUid: pvpOpponentState.uid,
+        damage: 1,
+        createdAt: serverTimestamp()
+    }).catch(error => {
+        console.warn("PvP攻撃を送信できませんでした:", error);
+        setPvpStatus("PvP攻撃の送信権限がありません。Firebaseのfirestore.rulesを公開してください。");
+    });
 }
 
 function finishPvpMatch(result) {
@@ -5899,6 +5983,10 @@ function finishPvpMatch(result) {
     clearHeldInputs();
     if (pvpSyncTimer) clearInterval(pvpSyncTimer);
     pvpSyncTimer = null;
+    pvpRoomUnsubscribe?.();
+    pvpPlayersUnsubscribe?.();
+    pvpHitsUnsubscribe?.();
+    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = null;
     if (pauseOverlay) pauseOverlay.style.display = "none";
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     const quitButton = document.getElementById("quitGameBtn");
@@ -5927,7 +6015,8 @@ async function leavePvpRoom() {
     pvpSyncTimer = null;
     pvpRoomUnsubscribe?.();
     pvpPlayersUnsubscribe?.();
-    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = null;
+    pvpHitsUnsubscribe?.();
+    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = null;
     const oldRoomCode = pvpRoomCode;
     if (oldRoomCode && !pvpStarted && pvpIsHost && auth?.currentUser) {
         try {
@@ -5942,8 +6031,12 @@ async function leavePvpRoom() {
     pvpLocalDead = false;
     pvpIsHost = false;
     pvpOpponentState = null;
+    pvpProcessedHitIds.clear();
+    pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
+    pvpLastStateSyncAt = 0;
     if (pvpPanel) pvpPanel.hidden = false;
     if (pvpHud) pvpHud.hidden = true;
+    if (pvpRemoteAvatar) pvpRemoteAvatar.hidden = true;
     if (pvpRoomCodeDisplay) pvpRoomCodeDisplay.hidden = true;
     if (pvpCreateButton) {
         pvpCreateButton.disabled = false;
