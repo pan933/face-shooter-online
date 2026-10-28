@@ -1071,21 +1071,39 @@ async function activateFaceSkill() {
     skillActivationBusy = true;
     updateSkillButton();
     try {
-        const result = activeFaceSkill.activate({ player, enemies, canvas, skillLevel: activeSkillData.level });
+        const result = activeFaceSkill.activate({
+            player,
+            enemies,
+            canvas,
+            viewportWidth: W,
+            viewportHeight: H,
+            skillLevel: activeSkillData.level
+        });
         if (!result?.success) return;
         showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}`);
         switch (result.type) {
-            case "explosion":
-                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - result.x, enemy.y - result.y) <= result.radius), result.damage);
+            case "explosion": {
+                const targets = enemies.filter(enemy => Math.hypot(enemy.x - result.x, enemy.y - result.y) <= result.radius + enemy.size * 0.5);
+                damageSkillTargets(targets, result.damage);
                 if (boss && Math.hypot(boss.x - result.x, boss.y - result.y) <= result.radius + boss.size * .5) damageBossWithSkill(result.damage);
                 boom(result.x, result.y, true);
+                showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}・${targets.length}体に命中`);
                 break;
+            }
             case "line_clear": {
                 const attackX = result.x ?? player.x;
                 const attackY = result.y ?? player.y;
-                const targets = enemies.filter(enemy => Math.abs(enemy.x - attackX) <= result.width / 2 && enemy.y < attackY && enemy.y > attackY - result.height).slice(0, result.maxTargets);
+                const targets = enemies
+                    .filter(enemy =>
+                        Math.abs(enemy.x - attackX) <= result.width / 2 + enemy.size / 2 &&
+                        enemy.y - enemy.size / 2 < attackY &&
+                        enemy.y + enemy.size / 2 > attackY - result.height
+                    )
+                    .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
+                    .slice(0, Math.max(1, Number(result.maxTargets) || enemies.length));
                 damageSkillTargets(targets, result.damage);
-                if (boss && Math.abs(boss.x - attackX) <= result.width / 2 + boss.size / 2 && boss.y < attackY && boss.y > attackY - result.height - boss.size / 2) damageBossWithSkill(result.damage);
+                if (boss && Math.abs(boss.x - attackX) <= result.width / 2 + boss.size / 2 && boss.y - boss.size / 2 < attackY && boss.y + boss.size / 2 > attackY - result.height) damageBossWithSkill(result.damage);
+                showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}・${targets.length}体に命中`);
                 break;
             }
             case "power_up":

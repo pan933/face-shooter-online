@@ -19,8 +19,8 @@ const skill = {
             // Lv1
             requiredKills: 24,
             damage: 80,
-            width: 180,
-            height: 120,
+            widthRatio: 0.58,
+            heightRatio: 0.55,
             maxTargets: 3
         },
 
@@ -28,8 +28,8 @@ const skill = {
             // Lv2
             requiredKills: 22,
             damage: 105,
-            width: 210,
-            height: 135,
+            widthRatio: 0.66,
+            heightRatio: 0.62,
             maxTargets: 4
         },
 
@@ -37,8 +37,8 @@ const skill = {
             // Lv3
             requiredKills: 20,
             damage: 135,
-            width: 240,
-            height: 150,
+            widthRatio: 0.74,
+            heightRatio: 0.69,
             maxTargets: 5
         },
 
@@ -46,8 +46,8 @@ const skill = {
             // Lv4
             requiredKills: 18,
             damage: 175,
-            width: 280,
-            height: 170,
+            widthRatio: 0.82,
+            heightRatio: 0.76,
             maxTargets: 6
         },
 
@@ -55,8 +55,8 @@ const skill = {
             // Lv5
             requiredKills: 15,
             damage: 225,
-            width: 320,
-            height: 195,
+            widthRatio: 0.90,
+            heightRatio: 0.83,
             maxTargets: 8
         },
 
@@ -64,8 +64,8 @@ const skill = {
             // Lv6
             requiredKills: 12,
             damage: 300,
-            width: 370,
-            height: 220,
+            widthRatio: 1.00,
+            heightRatio: 0.92,
             maxTargets: 10
         }
     ],
@@ -103,6 +103,8 @@ const skill = {
         const playerY =
             player?.y ??
             (canvas ? canvas.height / 2 : 0);
+        const viewportWidth = Number(context.viewportWidth) || Number(canvas?.width) || 800;
+        const viewportHeight = Number(context.viewportHeight) || Number(canvas?.height) || 600;
 
         console.log(
             `[顔1] 一掃発動 Lv${level}`,
@@ -116,9 +118,9 @@ const skill = {
 
             damage: levelData.damage,
 
-            width: levelData.width,
+            width: Math.round(viewportWidth * levelData.widthRatio),
 
-            height: levelData.height,
+            height: Math.round(viewportHeight * levelData.heightRatio),
 
             maxTargets: levelData.maxTargets,
 
