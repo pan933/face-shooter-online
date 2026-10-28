@@ -53,6 +53,8 @@ let pvpPlayersUnsubscribe = null;
 let pvpHitsUnsubscribe = null;
 let pvpSyncTimer = null;
 let pvpSyncBusy = false;
+let pvpSyncFailureCount = 0;
+let pvpSyncRetryAfter = 0;
 let pvpStarted = false;
 let pvpFinished = false;
 let pvpLocalDead = false;
@@ -5761,7 +5763,7 @@ function setPvpMatchNotice(message) {
 }
 
 function setPvpSyncSuccess(message) {
-    if (!pvpSyncNotice || pvpSyncNotice.dataset.kind === "error") return;
+    if (!pvpSyncNotice) return;
     if (pvpSyncNotice.textContent !== message || pvpSyncNotice.hidden) {
         pvpSyncNotice.textContent = message;
         pvpSyncNotice.hidden = false;
@@ -5918,6 +5920,8 @@ function beginPvpMatch() {
     pvpLastSentFaceId = "";
     pvpLastOpponentUpdate = Date.now();
     pvpHasSeenOpponentState = false;
+    pvpSyncFailureCount = 0;
+    pvpSyncRetryAfter = 0;
     if (pvpPanel) pvpPanel.hidden = true;
     if (pvpCancelButton) pvpCancelButton.hidden = true;
     if (pvpHud) pvpHud.hidden = false;
@@ -6015,6 +6019,7 @@ async function syncPvpPlayerState(force = false) {
     const uid = auth?.currentUser?.uid;
     if (!pvpStarted || !pvpRoomCode || !uid || !db || pvpSyncBusy) return;
     const now = Date.now();
+    if (!force && now < pvpSyncRetryAfter) return;
     const x = Math.max(0, Math.min(1, (Number(player?.x) || W / 2) / Math.max(1, W)));
     const currentScore = Math.max(0, Math.floor(Number(score) || 0));
     const currentWave = Math.max(1, Math.floor(Number(wave) || 1));
@@ -6045,10 +6050,17 @@ async function syncPvpPlayerState(force = false) {
         pvpLastSentWave = currentWave;
         pvpLastSentHp = currentHp;
         pvpLastSentFaceId = activeFaceId;
+        pvpSyncFailureCount = 0;
+        pvpSyncRetryAfter = 0;
         if (!pvpHasSeenOpponentState) setPvpSyncSuccess("自分のデータ送信OK。相手のデータ待ちです");
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
-        setPvpMatchNotice(`自分のデータ送信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesをFirebase Consoleで公開してください。`);
+        pvpSyncFailureCount += 1;
+        pvpSyncRetryAfter = Date.now() + Math.min(30000, 1000 * (2 ** Math.min(5, pvpSyncFailureCount - 1)));
+        const message = error?.code === "permission-denied"
+            ? "permission-denied：Firebase側のRulesが古く、faceId / faceImageUrl を拒否しています。最新firestore.rulesをPublishしてください。"
+            : `自分のデータ送信失敗 (${getPvpErrorCode(error)})。通信とFirestore Rulesを確認してください。`;
+        setPvpMatchNotice(message);
     } finally {
         pvpSyncBusy = false;
     }
