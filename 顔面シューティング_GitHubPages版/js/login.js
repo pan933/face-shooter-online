@@ -139,6 +139,34 @@ async function ensureProfile(user, preferredUsername = "") {
   const existing = await getProfile(user);
 
   if (existing) return existing;
+    return {
+    ...profile,
+    createdAt: new Date()
+  };
+}
+// ========================================
+// ガチャ用ユーザーデータ
+// ========================================
+
+async function ensureGameUserData(user) {
+const userRef = doc(db, "users", user.uid);
+const snapshot = await getDoc(userRef);
+
+// すでにデータがあれば上書きしない
+if (snapshot.exists()) {
+return;
+}
+
+// 初回ログイン時に必要なデータを作成
+await setDoc(userRef, {
+points: 0,
+faces: [],
+selectedFace: "face2",
+skillTickets: 0,
+createdAt: serverTimestamp()
+});
+}
+
 
   let username = String(preferredUsername || "").trim();
 
@@ -184,6 +212,12 @@ async function finishLogin(user, preferredUsername = "") {
   await ensureProfile(user, preferredUsername);
   redirectAfterLogin();
 }
+async function finishLogin(user, preferredUsername = "") {
+await ensureProfile(user, preferredUsername);
+await ensureGameUserData(user);
+redirectAfterLogin();
+}
+
 
 // ========================================
 // ボタン制御
