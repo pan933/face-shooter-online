@@ -5,6 +5,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin'];
+    }
+
+    function isOwner() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
+    }
+
     function validProfile(uid) {
       return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'createdAt'])
         && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'createdAt'])
@@ -62,30 +78,69 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
-    // Private account profile: a user can create and read only their own profile.
+    // アカウントプロフィール。本人のみ読めて、管理者は一覧と管理操作が可能。
     match /profiles/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
-      allow create: if signedIn() && request.auth.uid == uid && validProfile(uid);
-      allow update, delete: if false;
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSelf(uid) && validProfile(uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Public scores, one best-score document per authenticated user.
+    // ゲーム内データ（ポイント・所持顔・選択顔・スキル等）。本人が読み書きする。
+    // このブラウザー版ではゲーム内報酬がクライアント処理のため、改造クライアントによる
+    // ポイント等の不正をFirestoreルールだけで完全に防ぐことはできない。
+    match /users/{uid} {
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isSelf(uid);
+      allow delete: if isOwner();
+    }
+
+    // 公開ランキング。ユーザーごとに自己ベストのみ登録できる。
     match /leaderboard/{uid} {
       allow read: if true;
-      allow create: if signedIn() && request.auth.uid == uid && validScore(uid);
-      allow update: if signedIn()
-        && request.auth.uid == uid
+      allow create: if isSelf(uid) && validScore(uid);
+      allow update: if isSelf(uid)
         && validScore(uid)
         && (request.resource.data.score > resource.data.score
           || (request.resource.data.score == resource.data.score
             && request.resource.data.wave > resource.data.wave));
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
-    // Invite-code rooms for friend survival PvP. Waiting rooms can only be
-    // joined once; only the two members may read their live player states.
+    // ゲーム・ガチャ設定。ログインユーザーに読み取りを許し、管理者のみ変更できる。
+    match /adminSettings/{settingId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 利用停止フラグは本人と管理者が読める。変更は管理者だけ。
+    match /accessControl/{uid} {
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 管理者一覧。最初の owner はFirebase Consoleから手動登録する。
+    // その後の管理者追加・削除は owner のみ可能。
+    match /admins/{uid} {
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if isOwner();
+    }
+
+    match /adminAuditLog/{logId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.action is string
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // 招待コード式のフレンドPvP。部屋一覧は禁止し、参加者だけ状態を共有する。
     match /pvpRooms/{roomId} {
-      // The 8-character random code is the invite. Listing rooms is always denied.
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn()
@@ -113,7 +168,7 @@ service cloud.firestore {
         allow read: if isPvpParticipant(roomId);
         allow create, update: if isPvpParticipant(roomId)
           && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
-          && request.auth.uid == uid
+          && isSelf(uid)
           && validPvpState(uid);
         allow delete: if false;
       }

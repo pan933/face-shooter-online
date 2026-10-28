@@ -27,13 +27,17 @@
 4. Sign-in method / Sign-in providers で **Email/Password** を有効にして保存します。ここでいうメール/パスワード方式を、サイト側ではID＋パスワードの形にしています。
 5. Authenticationの設定にある **Authorized domains** に `pan933.github.io` があるか確認します。なければ追加します。
 6. **Build → Firestore Database → Create database** を開き、データベースを作成します。リージョンは日本から使うなら `asia-northeast1`（Tokyo）が候補です。リージョンは後から変更できないため確認してから作成してください。
-7. Firestoreの **Rules** タブでルールを設定します。既にログイン・管理画面などで使っているルールがある場合は、同梱の `firestore.rules` で丸ごと置き換えず、必要なルールを維持したまま不足分を追加してください。ルールを置き換えると、ログイン後のプロフィール読み込みや管理画面の読み書きが permission-denied になる場合があります。
+7. Firestoreの **Rules** タブに、同梱の `firestore.rules` を貼り付けて **Publish** します。このファイルには、このゲームで使うログイン・プロフィール・ゲームデータ・ランキング・管理画面・PvP用ルールをまとめています。Firebaseプロジェクトでこのゲーム以外のアプリも動かしている場合は、そのアプリのルールも残るよう統合してください。
+
+### 管理画面の初期 owner 設定
+
+最初の管理者は、Firestore Rules公開後にFirebase Consoleから登録します。Authenticationのユーザー一覧で自分のUIDを確認し、Firestoreの `admins` コレクションにドキュメントIDをそのUIDにしたドキュメントを作成してください。フィールドは `role`（文字列）=`owner`、`createdAt`（timestamp）=現在時刻です。以降の管理者追加はゲーム内管理画面から行えます。owner登録をクライアントから許すルールにはしていません。
 
 ### フレンド対戦を有効にする
 
 ゲーム画面の「フレンドとオンライン対戦」から8文字の合言葉を発行し、フレンドが同じ画面で入力するとサバイバルPvPが始まります。両方のプレイヤーがログインしている必要があります。一人用の出撃ボタンとランキングは別モードのままです。
 
-この機能はFirestoreに `pvpRooms` を作成し、プレイヤーの位置と弾の命中イベントを同期します。Firebase Consoleの **Firestore Database → Rules** で、既存のログイン・プロフィール・管理画面用ルールを残したまま、同梱 `firestore.rules` の `pvpRooms` マッチ節と必要な補助関数を統合して **Publish** してください。既存ルールを丸ごと置き換えるとログイン後の機能が permission-denied になる場合があります。GitHubへのプッシュだけではFirebaseのルールは更新されません。
+この機能はFirestoreに `pvpRooms` を作成し、プレイヤーの位置と弾の命中イベントを同期します。上記の統合済み `firestore.rules` をFirebase Consoleの **Firestore Database → Rules** に公開してください。GitHubへのプッシュだけではFirebaseのルールは更新されません。
 
 ## 2. FirebaseのWeb設定をHTMLに入れる
 
