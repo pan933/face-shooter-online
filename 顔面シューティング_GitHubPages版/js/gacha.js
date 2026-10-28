@@ -71,6 +71,12 @@ const pointValue =
     document.getElementById("pointValue");
 const collectionGrid =
     document.getElementById("collectionGrid");
+const gachaFacesGrid =
+    document.getElementById("gachaFacesGrid");
+const gachaFaceDisplay =
+    document.getElementById("gachaFace");
+const gachaRarityDisplay =
+    document.getElementById("gachaRarity");
 
 
 // ========================================
@@ -116,19 +122,23 @@ function renderCollection(faces) {
     collectionGrid.replaceChildren();
 
     for (const face of faces) {
+        const currentSettings = gachaFaces.find(item => item.id === face.id);
+        const displayFace = currentSettings
+            ? { ...face, ...currentSettings }
+            : face;
         const card = document.createElement("article");
         card.className = "collection-card";
 
         const image = document.createElement("img");
-        image.src = face.imageUrl || "";
-        image.alt = face.name || face.id || "顔";
+        image.src = displayFace.imageUrl || "";
+        image.alt = displayFace.name || displayFace.id || "顔";
         image.loading = "lazy";
 
         const name = document.createElement("h3");
-        name.textContent = face.name || face.id || "無名";
+        name.textContent = displayFace.name || displayFace.id || "無名";
 
         const rarity = document.createElement("p");
-        rarity.textContent = face.rarity || "N";
+        rarity.textContent = displayFace.rarity || "N";
 
         const skill = normalizeFaceSkill(face.skill);
 
@@ -151,6 +161,8 @@ function renderCollection(faces) {
             skillLevel,
             progress
         );
+
+        appendFaceDetails(card, displayFace);
 
         collectionGrid.appendChild(card);
     }
@@ -264,6 +276,14 @@ async function loadSettings() {
                                 "N"
                             ),
 
+                        description:
+                            String(
+                                face.description ||
+                                face.additionalInfo ||
+                                face.details ||
+                                ""
+                            ),
+
                         probability:
                             Number(
                                 face.probability
@@ -289,10 +309,6 @@ async function loadSettings() {
         // ------------------------------
         // 確率確認
         // ------------------------------
-
-        const total =
-            getProbabilityTotal();
-
 
         // ガチャ顔が未登録の場合は初期顔セットを使用
 if (gachaFaces.length === 0) {
@@ -338,6 +354,10 @@ if (gachaFaces.length === 0) {
         "[GACHA] 管理画面に顔が未登録のため、初期顔セットを使用します。"
     );
 }
+
+
+        const total = getProbabilityTotal();
+        renderGachaLineup();
 
 
         if (total <= 0) {
@@ -396,6 +416,81 @@ if (gachaFaces.length === 0) {
 
     }
 
+}
+
+
+// ==================================================
+// 管理画面で設定した排出ラインナップ
+// ==================================================
+
+function renderGachaLineup() {
+    if (!gachaFacesGrid) return;
+
+    gachaFacesGrid.replaceChildren();
+
+    for (const face of gachaFaces) {
+        const card = document.createElement("article");
+        card.className = "gacha-lineup-card";
+
+        const image = document.createElement("img");
+        image.src = face.imageUrl || "";
+        image.alt = face.name || face.id || "顔";
+        image.loading = "lazy";
+        image.addEventListener("error", () => {
+            image.classList.add("image-load-failed");
+            image.alt = `${face.name || face.id || "顔"}（画像を読み込めません）`;
+        }, { once: true });
+
+        const name = document.createElement("h3");
+        name.textContent = face.name || face.id || "無名の顔";
+
+        const rarity = document.createElement("p");
+        rarity.className = "lineup-rarity";
+        rarity.textContent = face.rarity || "N";
+
+        const probability = document.createElement("p");
+        probability.className = "lineup-probability";
+        probability.textContent = `排出確率 ${Number(face.probability).toFixed(2)}%`;
+
+        card.append(image, name, rarity, probability);
+        appendFaceDetails(card, face);
+        gachaFacesGrid.appendChild(card);
+    }
+}
+
+
+function appendFaceDetails(container, face) {
+    const description = String(
+        face.description || face.additionalInfo || face.details || ""
+    ).trim();
+
+    if (description) {
+        const details = document.createElement("p");
+        details.className = "face-description";
+        details.textContent = description;
+        container.appendChild(details);
+    }
+}
+
+
+function revealGachaFace(face) {
+    if (!face) return;
+
+    if (gachaFaceDisplay) {
+        const image = document.createElement("img");
+        image.src = face.imageUrl || "";
+        image.alt = face.name || face.id || "顔";
+        image.addEventListener("error", () => {
+            gachaFaceDisplay.textContent = face.name || face.id || "顔";
+        }, { once: true });
+        gachaFaceDisplay.replaceChildren(image);
+        gachaFaceDisplay.classList.remove("gachaReveal");
+        requestAnimationFrame(() => gachaFaceDisplay.classList.add("gachaReveal"));
+    }
+
+    if (gachaRarityDisplay) {
+        gachaRarityDisplay.textContent = face.rarity || "N";
+    }
 }
 
 
@@ -854,6 +949,8 @@ function renderSingleResult(
                 ${Number(face.probability).toFixed(2)}%
             </p>
 
+            ${getFaceDescriptionMarkup(face)}
+
             ${extraText}
 
         </div>
@@ -963,6 +1060,8 @@ function renderTenResults(
                                 ).toFixed(2)}%
                             </p>
 
+                            ${getFaceDescriptionMarkup(face)}
+
                             ${extraText}
 
                         </div>
@@ -973,6 +1072,17 @@ function renderTenResults(
             )
             .join("");
 
+}
+
+
+function getFaceDescriptionMarkup(face) {
+    const description = String(
+        face?.description || face?.additionalInfo || face?.details || ""
+    ).trim();
+
+    return description
+        ? `<p class="face-description">${escapeHtml(description)}</p>`
+        : "";
 }
 
 
@@ -1253,6 +1363,9 @@ async function addFacesToCollection(
                 rarity:
                     face.rarity,
 
+                description:
+                    face.description || "",
+
                 probability:
                     face.probability,
 
@@ -1492,6 +1605,7 @@ async function drawSingle() {
             face,
             duplicateInfo
         );
+        revealGachaFace(face);
 
 
         if (
@@ -1716,6 +1830,7 @@ async function drawTen() {
             results,
             duplicateInfos
         );
+        revealGachaFace(results[results.length - 1]);
 
 
         const levelUpCount =
@@ -1923,10 +2038,12 @@ onAuthStateChanged(
             return;
         }
 
-        void Promise.all([
-    loadSettings(),
-    updatePointDisplay(user.uid),
-    loadCollection(user.uid)
-]);
+        void (async () => {
+            await loadSettings();
+            await Promise.all([
+                updatePointDisplay(user.uid),
+                loadCollection(user.uid)
+            ]);
+        })();
     }
 );

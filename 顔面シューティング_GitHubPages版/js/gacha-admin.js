@@ -28,6 +28,7 @@ const DEFAULT_FACES = [
     {
         id: "face2",
         name: "初期顔",
+        description: "",
         imageUrl:
             "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
         rarity: "N",
@@ -36,6 +37,7 @@ const DEFAULT_FACES = [
     {
         id: "face_1",
         name: "顔1",
+        description: "",
         imageUrl:
             "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
         rarity: "UR",
@@ -44,6 +46,7 @@ const DEFAULT_FACES = [
     {
         id: "face_2",
         name: "顔2",
+        description: "",
         imageUrl:
             "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
         rarity: "UR",
@@ -52,6 +55,7 @@ const DEFAULT_FACES = [
     {
         id: "face_3",
         name: "顔3",
+        description: "",
         imageUrl:
             "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
         rarity: "UR",
@@ -60,6 +64,7 @@ const DEFAULT_FACES = [
     {
         id: "face_4",
         name: "顔4",
+        description: "",
         imageUrl:
             "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
         rarity: "SSR",
@@ -381,6 +386,13 @@ function normalizeFace(
                 ""
             ),
 
+        description:
+            String(
+                face?.description ||
+                face?.additionalInfo ||
+                ""
+            ),
+
         rarity:
             RARITIES.includes(
                 face?.rarity
@@ -483,6 +495,11 @@ function renderFaces() {
                         ".gacha-face-url"
                     );
 
+                const descriptionInput =
+                    card.querySelector(
+                        ".gacha-face-description"
+                    );
+
 
                 const rarityInput =
                     card.querySelector(
@@ -519,6 +536,13 @@ function renderFaces() {
                             face.imageUrl
                         );
 
+                    }
+                );
+
+                descriptionInput?.addEventListener(
+                    "input",
+                    event => {
+                        face.description = event.target.value;
                     }
                 );
 
@@ -744,6 +768,20 @@ function createFaceCard(
                 </label>
 
 
+                <label>
+
+                    追加情報（ガチャ画面に表示）
+
+                    <textarea
+                        class="gacha-face-description"
+                        rows="3"
+                        maxlength="300"
+                        placeholder="顔の説明や特徴など"
+                    >${escapeHtml(face.description || "")}</textarea>
+
+                </label>
+
+
                 <div
                     style="
                         display:grid;
@@ -822,6 +860,9 @@ function addFace() {
             "新しい顔",
 
         imageUrl:
+            "",
+
+        description:
             "",
 
         rarity:
@@ -1142,6 +1183,15 @@ async function saveFaces() {
                     ?.trim() ||
                 "";
 
+            face.description =
+                card
+                    .querySelector(
+                        ".gacha-face-description"
+                    )
+                    ?.value
+                    ?.trim() ||
+                "";
+
 
             face.rarity =
                 card
@@ -1321,6 +1371,9 @@ async function saveFaces() {
 
                             imageUrl:
                                 face.imageUrl,
+
+                            description:
+                                face.description || "",
 
                             rarity:
                                 face.rarity,

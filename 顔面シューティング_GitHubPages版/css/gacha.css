@@ -239,6 +239,7 @@ main {
 
 .gachaPanel,
 .resultPanel,
+.lineupPanel,
 .collectionPanel {
 
     margin-top: 22px;
@@ -255,6 +256,64 @@ main {
 
     box-shadow:
         0 8px 25px rgba(0,0,0,.3);
+}
+
+.lineupHelp {
+    margin-top: -8px;
+    color: #cbd5e1;
+    font-size: 13px;
+}
+
+.gachaFacesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+}
+
+.gacha-lineup-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 14px;
+    background: rgba(255,255,255,.04);
+    text-align: center;
+}
+
+.gacha-lineup-card img {
+    width: min(100%, 150px);
+    aspect-ratio: 1;
+    object-fit: contain;
+    border-radius: 10px;
+    background: #020617;
+}
+
+.gacha-lineup-card h3 {
+    margin: 8px 0 4px;
+    overflow-wrap: anywhere;
+}
+
+.lineup-rarity,
+.lineup-probability,
+.face-probability {
+    margin: 4px 0;
+    font-weight: 800;
+}
+
+.lineup-rarity {
+    color: #facc15;
+}
+
+.lineup-probability,
+.face-probability {
+    color: #bfdbfe;
+}
+
+.face-description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 section h2 {
