@@ -368,6 +368,18 @@ main {
     background: #020617;
 }
 
+.collection-card .collection-skill-info {
+    min-height: 3.6em;
+    padding: 8px;
+    border: 1px solid rgba(125,211,252,.22);
+    border-radius: 10px;
+    background: rgba(8,47,73,.42);
+    color: #e0f2fe;
+    line-height: 1.5;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
 .collection-card h3 {
     margin: 6px 0;
     overflow-wrap: anywhere;

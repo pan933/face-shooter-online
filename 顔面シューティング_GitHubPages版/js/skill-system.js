@@ -68,13 +68,17 @@ export async function loadSkill(faceId) {
         return skill;
 
     } catch (error) {
-
-        console.error(
-            `[Skill] ${faceId} のスキル読み込み失敗`,
-            error
-        );
-
-        return null;
+        // 新しい顔にも専用ファイルができるまで汎用スキルを割り当てる。
+        try {
+            const catalog = await import("./skills/future-skill-catalog.js");
+            const skill = catalog.createFutureSkill(faceId);
+            skillCache.set(faceId, skill);
+            console.info(`[Skill] ${faceId} に汎用スキル「${skill.name}」を割り当てました`);
+            return skill;
+        } catch (fallbackError) {
+            console.error(`[Skill] ${faceId} のスキル読み込み失敗`, error, fallbackError);
+            return null;
+        }
     }
 }
 

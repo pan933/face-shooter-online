@@ -77,7 +77,8 @@ const DEFAULT_GACHA_SETTINGS = {
     boostMultiplier: 2,
     duplicateCoinReward: 1,
     mudDangoCoinsRequired: 30,
-    mudDangoRewardFaceId: ""
+    mudDangoRewardFaceId: "",
+    mudDangoRewardFaceIds: []
 };
 
 
@@ -235,7 +236,8 @@ function createPanel() {
                     <input id="mudDangoCoinsRequired" type="number" min="1" max="1000000" step="1">
                 </label>
                 <label>交換でもらえる超レア顔（UR）
-                    <select id="mudDangoRewardFaceId"></select>
+                    <select id="mudDangoRewardFaceId" multiple size="5" aria-describedby="mudDangoRewardHelp"></select>
+                    <small id="mudDangoRewardHelp" class="muted">複数選択できます（WindowsはCtrlを押しながら選択）。選択した顔は通常ガチャに出ず、交換時にこの中からランダムで選ばれます。</small>
                 </label>
             </div>
         </div>
@@ -345,7 +347,10 @@ async function loadFaces() {
                     ? DEFAULT_GACHA_SETTINGS.duplicateCoinReward
                     : Math.max(0, Math.floor(Number(data.duplicateCoinReward) || 0)),
                 mudDangoCoinsRequired: Math.max(1, Math.floor(Number(data.mudDangoCoinsRequired) || DEFAULT_GACHA_SETTINGS.mudDangoCoinsRequired)),
-                mudDangoRewardFaceId: String(data.mudDangoRewardFaceId || "")
+                mudDangoRewardFaceId: String(data.mudDangoRewardFaceId || ""),
+                mudDangoRewardFaceIds: Array.isArray(data.mudDangoRewardFaceIds)
+                    ? data.mudDangoRewardFaceIds.map(String)
+                    : [String(data.mudDangoRewardFaceId || "")].filter(Boolean)
             };
 
 
@@ -479,7 +484,8 @@ function renderGachaSettings() {
 
     updateRewardFaceOptions();
     rewardFaceSelect.addEventListener("change", () => {
-        gachaSettings.mudDangoRewardFaceId = rewardFaceSelect.value;
+        gachaSettings.mudDangoRewardFaceIds = [...rewardFaceSelect.selectedOptions].map(option => option.value);
+        gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
     });
 }
 
@@ -488,17 +494,22 @@ function updateRewardFaceOptions() {
     const select = document.getElementById("mudDangoRewardFaceId");
     if (!select) return;
 
-    const selected = select.value || gachaSettings.mudDangoRewardFaceId;
+    const selected = new Set(gachaSettings.mudDangoRewardFaceIds?.length
+        ? gachaSettings.mudDangoRewardFaceIds
+        : [select.value || gachaSettings.mudDangoRewardFaceId].filter(Boolean));
     const ultraRareFaces = faces.filter(face => face.rarity === "UR");
     const rewardOptions = ultraRareFaces.length > 0 ? ultraRareFaces : faces;
     select.innerHTML = rewardOptions.map(face =>
         `<option value="${escapeHtml(face.id)}">${escapeHtml(face.name)}（${escapeHtml(face.rarity)}）</option>`
     ).join("");
 
-    select.value = rewardOptions.some(face => face.id === selected)
-        ? selected
-        : rewardOptions.find(face => face.rarity === "UR")?.id || rewardOptions[0]?.id || "";
-    gachaSettings.mudDangoRewardFaceId = select.value;
+    for (const option of select.options) option.selected = selected.has(option.value);
+    if (![...select.selectedOptions].length) {
+        const first = rewardOptions.find(face => face.rarity === "UR") || rewardOptions[0];
+        if (first) select.value = first.id;
+    }
+    gachaSettings.mudDangoRewardFaceIds = [...select.selectedOptions].map(option => option.value);
+    gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
 }
 
 
@@ -1441,18 +1452,19 @@ async function saveFaces() {
         1,
         Math.floor(Number(document.getElementById("mudDangoCoinsRequired")?.value) || 30)
     );
-    gachaSettings.mudDangoRewardFaceId =
-        document.getElementById("mudDangoRewardFaceId")?.value || "";
+    const rewardSelect = document.getElementById("mudDangoRewardFaceId");
+    gachaSettings.mudDangoRewardFaceIds = [...(rewardSelect?.selectedOptions || [])].map(option => option.value);
+    gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
 
     const guaranteeRank = RARITIES.indexOf(gachaSettings.guaranteeRarity);
-    if (!faces.some(face => RARITIES.indexOf(face.rarity) >= guaranteeRank)) {
+    if (!faces.some(face => RARITIES.indexOf(face.rarity) >= guaranteeRank && !gachaSettings.mudDangoRewardFaceIds.includes(face.id))) {
         showToast(`保証レア度 ${gachaSettings.guaranteeRarity} 以上の顔を1つ以上設定してください。`);
         return;
     }
 
-    const rewardFace = faces.find(face => face.id === gachaSettings.mudDangoRewardFaceId);
-    if (!rewardFace || rewardFace.rarity !== "UR") {
-        showToast("泥団子コインの交換先として、レア度URの顔を選んでください。");
+    const rewardFaces = faces.filter(face => gachaSettings.mudDangoRewardFaceIds.includes(face.id));
+    if (!rewardFaces.length || rewardFaces.some(face => face.rarity !== "UR")) {
+        showToast("泥団子交換用にレア度URの顔を1つ以上選んでください。");
         return;
     }
 
@@ -1513,6 +1525,7 @@ async function saveFaces() {
                 duplicateCoinReward: gachaSettings.duplicateCoinReward,
                 mudDangoCoinsRequired: gachaSettings.mudDangoCoinsRequired,
                 mudDangoRewardFaceId: gachaSettings.mudDangoRewardFaceId,
+                mudDangoRewardFaceIds: gachaSettings.mudDangoRewardFaceIds,
 
                 gachaFaces:
                     faces.map(

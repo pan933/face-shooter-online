@@ -4,6 +4,7 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestam
 
 import {
     addMatchPoints,
+    claimDailyLoginBonus,
     loadFaceData,
     saveFaceData,
     CLOUDINARY_FACE_URLS
@@ -50,6 +51,7 @@ let skillActivationBusy = false;
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
     move:   { x: 0.13, y: 0.77, size: 1.00, opacity: 0.82 },
+    dpad:   { x: 0.13, y: 0.77, size: 1.00, opacity: 0.90 },
     shoot:  { x: 0.87, y: 0.77, size: 1.00, opacity: 0.96 },
     bomb:   { x: 0.80, y: 0.59, size: 1.00, opacity: 0.93 },
     shield: { x: 0.94, y: 0.59, size: 1.00, opacity: 0.93 },
@@ -671,6 +673,22 @@ function applyControlLayout() {
         }
     }
 
+    if (touchDpad) {
+        const dpad = controlLayout.dpad;
+        const dpadBase = window.matchMedia("(max-width: 900px) and (orientation: landscape) and (pointer: coarse)").matches
+            ? 32
+            : window.matchMedia("(max-width: 760px), (pointer: coarse)").matches ? 38 : 42;
+        touchDpad.style.setProperty("position", "absolute", "important");
+        touchDpad.style.setProperty("left", `${dpad.x * 100}%`, "important");
+        touchDpad.style.setProperty("top", `${dpad.y * 100}%`, "important");
+        touchDpad.style.setProperty("right", "auto", "important");
+        touchDpad.style.setProperty("bottom", "auto", "important");
+        touchDpad.style.setProperty("transform", `translate(-50%, -50%) scale(${dpad.size})`, "important");
+        touchDpad.style.setProperty("grid-template-columns", `repeat(3, ${dpadBase}px)`, "important");
+        touchDpad.style.setProperty("grid-template-rows", `repeat(3, ${dpadBase}px)`, "important");
+        touchDpad.style.setProperty("opacity", String(dpad.opacity), "important");
+    }
+
     const buttonSpecs = {
         shoot: { element: touchShoot, desktop: [161, 76], compact: [142, 60], landscape: [121, 48] },
         bomb: { element: touchBomb, desktop: [76, 76], compact: [68, 60], landscape: [58, 48] },
@@ -751,7 +769,7 @@ function createControlLayoutEditor() {
                     <input id="cleOpacity" type="range" min="25" max="100" step="5" value="82">
                 </label>
             </div>
-            <p class="cle-help">配置できるもの：移動スティック・発射・爆弾・シールド・照準。選んだボタンは黄色い枠で表示されます。</p>
+            <p class="cle-help">配置できるもの：移動スティック・方向パッド・発射・爆弾・シールド・スキル・照準。選んだボタンは黄色い枠で表示されます。</p>
             <p class="cle-status" id="cleStatus" role="status" aria-live="polite"></p>
             <div class="cle-actions">
                 <button type="button" class="cle-action-button" id="cleCancel">キャンセル</button>
@@ -770,6 +788,7 @@ function createControlLayoutEditor() {
 
     const descriptors = [
         { key: "move", name: "移動スティック", text: "🕹 移動", className: "cle-stick" },
+        { key: "dpad", name: "方向パッド", text: "✥ 方向", className: "cle-stick" },
         { key: "shoot", name: "発射ボタン", text: "🔫 発射", className: "cle-action cle-shoot" },
         { key: "bomb", name: "爆弾ボタン", text: "💣 爆弾", className: "cle-action cle-bomb" },
         { key: "shield", name: "シールドボタン", text: "🛡 盾", className: "cle-action cle-shield" },
@@ -1079,7 +1098,7 @@ async function activateFaceSkill() {
                 damageSkillTargets([...enemies], result.damage);
                 damageBossWithSkill(result.damage);
                 enemyBullets = [];
-                timeStopTimer = Math.max(timeStopTimer, result.duration || 2);
+                timeStopTimer = Math.max(timeStopTimer, result.duration || result.stopDuration || 2);
                 break;
             case "defense":
                 hp = Math.min(5, hp + (result.heal || 0));
@@ -1092,10 +1111,18 @@ async function activateFaceSkill() {
                 if (boss && Math.hypot(boss.x - player.x, boss.y - player.y) <= result.radius + boss.size / 2) damageBossWithSkill(result.damagePerBullet * result.maxBullets);
                 break;
             case "black_hole":
-                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius), result.damage);
+                {
+                const targets = enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius);
+                const pull = Math.max(0, Math.min(0.55, Number(result.pullPower) || 0.25));
+                for (const enemy of targets) {
+                    enemy.x += (player.x - enemy.x) * pull;
+                    enemy.y += (player.y - enemy.y) * pull;
+                }
+                damageSkillTargets(targets, result.damage);
                 if (boss && Math.hypot(boss.x - player.x, boss.y - player.y) <= result.radius + boss.size / 2) damageBossWithSkill(result.damage);
                 enemyBullets = [];
                 break;
+                }
             default:
                 console.warn("未対応のスキル効果:", result.type);
                 return;
@@ -5473,6 +5500,13 @@ async function initializeSharedAuth() {
             username: String(profile.username || "player"),
             displayName: String(profile.displayName || profile.username || "Player")
         };
+        const dailyBonus = await claimDailyLoginBonus(user.uid);
+        const dailyBonusMessage = document.getElementById("dailyLoginBonusMessage");
+        if (dailyBonusMessage) {
+            dailyBonusMessage.textContent = dailyBonus.claimed
+                ? `🎁 今日のログインボーナス +${dailyBonus.bonus}P を受け取りました！`
+                : "🎁 ログインボーナスは毎日1回（日本時間）受け取れます。";
+        }
         setFaceForMode(false);
         createGuestImagePicker();
         authErrorMessage = "";

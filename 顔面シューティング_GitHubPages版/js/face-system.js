@@ -600,3 +600,39 @@ export async function addMatchPoints(uid, amount = 0) {
         };
     }
 }
+
+// 日本時間の暦日ごとに一度だけログインポイントを付与する。
+export async function claimDailyLoginBonus(uid, amount = 500) {
+    if (!uid || uid === "guest-local-only") return { success: false, claimed: false, points: 0, bonus: 0 };
+    const bonus = Math.max(0, Math.floor(Number(amount) || 0));
+    const dateParts = new Intl.DateTimeFormat("en", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(new Date()).reduce((parts, item) => {
+        if (item.type !== "literal") parts[item.type] = item.value;
+        return parts;
+    }, {});
+    const today = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+    const ref = doc(db, "users", uid);
+    try {
+        const result = await runTransaction(db, async transaction => {
+            const snap = await transaction.get(ref);
+            const data = snap.exists() ? snap.data() : {};
+            const points = Math.max(0, Number(data.points) || 0);
+            if (data.lastDailyLoginBonusDate === today) {
+                return { claimed: false, points, bonus: 0 };
+            }
+            const nextPoints = points + bonus;
+            transaction.set(ref, {
+                points: nextPoints,
+                lastDailyLoginBonusDate: today,
+                lastDailyLoginBonusAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            return { claimed: true, points: nextPoints, bonus };
+        });
+        return { success: true, ...result };
+    } catch (error) {
+        console.error("[FaceSystem] ログインボーナス付与失敗:", error);
+        return { success: false, claimed: false, points: 0, bonus: 0, error };
+    }
+}

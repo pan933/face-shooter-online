@@ -13,8 +13,10 @@ import {
 
 import {
     loadFaceData,
-    saveFaceData
+    saveFaceData,
+    claimDailyLoginBonus
 } from "./face-system.js";
+import { loadSkill } from "./skill-system.js";
 
 
 // ==================================================
@@ -30,6 +32,7 @@ let boostMultiplier = 2;
 let duplicateCoinReward = 1;
 let mudDangoCoinsRequired = 30;
 let mudDangoRewardFaceId = "";
+let mudDangoRewardFaceIds = [];
 
 
 // ==================================================
@@ -104,7 +107,7 @@ async function loadCollection(uid) {
             ? faceData.faces
             : [];
 
-        renderCollection(faces, faceData.selectedFace || "face2", uid);
+        await renderCollection(faces, faceData.selectedFace || "face2", uid);
 
     } catch (error) {
         console.error("[GACHA] 所持顔読み込み失敗:", error);
@@ -119,7 +122,7 @@ async function loadCollection(uid) {
 // 所持顔一覧の描画
 // ========================================
 
-function renderCollection(faces, selectedFaceId = "face2", uid = null) {
+async function renderCollection(faces, selectedFaceId = "face2", uid = null) {
     if (!collectionGrid) return;
 
     if (!Array.isArray(faces) || faces.length === 0) {
@@ -150,9 +153,13 @@ function renderCollection(faces, selectedFaceId = "face2", uid = null) {
         rarity.textContent = displayFace.rarity || "N";
 
         const skill = normalizeFaceSkill(face.skill);
+        const skillDefinition = await loadSkill(face.id);
 
         const skillLevel = document.createElement("p");
         skillLevel.textContent = `スキル Lv.${skill.level}`;
+        const skillInfo = document.createElement("p");
+        skillInfo.className = "collection-skill-info";
+        skillInfo.textContent = `${skillDefinition?.name || "スキル"}：${skillDefinition?.description || "ゲージ満タンで発動"}`;
 
         const progress = document.createElement("p");
 
@@ -177,7 +184,7 @@ function renderCollection(faces, selectedFaceId = "face2", uid = null) {
             try {
                 await saveFaceData(uid, { selectedFace: face.id });
                 showMessage(`${displayFace.name || "この顔"}をゲームで使う顔に設定しました。`);
-                renderCollection(faces, face.id, uid);
+                void renderCollection(faces, face.id, uid);
             } catch (error) {
                 console.error("使用する顔を保存できませんでした。", error);
                 useFaceButton.disabled = false;
@@ -190,6 +197,7 @@ function renderCollection(faces, selectedFaceId = "face2", uid = null) {
             name,
             rarity,
             skillLevel,
+            skillInfo,
             progress,
             useFaceButton
         );
@@ -238,7 +246,10 @@ async function loadSettings() {
             ? 1
             : Math.max(0, Math.floor(Number(data.duplicateCoinReward) || 0));
         mudDangoCoinsRequired = Math.max(1, Math.floor(Number(data.mudDangoCoinsRequired) || 30));
-        mudDangoRewardFaceId = String(data.mudDangoRewardFaceId || "");
+        mudDangoRewardFaceIds = Array.isArray(data.mudDangoRewardFaceIds)
+            ? data.mudDangoRewardFaceIds.map(String).filter(Boolean)
+            : [String(data.mudDangoRewardFaceId || "")].filter(Boolean);
+        mudDangoRewardFaceId = mudDangoRewardFaceIds[0] || "";
         if (mudDangoCoinRequirement) {
             mudDangoCoinRequirement.textContent = mudDangoCoinsRequired.toLocaleString();
         }
@@ -404,6 +415,7 @@ if (gachaFaces.length === 0) {
 }
 
 
+        // 交換専用顔は通常の抽選候補から取り除く。
         const total = getProbabilityTotal();
         renderGachaLineup();
 
@@ -498,8 +510,11 @@ function renderGachaLineup() {
 
         const probability = document.createElement("p");
         probability.className = "lineup-probability";
-        probability.textContent = `実際の排出率 ${getEffectiveProbability(face).toFixed(2)}%`;
-        if (face.boosted) {
+        const exchangeOnly = mudDangoRewardFaceIds.includes(face.id);
+        probability.textContent = exchangeOnly
+            ? "泥団子コイン交換限定（ガチャ排出なし）"
+            : `実際の排出率 ${getEffectiveProbability(face).toFixed(2)}%`;
+        if (face.boosted && !exchangeOnly) {
             probability.textContent += `（設定 ${Number(face.probability).toFixed(2)}%・重み×${boostMultiplier}）`;
         }
 
@@ -551,7 +566,7 @@ function revealGachaFace(face) {
 
 function getProbabilityTotal() {
 
-    return gachaFaces.reduce(
+    return getNormalGachaFaces().reduce(
         (
             sum,
             face
@@ -578,6 +593,11 @@ function getProbabilityTotal() {
 
 }
 
+function getNormalGachaFaces() {
+    const excluded = new Set(mudDangoRewardFaceIds);
+    return gachaFaces.filter(face => !excluded.has(face.id));
+}
+
 
 function getFaceWeight(face) {
     const probability = Math.max(0, Number(face?.probability) || 0);
@@ -592,7 +612,7 @@ function getRarityRank(rarity) {
 
 function getGuaranteedFaces() {
     const rank = getRarityRank(guaranteeRarity);
-    return gachaFaces.filter(face => getRarityRank(face.rarity) >= rank);
+    return getNormalGachaFaces().filter(face => getRarityRank(face.rarity) >= rank);
 }
 
 
@@ -611,7 +631,7 @@ function getEffectiveProbability(face) {
 // 個別確率抽選
 // ==================================================
 
-function randomFace(candidates = gachaFaces) {
+function randomFace(candidates = getNormalGachaFaces()) {
     if (!Array.isArray(candidates) || candidates.length === 0) return null;
 
     const total = candidates.reduce((sum, face) => sum + getFaceWeight(face), 0);
@@ -1442,10 +1462,9 @@ async function addFacesToCollection(
         coinsEarned += coinsFromDuplicate;
         duplicateInfos[duplicateInfos.length - 1].coinsEarned = coinsFromDuplicate;
 
-        const rewardFace = gachaFaces.find(item => item.id === mudDangoRewardFaceId);
         let rewardsGranted = 0;
         while (
-            rewardFace &&
+            mudDangoRewardFaceIds.length > 0 &&
             mudDangoCoinsRequired > 0 &&
             coinBalance >= mudDangoCoinsRequired &&
             rewardsGranted < 20
@@ -1453,6 +1472,8 @@ async function addFacesToCollection(
             coinBalance -= mudDangoCoinsRequired;
             rewardsGranted += 1;
 
+            const rewardFace = gachaFaces.find(item => item.id === mudDangoRewardFaceIds[Math.floor(Math.random() * mudDangoRewardFaceIds.length)]);
+            if (!rewardFace) break;
             const ownedReward = faceData.faces.find(item => item.id === rewardFace.id);
             if (ownedReward) {
                 const rewardSkill = applyDuplicateSkill(ownedReward);
@@ -2054,6 +2075,11 @@ onAuthStateChanged(
 
         void (async () => {
             await loadSettings();
+            const dailyBonus = await claimDailyLoginBonus(user.uid);
+            const dailyMessage = document.getElementById("dailyLoginBonusMessage");
+            if (dailyMessage) dailyMessage.textContent = dailyBonus.claimed
+                ? `🎁 今日のログインボーナス +${dailyBonus.bonus}P を受け取りました！`
+                : "🎁 ログインボーナスは毎日1回（日本時間）受け取れます。";
             await Promise.all([
                 updatePointDisplay(user.uid),
                 loadCollection(user.uid)
