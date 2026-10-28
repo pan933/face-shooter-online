@@ -450,9 +450,60 @@ function randomFace() {
     }
 
 
-    const total =
-        getProbabilityTotal();
+// ガチャ顔が未登録の場合は初期顔セットを使用
+if (gachaFaces.length === 0) {
+    gachaFaces = [
+        {
+            id: "face2",
+            name: "初期顔",
+            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
+            rarity: "N",
+            probability: 93
+        },
+        {
+            id: "face_4",
+            name: "顔 4",
+            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
+            rarity: "SR",
+            probability: 4
+        },
+        {
+            id: "face_1",
+            name: "顔 1",
+            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
+            rarity: "UR",
+            probability: 1
+        },
+        {
+            id: "face_2",
+            name: "顔 2",
+            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
+            rarity: "UR",
+            probability: 1
+        },
+        {
+            id: "face_3",
+            name: "顔 3",
+            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
+            rarity: "UR",
+            probability: 1
+        }
+    ];
 
+    console.warn(
+        "[GACHA] 管理画面に顔が未登録のため、初期顔セットを使用します。"
+    );
+}
+
+// ★ 顔を用意した後に確率を計算する
+const total = getProbabilityTotal();
+
+if (total <= 0) {
+    showMessage("ガチャ確率が設定されていません。");
+    disableButtons();
+    gachaReady = false;
+    return;
+}
 
     if (
         total <= 0
