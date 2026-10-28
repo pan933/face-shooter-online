@@ -59,6 +59,7 @@ let pvpLocalDead = false;
 let pvpIsHost = false;
 let pvpOpponentState = null;
 let pvpLastOpponentUpdate = 0;
+let pvpHasSeenOpponentState = false;
 let pvpLastStateSyncAt = 0;
 let pvpLastSentX = -1;
 let pvpLastSentScore = -1;
@@ -3282,12 +3283,13 @@ function defeatBoss() {
 
 
 function takeDamage(
-    amount = 1
+    amount = 1,
+    ignoreInvulnerability = false
 ) {
 
-    if (
+    if (!ignoreInvulnerability && (
         damageCooldown > 0
-    )
+    ))
         return;
 
 
@@ -5746,6 +5748,11 @@ function setPvpStatus(message) {
     if (pvpStatus) pvpStatus.textContent = message;
 }
 
+function setPvpMatchNotice(message) {
+    setPvpStatus(message);
+    if (pvpOpponentSummary && pvpStarted) pvpOpponentSummary.textContent = message;
+}
+
 function makePvpRoomCode() {
     const values = new Uint8Array(8);
     crypto.getRandomValues(values);
@@ -5890,6 +5897,7 @@ function beginPvpMatch() {
     pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastSentFaceId = "";
     pvpLastOpponentUpdate = Date.now();
+    pvpHasSeenOpponentState = false;
     if (pvpPanel) pvpPanel.hidden = true;
     if (pvpCancelButton) pvpCancelButton.hidden = true;
     if (pvpHud) pvpHud.hidden = false;
@@ -5902,8 +5910,12 @@ function beginPvpMatch() {
         collection(db, "pvpRooms", pvpRoomCode, "players"),
         snapshot => {
             const opponent = snapshot.docs.map(entry => entry.data()).find(entry => entry.uid !== auth.currentUser?.uid);
-            if (!opponent) return;
+            if (!opponent) {
+                if (pvpOpponentSummary && !pvpHasSeenOpponentState) pvpOpponentSummary.textContent = "相手の対戦データを待っています…";
+                return;
+            }
             pvpOpponentState = opponent;
+            pvpHasSeenOpponentState = true;
             const timestamp = opponent.updatedAt?.toMillis?.() || 0;
             if (timestamp > 0 && timestamp !== pvpLastOpponentUpdate) pvpLastOpponentUpdate = timestamp;
             if (pvpOpponentSummary) {
@@ -5934,7 +5946,7 @@ function beginPvpMatch() {
         },
         error => {
             console.error("PvP対戦相手の同期に失敗:", error);
-            setPvpStatus("対戦データを受信できません。Firestoreルールを確認してください。");
+            setPvpMatchNotice("相手データの受信に失敗しました。Firestoreルールを再公開してください。");
         }
     );
     pvpHitsUnsubscribe = onSnapshot(
@@ -5945,8 +5957,10 @@ function beginPvpMatch() {
                 const hit = change.doc.data();
                 if (hit.targetUid !== auth.currentUser?.uid) continue;
                 pvpProcessedHitIds.add(change.doc.id);
-                if (pvpStarted && running && !pvpLocalDead && damageCooldown <= 0 && shieldTime <= 0) {
-                    takeDamage(1);
+                if (pvpStarted && running && !pvpLocalDead && shieldTime <= 0) {
+                    // PvPはキャラ同士の接触ではダメージを受けず、相手の弾イベントだけで被弾する。
+                    // 連続した弾命中もそれぞれ1ダメージとして処理する。
+                    takeDamage(1, true);
                     if (pvpOpponentSummary) pvpOpponentSummary.textContent = `💥 ${hit.attackerName || "フレンド"} の弾が命中！ HP ${Math.max(0, hp)}`;
                 }
                 void deleteDoc(change.doc.ref).catch(error => console.warn("PvPの被弾記録を消せませんでした:", error));
@@ -5954,13 +5968,17 @@ function beginPvpMatch() {
         },
         error => {
             console.error("PvP攻撃イベントの受信に失敗:", error);
-            setPvpStatus("PvP攻撃の受信権限がありません。Firebaseのfirestore.rulesを公開してください。");
+            setPvpMatchNotice("被弾データを受信できません。最新のfirestore.rulesを再公開してください。");
         }
     );
     startGame();
+    void syncPvpPlayerState(true);
     pvpSyncTimer = setInterval(() => {
         void syncPvpPlayerState();
-        if (Date.now() - pvpLastOpponentUpdate > 15000 && !pvpFinished) finishPvpMatch("win");
+        if (pvpHasSeenOpponentState && Date.now() - pvpLastOpponentUpdate > 15000 && !pvpFinished) finishPvpMatch("win");
+        else if (!pvpHasSeenOpponentState && Date.now() - pvpLastOpponentUpdate > 8000 && pvpOpponentSummary?.textContent === "相手の対戦データを待っています…") {
+            setPvpMatchNotice("相手データを受信できません。2人とも最新のfirestore.rulesを公開後に作ったルームへ入り直してください。");
+        }
     }, 250);
 }
 
@@ -6000,6 +6018,7 @@ async function syncPvpPlayerState(force = false) {
         pvpLastSentFaceId = activeFaceId;
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
+        setPvpMatchNotice("自分の対戦データを送れません。最新のfirestore.rulesをFirebase Consoleで公開してください。");
     } finally {
         pvpSyncBusy = false;
     }
@@ -6017,7 +6036,7 @@ function sendPvpHit() {
         createdAt: serverTimestamp()
     }).catch(error => {
         console.warn("PvP攻撃を送信できませんでした:", error);
-        setPvpStatus("PvP攻撃の送信権限がありません。Firebaseのfirestore.rulesを公開してください。");
+        setPvpMatchNotice("弾の命中を送信できません。最新のfirestore.rulesを再公開してください。");
     });
 }
 
