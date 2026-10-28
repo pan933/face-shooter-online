@@ -5830,7 +5830,10 @@ async function joinPvpRoom() {
             const snapshot = await transaction.get(roomRef);
             if (!snapshot.exists()) throw new Error("ROOM_NOT_FOUND");
             const room = snapshot.data();
-            if (room.status !== "waiting" || room.guestUid || room.hostUid === uid) throw new Error("ROOM_NOT_JOINABLE");
+            if (room.hostUid === uid) throw new Error("ROOM_SELF_JOIN");
+            if (room.status === "playing") throw new Error("ROOM_ALREADY_STARTED");
+            if (room.guestUid) throw new Error("ROOM_FULL");
+            if (room.status !== "waiting") throw new Error("ROOM_NOT_WAITING");
             transaction.update(roomRef, {
                 guestUid: uid,
                 status: "playing",
@@ -5847,8 +5850,14 @@ async function joinPvpRoom() {
         console.error("PvPルーム参加に失敗:", error);
         setPvpStatus(error.message === "ROOM_NOT_FOUND"
             ? "その合言葉のルームがありません。合言葉を確認してください。"
-            : error.message === "ROOM_NOT_JOINABLE"
-                ? "そのルームはすでに開始済みか、参加できません。"
+            : error.message === "ROOM_SELF_JOIN"
+                ? "作成した本人は参加できません。フレンドは別のアカウントでログインしてください。"
+                : error.message === "ROOM_ALREADY_STARTED"
+                    ? "そのルームは開始済みです。ホストに新しい合言葉を作ってもらってください。"
+                    : error.message === "ROOM_FULL"
+                        ? "そのルームにはすでに参加者がいます。ホストに新しい合言葉を作ってもらってください。"
+                        : error.message === "ROOM_NOT_WAITING"
+                            ? "そのルームは現在参加を受け付けていません。ホストに新しい合言葉を作ってもらってください。"
                 : "参加できません。Firestoreルールが更新されているか確認してください。");
         pvpCreateButton.disabled = false;
         pvpJoinButton.disabled = false;
