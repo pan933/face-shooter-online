@@ -7,6 +7,7 @@ import {
     doc,
     getDoc,
     setDoc,
+    runTransaction,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
@@ -553,29 +554,25 @@ export async function addMatchPoints(uid, amount = 0) {
             uid
         );
 
-        const snap = await getDoc(ref);
+        const newPoints = await runTransaction(db, async transaction => {
+            const snap = await transaction.get(ref);
+            const currentPoints = Math.max(
+                0,
+                Number(snap.exists() ? snap.data().points : 0) || 0
+            );
+            const nextPoints = currentPoints + add;
 
-        const currentData = snap.exists()
-            ? snap.data()
-            : {};
+            transaction.set(
+                ref,
+                {
+                    points: nextPoints,
+                    updatedAt: serverTimestamp()
+                },
+                { merge: true }
+            );
 
-        const currentPoints = Math.max(
-            0,
-            Number(currentData.points) || 0
-        );
-
-        const newPoints = currentPoints + add;
-
-        await setDoc(
-            ref,
-            {
-                points: newPoints,
-                updatedAt: serverTimestamp()
-            },
-            {
-                merge: true
-            }
-        );
+            return nextPoints;
+        });
 
         return {
             success: true,

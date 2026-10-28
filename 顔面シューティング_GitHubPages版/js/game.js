@@ -5,8 +5,10 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestam
 import {
     addMatchPoints,
     loadFaceData,
+    saveFaceData,
     CLOUDINARY_FACE_URLS
 } from "./face-system.js";
+import { loadSkill, getRequiredKills as getSkillRequiredKills, isSkillReady, consumeSkill, normalizeSkillData } from "./skill-system.js";
 
 
 
@@ -21,6 +23,8 @@ const joystickKnob = document.getElementById("joystickKnob");
 const touchShoot = document.getElementById("touchShoot");
 const touchBomb = document.getElementById("touchBomb");
 const touchShield = document.getElementById("touchShield");
+const touchSkill = document.getElementById("touchSkill");
+const skillBtn = document.getElementById("skillBtn");
 const touchBombCount = document.getElementById("touchBombCount");
 const touchShieldCount = document.getElementById("touchShieldCount");
 const controlModeBtn = document.getElementById("controlModeBtn");
@@ -33,6 +37,12 @@ let cursorSizeLevel = Number(cursorSize?.value) || 32;
 let gameCursor = null;
 let cursorBaseX = 0;
 let cursorBaseY = 0;
+
+let activeFaceId = "face2";
+let activeFaceSkill = null;
+let activeSkillData = normalizeSkillData();
+let skillDataSaveTimer = null;
+let skillActivationBusy = false;
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
@@ -856,6 +866,10 @@ async function setFaceForMode(isGuest) {
 
     // ゲストは今まで通り face.png
     if (isGuest) {
+        activeFaceId = "face2";
+        activeFaceSkill = await loadSkill(activeFaceId);
+        activeSkillData = normalizeSkillData();
+        updateSkillButton();
         faceImage.src = FACE_GUEST;
         return;
     }
@@ -865,6 +879,11 @@ async function setFaceForMode(isGuest) {
         const data = await loadFaceData(currentUser?.uid);
 
         const selectedFace = data?.selectedFace || "face2";
+        activeFaceId = selectedFace;
+        const ownedFace = (data?.faces || []).find(face => face.id === selectedFace);
+        activeSkillData = normalizeSkillData(ownedFace?.skill);
+        activeFaceSkill = await loadSkill(selectedFace);
+        updateSkillButton();
         const imagePath = getGachaFaceImage(selectedFace);
 
         console.log(
@@ -896,6 +915,131 @@ async function setFaceForMode(isGuest) {
         faceImage.src = FACE_REGISTERED;
     }
 }
+
+function updateSkillButton() {
+    const ready = isSkillReady(activeFaceSkill, activeSkillData);
+    const required = activeFaceSkill ? getSkillRequiredKills(activeFaceSkill, activeSkillData.level) : 0;
+    const label = activeFaceSkill?.name || "スキル";
+    const gauge = `${Math.min(activeSkillData.progress, required)} / ${required}`;
+    for (const button of [skillBtn, touchSkill]) {
+        if (!button) continue;
+        button.disabled = !ready || !running || paused || skillActivationBusy;
+        button.classList.toggle("ready", ready);
+        button.setAttribute("aria-label", `${label} ${gauge}${ready ? " 発動可能" : ""}`);
+        const text = button.querySelector("span");
+        if (text) text.textContent = gauge;
+        if (button === skillBtn) button.childNodes[0].textContent = `✨ ${label} `;
+        else button.childNodes[0].textContent = `✨ ${label}`;
+    }
+}
+
+function addSkillProgress(kills = 1) {
+    if (guestMode || !currentUser || !activeFaceSkill) return;
+    activeSkillData = normalizeSkillData({
+        ...activeSkillData,
+        progress: activeSkillData.progress + kills,
+        totalKills: activeSkillData.totalKills + kills
+    });
+    updateSkillButton();
+    if (skillDataSaveTimer) clearTimeout(skillDataSaveTimer);
+    skillDataSaveTimer = setTimeout(async () => {
+        try {
+            const data = await loadFaceData(currentUser.uid);
+            const faces = (data.faces || []).map(face => face.id === activeFaceId
+                ? { ...face, skill: activeSkillData }
+                : face);
+            await saveFaceData(currentUser.uid, { faces });
+        } catch (error) {
+            console.warn("スキルゲージの保存に失敗しました。", error);
+        }
+    }, 700);
+}
+
+function damageSkillTargets(targets, damage) {
+    let defeated = 0;
+    for (const enemy of targets) {
+        const index = enemies.indexOf(enemy);
+        if (index < 0) continue;
+        enemy.hp -= Math.max(1, Number(damage) || 1);
+        boom(enemy.x, enemy.y, !!enemy.elite);
+        if (enemy.hp <= 0) {
+            enemies.splice(index, 1);
+            defeated++;
+            defeatedThisWave++;
+            score += enemy.elite ? 300 : 100;
+            dropItem(enemy.x, enemy.y, enemy.elite);
+            combo++;
+        }
+    }
+    if (defeated) checkWaveClear();
+    return defeated;
+}
+
+async function activateFaceSkill() {
+    if (!running || paused || skillActivationBusy || !isSkillReady(activeFaceSkill, activeSkillData)) return;
+    skillActivationBusy = true;
+    updateSkillButton();
+    try {
+        const result = activeFaceSkill.activate({ player, enemies, canvas, skillLevel: activeSkillData.level });
+        if (!result?.success) return;
+        switch (result.type) {
+            case "explosion":
+                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - result.x, enemy.y - result.y) <= result.radius), result.damage);
+                boom(result.x, result.y, true);
+                break;
+            case "line_clear": {
+                const targets = enemies.filter(enemy => Math.abs(enemy.x - (result.x || player.x)) <= result.width / 2 && enemy.y < (result.y || player.y) && enemy.y > (result.y || player.y) - result.height).slice(0, result.maxTargets);
+                damageSkillTargets(targets, result.damage);
+                break;
+            }
+            case "power_up":
+                rapidTimer = Math.max(rapidTimer, result.duration || 5);
+                skillPowerTimer = Math.max(skillPowerTimer, result.duration || 5);
+                skillDamageMultiplier = Math.max(1, Number(result.damageMultiplier) || 1);
+                skillFireRateMultiplier = Math.max(1, Number(result.fireRateMultiplier) || 1);
+                break;
+            case "time_stop":
+                damageSkillTargets([...enemies], result.damage);
+                enemyBullets = [];
+                shieldTime = Math.max(shieldTime, result.duration || 2);
+                break;
+            case "defense":
+                hp = Math.min(5, hp + (result.heal || 0));
+                shields += 1;
+                shieldTime = Math.max(shieldTime, result.shieldDuration || 3);
+                break;
+            case "bullet_counter":
+                enemyBullets = [];
+                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius).slice(0, result.maxBullets), result.damagePerBullet);
+                break;
+            case "black_hole":
+                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) <= result.radius), result.damage);
+                enemyBullets = [];
+                break;
+            default:
+                console.warn("未対応のスキル効果:", result.type);
+                return;
+        }
+        const consumed = consumeSkill(activeFaceSkill, activeSkillData);
+        if (consumed.success) {
+            activeSkillData = consumed.data;
+            if (!guestMode && currentUser) {
+                const data = await loadFaceData(currentUser.uid);
+                const faces = (data.faces || []).map(face => face.id === activeFaceId ? { ...face, skill: activeSkillData } : face);
+                await saveFaceData(currentUser.uid, { faces });
+            }
+        }
+        updateHUD();
+    } catch (error) {
+        console.error("スキルを発動できませんでした。", error);
+    } finally {
+        skillActivationBusy = false;
+        updateSkillButton();
+    }
+}
+
+skillBtn?.addEventListener("click", activateFaceSkill);
+touchSkill?.addEventListener("click", activateFaceSkill);
 
 
 // 選んだ画像はこのページのメモリ内だけで使う。
@@ -1093,6 +1237,9 @@ let lastTime = 0;
 let items = [];
 let powerLevel = 1;
 let rapidTimer = 0;
+let skillPowerTimer = 0;
+let skillDamageMultiplier = 1;
+let skillFireRateMultiplier = 1;
 let pierceTimer = 0;
 let magnetTimer = 0;
 let scoreBoostTimer = 0;
@@ -1233,6 +1380,9 @@ function resetGame() {
     items = [];
     powerLevel = 1;
     rapidTimer = 0;
+    skillPowerTimer = 0;
+    skillDamageMultiplier = 1;
+    skillFireRateMultiplier = 1;
     pierceTimer = 0;
     magnetTimer = 0;
     scoreBoostTimer = 0;
@@ -1298,6 +1448,8 @@ function resetGame() {
 ================================================== */
 
 function updateHUD() {
+
+    updateSkillButton();
 
     document.getElementById(
         "score"
@@ -1560,6 +1712,7 @@ function startGame() {
     }
 
     running = true;
+    updateSkillButton();
     applyControlLayout();
     if (gameCursor && touchMode) {
         renderGameCursorPosition();
@@ -1733,7 +1886,7 @@ function shoot() {
 
 
     shootCooldown =
-        rapidTimer > 0 ? .11 : .28;
+        Math.max(.045, (rapidTimer > 0 ? .11 : .28) / skillFireRateMultiplier);
 
 
     bullets.push({
@@ -1751,7 +1904,7 @@ function shoot() {
             9,
 
         damage:
-            powerLevel,
+            Math.max(1, Math.round(powerLevel * skillDamageMultiplier)),
 
         pierce:
             pierceTimer > 0
@@ -2093,6 +2246,11 @@ function collectItem(item) {
 
 function updateItems(dt) {
     rapidTimer = Math.max(0, rapidTimer - dt);
+    skillPowerTimer = Math.max(0, skillPowerTimer - dt);
+    if (skillPowerTimer === 0) {
+        skillDamageMultiplier = 1;
+        skillFireRateMultiplier = 1;
+    }
     pierceTimer = Math.max(0, pierceTimer - dt);
     magnetTimer = Math.max(0, magnetTimer - dt);
     scoreBoostTimer = Math.max(0, scoreBoostTimer - dt);
@@ -3343,6 +3501,8 @@ function updateBullets(dt) {
 
 
                     defeatedThisWave++;
+
+                    addSkillProgress(1);
 
 
                     score +=
@@ -5042,10 +5202,13 @@ async function recordCurrentRun() {
          * ==========================================
          */
         try {
-            await addMatchPoints(scoreValue);
+            const pointResult = await addMatchPoints(firebaseUser.uid, scoreValue);
+            if (!pointResult.success) {
+                throw pointResult.error || new Error("ポイントを保存できませんでした。");
+            }
             console.log(
                 "ガチャポイント追加:",
-                scoreValue
+                pointResult.points
             );
         } catch (error) {
             console.warn(

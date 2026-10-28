@@ -232,6 +232,26 @@ main {
     font-size: 13px;
 }
 
+.mudDangoBalance {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    color: #fbbf24;
+    font-weight: 900;
+}
+
+.mudDangoBalance strong {
+    font-size: 22px;
+}
+
+.mudDangoBalance small {
+    color: #cbd5e1;
+    font-weight: 600;
+}
+
 
 /* =========================================================
    PANELS
@@ -314,6 +334,49 @@ main {
     color: #cbd5e1;
     font-size: 13px;
     line-height: 1.5;
+}
+
+.collectionGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+}
+
+.collection-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(30,41,59,.9), rgba(15,23,42,.9));
+    text-align: center;
+    overflow: hidden;
+}
+
+.collection-card img {
+    display: block;
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 8px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #020617;
+}
+
+.collection-card h3 {
+    margin: 6px 0;
+    overflow-wrap: anywhere;
+    font-size: 15px;
+}
+
+.collection-card p {
+    margin: 4px 0;
+    color: #cbd5e1;
+    font-size: 12px;
+}
+
+.collection-card .face-description {
+    text-align: left;
 }
 
 section h2 {

@@ -25,6 +25,11 @@ let settings = {
     singleCost: 1000,
     tenCost: 9000
 };
+let guaranteeRarity = "SSR";
+let boostMultiplier = 2;
+let duplicateCoinReward = 1;
+let mudDangoCoinsRequired = 30;
+let mudDangoRewardFaceId = "";
 
 
 // ==================================================
@@ -77,6 +82,10 @@ const gachaFaceDisplay =
     document.getElementById("gachaFace");
 const gachaRarityDisplay =
     document.getElementById("gachaRarity");
+const mudDangoCoinValue =
+    document.getElementById("mudDangoCoinValue");
+const mudDangoCoinRequirement =
+    document.getElementById("mudDangoCoinRequirement");
 
 
 // ========================================
@@ -198,6 +207,19 @@ async function loadSettings() {
                 ? snapshot.data()
                 : {};
 
+        guaranteeRarity = ["N", "R", "SR", "SSR", "UR"].includes(data.gachaGuaranteeRarity)
+            ? data.gachaGuaranteeRarity
+            : "SSR";
+        boostMultiplier = Math.max(1, Number(data.gachaBoostMultiplier) || 2);
+        duplicateCoinReward = data.duplicateCoinReward == null
+            ? 1
+            : Math.max(0, Math.floor(Number(data.duplicateCoinReward) || 0));
+        mudDangoCoinsRequired = Math.max(1, Math.floor(Number(data.mudDangoCoinsRequired) || 30));
+        mudDangoRewardFaceId = String(data.mudDangoRewardFaceId || "");
+        if (mudDangoCoinRequirement) {
+            mudDangoCoinRequirement.textContent = mudDangoCoinsRequired.toLocaleString();
+        }
+
 
         // ------------------------------
         // ガチャ料金
@@ -276,6 +298,9 @@ async function loadSettings() {
                                 "N"
                             ),
 
+                        boosted:
+                            Boolean(face.boosted),
+
                         description:
                             String(
                                 face.description ||
@@ -296,7 +321,7 @@ async function loadSettings() {
                         Number.isFinite(
                             face.probability
                         ) &&
-                        face.probability > 0
+                        face.probability >= 0
                     );
 
         } else {
@@ -450,7 +475,10 @@ function renderGachaLineup() {
 
         const probability = document.createElement("p");
         probability.className = "lineup-probability";
-        probability.textContent = `排出確率 ${Number(face.probability).toFixed(2)}%`;
+        probability.textContent = `実際の排出率 ${getEffectiveProbability(face).toFixed(2)}%`;
+        if (face.boosted) {
+            probability.textContent += `（設定 ${Number(face.probability).toFixed(2)}%・重み×${boostMultiplier}）`;
+        }
 
         card.append(image, name, rarity, probability);
         appendFaceDetails(card, face);
@@ -507,9 +535,7 @@ function getProbabilityTotal() {
         ) => {
 
             const probability =
-                Number(
-                    face.probability
-                );
+                getFaceWeight(face);
 
             return (
                 sum +
@@ -530,123 +556,53 @@ function getProbabilityTotal() {
 }
 
 
+function getFaceWeight(face) {
+    const probability = Math.max(0, Number(face?.probability) || 0);
+    return probability * (face?.boosted ? boostMultiplier : 1);
+}
+
+
+function getRarityRank(rarity) {
+    return ["N", "R", "SR", "SSR", "UR"].indexOf(String(rarity || "N").toUpperCase());
+}
+
+
+function getGuaranteedFaces() {
+    const rank = getRarityRank(guaranteeRarity);
+    return gachaFaces.filter(face => getRarityRank(face.rarity) >= rank);
+}
+
+
+function isGuaranteedRarity(face) {
+    return getRarityRank(face?.rarity) >= getRarityRank(guaranteeRarity);
+}
+
+
+function getEffectiveProbability(face) {
+    const total = getProbabilityTotal();
+    return total > 0 ? getFaceWeight(face) / total * 100 : 0;
+}
+
+
 // ==================================================
 // 個別確率抽選
 // ==================================================
 
-function randomFace() {
+function randomFace(candidates = gachaFaces) {
+    if (!Array.isArray(candidates) || candidates.length === 0) return null;
 
-    if (
-        gachaFaces.length === 0
-    ) {
-
-        return null;
-
+    const total = candidates.reduce((sum, face) => sum + getFaceWeight(face), 0);
+    if (total <= 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)] || null;
     }
 
-
-// ガチャ顔が未登録の場合は初期顔セットを使用
-if (gachaFaces.length === 0) {
-    gachaFaces = [
-        {
-            id: "face2",
-            name: "初期顔",
-            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
-            rarity: "N",
-            probability: 93
-        },
-        {
-            id: "face_4",
-            name: "顔 4",
-            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
-            rarity: "SR",
-            probability: 4
-        },
-        {
-            id: "face_1",
-            name: "顔 1",
-            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
-            rarity: "UR",
-            probability: 1
-        },
-        {
-            id: "face_2",
-            name: "顔 2",
-            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
-            rarity: "UR",
-            probability: 1
-        },
-        {
-            id: "face_3",
-            name: "顔 3",
-            imageUrl: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
-            rarity: "UR",
-            probability: 1
-        }
-    ];
-
-    console.warn(
-        "[GACHA] 管理画面に顔が未登録のため、初期顔セットを使用します。"
-    );
-}
-
-// ★ 顔を用意した後に確率を計算する
-const total = getProbabilityTotal();
-
-if (total <= 0) {
-    showMessage("ガチャ確率が設定されていません。");
-    disableButtons();
-    gachaReady = false;
-    return;
-}
-
-    if (
-        total <= 0
-    ) {
-
-        return null;
-
+    let random = Math.random() * total;
+    for (const face of candidates) {
+        random -= getFaceWeight(face);
+        if (random < 0) return face;
     }
 
-
-    let random =
-        Math.random() *
-        total;
-
-
-    for (
-        const face
-        of gachaFaces
-    ) {
-
-        const probability =
-            Number(
-                face.probability
-            ) || 0;
-
-
-        random -= probability;
-
-
-        if (
-            random < 0
-        ) {
-
-            return face;
-
-        }
-
-    }
-
-
-    // 浮動小数点誤差対策
-
-    return (
-        gachaFaces[
-            gachaFaces.length - 1
-        ]
-    );
-
+    return candidates[candidates.length - 1] || null;
 }
 
 
@@ -655,33 +611,20 @@ if (total <= 0) {
 // ==================================================
 
 function randomTenFaces() {
+    const results = Array.from({ length: 10 }, () => randomFace()).filter(Boolean);
+    const qualifyingFaces = getGuaranteedFaces();
 
-    const results = [];
-
-
-    for (
-        let i = 0;
-        i < 10;
-        i++
+    if (
+        results.length === 10 &&
+        qualifyingFaces.length > 0 &&
+        !results.some(isGuaranteedRarity)
     ) {
-
-        const face =
-            randomFace();
-
-
-        if (face) {
-
-            results.push(
-                face
-            );
-
-        }
-
+        const replaceIndex = Math.floor(Math.random() * results.length);
+        results[replaceIndex] = randomFace(qualifyingFaces);
+        results.guaranteed = true;
     }
 
-
     return results;
-
 }
 
 
@@ -802,6 +745,25 @@ function showMessage(
 }
 
 
+function getCoinRewardMessage(collectionUpdate) {
+    if (!collectionUpdate) return "";
+
+    const parts = [];
+    if (collectionUpdate.coinsEarned > 0) {
+        parts.push(
+            `泥団子コイン +${collectionUpdate.coinsEarned}（${collectionUpdate.coinBalance}/${mudDangoCoinsRequired}）`
+        );
+    }
+
+    if (collectionUpdate.coinRewards.length > 0) {
+        const names = collectionUpdate.coinRewards.map(face => face.name || face.id);
+        parts.push(`コイン交換でUR顔を獲得：${names.join("、")}`);
+    }
+
+    return parts.join(" / ");
+}
+
+
 // ==================================================
 // ポイント表示
 // ==================================================
@@ -839,6 +801,8 @@ async function updatePointDisplay(
             pointValue.textContent =
                 "0";
 
+            if (mudDangoCoinValue) mudDangoCoinValue.textContent = "0";
+
             return;
 
         }
@@ -856,6 +820,11 @@ async function updatePointDisplay(
 
         pointValue.textContent =
             points.toLocaleString();
+
+        if (mudDangoCoinValue) {
+            mudDangoCoinValue.textContent =
+                Math.max(0, Number(data.mudDangoCoins) || 0).toLocaleString();
+        }
 
     } catch (error) {
 
@@ -1303,7 +1272,7 @@ async function addFacesToCollection(
         results.length === 0
     ) {
 
-        return [];
+        return { duplicateInfos: [], coinRewards: [], coinsEarned: 0, coinBalance: 0 };
 
     }
 
@@ -1321,12 +1290,15 @@ async function addFacesToCollection(
         )
     ) {
 
-        return [];
+        return { duplicateInfos: [], coinRewards: [], coinsEarned: 0, coinBalance: 0 };
 
     }
 
 
     const duplicateInfos = [];
+    const coinRewards = [];
+    let coinBalance = Math.max(0, Number(faceData.mudDangoCoins) || 0);
+    let coinsEarned = 0;
 
 
     for (
@@ -1442,8 +1414,47 @@ async function addFacesToCollection(
             result
         );
 
+        const coinsFromDuplicate = duplicateCoinReward;
+        coinBalance += coinsFromDuplicate;
+        coinsEarned += coinsFromDuplicate;
+        duplicateInfos[duplicateInfos.length - 1].coinsEarned = coinsFromDuplicate;
+
+        const rewardFace = gachaFaces.find(item => item.id === mudDangoRewardFaceId);
+        let rewardsGranted = 0;
+        while (
+            rewardFace &&
+            mudDangoCoinsRequired > 0 &&
+            coinBalance >= mudDangoCoinsRequired &&
+            rewardsGranted < 20
+        ) {
+            coinBalance -= mudDangoCoinsRequired;
+            rewardsGranted += 1;
+
+            const ownedReward = faceData.faces.find(item => item.id === rewardFace.id);
+            if (ownedReward) {
+                const rewardSkill = applyDuplicateSkill(ownedReward);
+                ownedReward.skill = rewardSkill.skill;
+            } else {
+                faceData.faces.push({
+                    ...rewardFace,
+                    obtainedAt: Date.now(),
+                    skill: {
+                        level: 1,
+                        progress: 0,
+                        totalKills: 0,
+                        tickets: 0,
+                        duplicateProgress: 0
+                    }
+                });
+            }
+
+            coinRewards.push(rewardFace);
+        }
+
     }
 
+
+    faceData.mudDangoCoins = coinBalance;
 
     await saveFaceData(
         uid,
@@ -1451,7 +1462,7 @@ async function addFacesToCollection(
     );
 
 
-    return duplicateInfos;
+    return { duplicateInfos, coinRewards, coinsEarned, coinBalance };
 
 }
 
@@ -1494,19 +1505,8 @@ async function drawSingle() {
 
     try {
 
-        const face =
-            randomFace();
-
-
-        if (
-            !face
-        ) {
-
-            throw new Error(
-                "抽選対象がありません。"
-            );
-
-        }
+        let face = null;
+        let guaranteedByPity = false;
 
 
         // ------------------------------
@@ -1563,6 +1563,20 @@ async function drawSingle() {
 
                 }
 
+                const pityCount = Math.max(
+                    0,
+                    Math.min(9, Math.floor(Number(data.gachaPityCount) || 0))
+                );
+                const qualifyingFaces = getGuaranteedFaces();
+                guaranteedByPity = pityCount >= 9 && qualifyingFaces.length > 0;
+                face = randomFace(
+                    guaranteedByPity ? qualifyingFaces : gachaFaces
+                );
+                if (!face) throw new Error("抽選対象がありません。");
+                const nextPityCount = isGuaranteedRarity(face)
+                    ? 0
+                    : Math.min(9, pityCount + 1);
+
 
                 transaction.update(
                     userRef,
@@ -1571,6 +1585,9 @@ async function drawSingle() {
                         points:
                             points -
                             settings.singleCost,
+
+                        gachaPityCount:
+                            nextPityCount,
 
                         updatedAt:
                             serverTimestamp()
@@ -1586,7 +1603,7 @@ async function drawSingle() {
         // 所持顔保存
         // ------------------------------
 
-        const duplicateInfos =
+        const collectionUpdate =
             await addFacesToCollection(
                 user.uid,
                 [face]
@@ -1594,7 +1611,7 @@ async function drawSingle() {
         await loadCollection(user.uid);
 
         const duplicateInfo =
-            duplicateInfos[0];
+            collectionUpdate.duplicateInfos[0];
 
 
         // ------------------------------
@@ -1608,41 +1625,16 @@ async function drawSingle() {
         revealGachaFace(face);
 
 
-        if (
-            duplicateInfo?.leveledUp
-        ) {
-
-            showMessage(
-                `${face.rarity}「${face.name}」のスキルがLv${duplicateInfo.newLevel}になった！`
-            );
-
-        } else if (
-            duplicateInfo
-        ) {
-
-            if (
-                duplicateInfo.maxLevel
-            ) {
-
-                showMessage(
-                    `${face.rarity}「${face.name}」はスキルLv6です！`
-                );
-
-            } else {
-
-                showMessage(
-                    `${face.rarity}「${face.name}」が重複！ スキル成長！`
-                );
-
-            }
-
-        } else {
-
-            showMessage(
-                `${face.rarity}「${face.name}」を獲得！`
-            );
-
+        let resultMessage = duplicateInfo?.leveledUp
+            ? `${face.rarity}「${face.name}」が重複！ スキルLv${duplicateInfo.newLevel}！`
+            : duplicateInfo
+                ? `${face.rarity}「${face.name}」が重複！ スキル成長！`
+                : `${face.rarity}「${face.name}」を獲得！`;
+        if (guaranteedByPity) {
+            resultMessage = `10回保証！ ${resultMessage}`;
         }
+        const coinMessage = getCoinRewardMessage(collectionUpdate);
+        showMessage([resultMessage, coinMessage].filter(Boolean).join(" ／ "));
 
 
         await updatePointDisplay(
@@ -1791,6 +1783,14 @@ async function drawTen() {
 
                 }
 
+                const pityCount = Math.max(
+                    0,
+                    Math.min(9, Math.floor(Number(data.gachaPityCount) || 0))
+                );
+                const nextPityCount = results.some(isGuaranteedRarity)
+                    ? 0
+                    : Math.min(9, pityCount + 10);
+
 
                 transaction.update(
                     userRef,
@@ -1799,6 +1799,9 @@ async function drawTen() {
                         points:
                             points -
                             settings.tenCost,
+
+                        gachaPityCount:
+                            nextPityCount,
 
                         updatedAt:
                             serverTimestamp()
@@ -1814,12 +1817,13 @@ async function drawTen() {
         // 所持顔保存
         // ------------------------------
 
-        const duplicateInfos =
+        const collectionUpdate =
             await addFacesToCollection(
                 user.uid,
                 results
             );
         await loadCollection(user.uid);
+        const duplicateInfos = collectionUpdate.duplicateInfos;
 
 
         // ------------------------------
@@ -1848,29 +1852,16 @@ async function drawTen() {
             ).length;
 
 
-        if (
-            levelUpCount > 0
-        ) {
-
-            showMessage(
-                `10連完了！ スキルLvアップ ${levelUpCount}件！`
-            );
-
-        } else if (
-            duplicateCount > 0
-        ) {
-
-            showMessage(
-                `10連完了！ 重複 ${duplicateCount}件がスキル成長！`
-            );
-
-        } else {
-
-            showMessage(
-                "10連ガチャ完了！"
-            );
-
+        let resultMessage = levelUpCount > 0
+            ? `10連完了！ スキルLvアップ ${levelUpCount}件！`
+            : duplicateCount > 0
+                ? `10連完了！ 重複 ${duplicateCount}件がスキル成長！`
+                : "10連ガチャ完了！";
+        if (results.guaranteed) {
+            resultMessage += ` ${guaranteeRarity}以上を1つ保証しました。`;
         }
+        const coinMessage = getCoinRewardMessage(collectionUpdate);
+        showMessage([resultMessage, coinMessage].filter(Boolean).join(" ／ "));
 
 
         await updatePointDisplay(

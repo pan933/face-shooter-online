@@ -218,30 +218,9 @@ export function addSkillKill(skill, skillData, amount = 1) {
     data.progress += add;
     data.totalKills += add;
 
-    let leveledUp = false;
-
-    // 最大Lvではレベルアップしない
-    if (data.level < MAX_SKILL_LEVEL) {
-
-        const requiredKills = getRequiredKills(
-            skill,
-            data.level
-        );
-
-        // ゲージ満タンでスキルLvアップ
-        if (data.progress >= requiredKills) {
-
-            data.progress -= requiredKills;
-
-            data.level += 1;
-
-            leveledUp = true;
-
-            console.log(
-                `[Skill] スキルLvアップ → Lv${data.level}`
-            );
-        }
-    }
+    // 撃破数はスキル発動ゲージにのみ加算する。
+    // レベルはガチャ重複やスキルチケットで上げる。
+    const leveledUp = false;
 
     return {
         data,
