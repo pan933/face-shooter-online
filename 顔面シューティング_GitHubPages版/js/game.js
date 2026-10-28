@@ -1,6 +1,6 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 import {
     addMatchPoints,
@@ -45,6 +45,18 @@ let activeFaceId = "face2";
 let activeFaceSkill = null;
 let activeSkillData = normalizeSkillData();
 let skillActivationBusy = false;
+
+// Firestoreの招待コード式サバイバルPvP状態
+let pvpRoomCode = "";
+let pvpRoomUnsubscribe = null;
+let pvpPlayersUnsubscribe = null;
+let pvpSyncTimer = null;
+let pvpStarted = false;
+let pvpFinished = false;
+let pvpLocalDead = false;
+let pvpIsHost = false;
+let pvpOpponentState = null;
+let pvpLastOpponentUpdate = 0;
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
@@ -1782,6 +1794,11 @@ function updateHUD() {
 
 function startGame() {
 
+    if (pvpRoomCode && !pvpStarted) {
+        setPvpStatus("合言葉ルームの待機中です。対戦をキャンセルするか、フレンドの参加を待ってください。");
+        return;
+    }
+
     // ゲストはログインユーザーがいなくてもゲームを開始できる。
     if (!guestMode && (!currentUser || !authReady)) {
         window.location.replace("./login.html");
@@ -1790,6 +1807,7 @@ function startGame() {
 
     runRecorded = false;
     runRecordPromise = null;
+    pvpLocalDead = false;
     paused = false;
     if (pauseOverlay) {
         pauseOverlay.style.display = "none";
@@ -1882,7 +1900,7 @@ function syncPauseButton() {
 }
 
 function pauseGame() {
-    if (!running || paused) return;
+    if (!running || paused || (pvpStarted && !pvpFinished)) return;
     paused = true;
     clearHeldInputs();
     if (pauseOverlay) {
@@ -1911,10 +1929,14 @@ function togglePause() {
 }
 
 async function quitGame() {
-    try {
-        await recordCurrentRun();
-    } catch (error) {
-        console.error("ゲーム結果の保存に失敗:", error);
+    if (pvpStarted && !pvpFinished) {
+        pvpLocalDead = true;
+    } else if (!pvpStarted) {
+        try {
+            await recordCurrentRun();
+        } catch (error) {
+            console.error("ゲーム結果の保存に失敗:", error);
+        }
     }
     hideQuitConfirm();
     paused = false;
@@ -1925,6 +1947,7 @@ async function quitGame() {
     }
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     running = false;
+    if (pvpStarted && !pvpFinished) await syncPvpPlayerState();
     if (gameCursor) gameCursor.style.display = "none";
     const quitBtn = document.getElementById("quitGameBtn");
     if (quitBtn) quitBtn.style.display = "none";
@@ -1932,16 +1955,22 @@ async function quitGame() {
     document.getElementById("bossGimmick").style.display = "none";
     document.getElementById("gameover").style.display = "none";
     document.getElementById("start").style.display = "flex";
+    if (pvpStarted) await leavePvpRoom();
 }
 
 async function gameOver() {
-    try {
-        await recordCurrentRun();
-    } catch (error) {
-        console.error("ゲーム結果の保存に失敗:", error);
+    if (pvpStarted) {
+        pvpLocalDead = true;
+    } else {
+        try {
+            await recordCurrentRun();
+        } catch (error) {
+            console.error("ゲーム結果の保存に失敗:", error);
+        }
     }
 
     running = false;
+    if (pvpStarted) await syncPvpPlayerState();
     paused = false;
     clearHeldInputs();
     if (pauseOverlay) {
@@ -1979,6 +2008,16 @@ async function gameOver() {
             ? "かなり長生きしました。"
 
             : "顔に敗北しました。";
+
+    if (pvpStarted) {
+        const message = document.getElementById("pvpResultMessage");
+        if (message) {
+            message.hidden = false;
+            message.textContent = pvpOpponentState?.alive
+                ? "撃破されました。フレンドの勝ちです。"
+                : "対戦相手の結果を待っています…";
+        }
+    }
 
 
     document.getElementById(
@@ -5464,6 +5503,7 @@ async function initializeSharedAuth() {
         authReady = true;
         authErrorMessage = "";
         await setFaceForMode(true);
+        updatePvpAccess();
         createGuestImagePicker();
         updateAuthUI();
         return;
@@ -5521,6 +5561,7 @@ async function initializeSharedAuth() {
         authErrorMessage = "";
         authReady = true;
         updateAuthUI();
+        updatePvpAccess();
         await renderLeaderboard();
     } catch (error) {
         console.error("Firebase auth/profile initialization failed:", error);
@@ -5644,6 +5685,294 @@ document.getElementById(
 
 
 // Static login is loaded before enabling the start button.
+const pvpPanel = document.getElementById("pvpPanel");
+const pvpCreateButton = document.getElementById("pvpCreateButton");
+const pvpJoinButton = document.getElementById("pvpJoinButton");
+const pvpCancelButton = document.getElementById("pvpCancelButton");
+const pvpRoomCodeInput = document.getElementById("pvpRoomCodeInput");
+const pvpRoomCodeDisplay = document.getElementById("pvpRoomCodeDisplay");
+const pvpStatus = document.getElementById("pvpStatus");
+const pvpHud = document.getElementById("pvpHud");
+const pvpOpponentSummary = document.getElementById("pvpOpponentSummary");
+const pvpAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+pvpCreateButton.disabled = true;
+pvpJoinButton.disabled = true;
+
+function updatePvpAccess() {
+    const allowed = !!auth?.currentUser && !!currentUser && !guestMode;
+    if (pvpCreateButton) pvpCreateButton.disabled = !allowed || !!pvpRoomCode;
+    if (pvpJoinButton) pvpJoinButton.disabled = !allowed || !!pvpRoomCode;
+    setPvpStatus(allowed ? "対戦ルームを作るか、フレンドの合言葉を入力してください。" : "対戦にはログインが必要です。");
+}
+
+function setPvpStatus(message) {
+    if (pvpStatus) pvpStatus.textContent = message;
+}
+
+function makePvpRoomCode() {
+    const values = new Uint8Array(8);
+    crypto.getRandomValues(values);
+    return [...values].map(value => pvpAlphabet[value % pvpAlphabet.length]).join("");
+}
+
+function watchPvpRoom() {
+    if (pvpRoomUnsubscribe) pvpRoomUnsubscribe();
+    pvpRoomUnsubscribe = onSnapshot(
+        doc(db, "pvpRooms", pvpRoomCode),
+        snapshot => {
+            if (!snapshot.exists()) {
+                setPvpStatus("ルームが閉じられました。新しく作成してください。");
+                return;
+            }
+            const room = snapshot.data();
+            if (room.status === "playing" && room.guestUid) {
+                beginPvpMatch();
+            } else if (room.status === "waiting") {
+                setPvpStatus(`合言葉 ${pvpRoomCode} をフレンドに伝えてください。参加すると対戦開始します。`);
+            }
+        },
+        error => {
+            console.error("PvPルームの監視に失敗:", error);
+            setPvpStatus("ルームに接続できません。Firestoreルールを確認してください。");
+        }
+    );
+}
+
+async function createPvpRoom() {
+    const uid = auth?.currentUser?.uid;
+    if (!firebaseReady || !db || !uid || guestMode) {
+        setPvpStatus("フレンド対戦にはログインが必要です。");
+        return;
+    }
+    pvpIsHost = true;
+    pvpCreateButton.disabled = true;
+    pvpJoinButton.disabled = true;
+    setPvpStatus("ルームを作成中…");
+    try {
+        let created = false;
+        for (let attempt = 0; attempt < 5 && !created; attempt++) {
+            const code = makePvpRoomCode();
+            try {
+                await runTransaction(db, async transaction => {
+                    const roomRef = doc(db, "pvpRooms", code);
+                    const existing = await transaction.get(roomRef);
+                    if (existing.exists()) throw new Error("ROOM_CODE_COLLISION");
+                    transaction.set(roomRef, {
+                        hostUid: uid,
+                        guestUid: "",
+                        status: "waiting",
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+                });
+                pvpRoomCode = code;
+                created = true;
+            } catch (error) {
+                if (error.message !== "ROOM_CODE_COLLISION") throw error;
+            }
+        }
+        if (!created) throw new Error("ROOM_CODE_UNAVAILABLE");
+        if (pvpRoomCodeDisplay) {
+            pvpRoomCodeDisplay.textContent = `合言葉：${pvpRoomCode}`;
+            pvpRoomCodeDisplay.hidden = false;
+        }
+        pvpCreateButton.textContent = "フレンドを待っています…";
+        const soloStartButton = document.getElementById("startBtn");
+        if (soloStartButton) soloStartButton.disabled = true;
+        if (pvpCancelButton) pvpCancelButton.hidden = false;
+        watchPvpRoom();
+    } catch (error) {
+        console.error("PvPルーム作成に失敗:", error);
+        setPvpStatus("ルームを作成できませんでした。Firestoreルールが更新されているか確認してください。");
+        pvpCreateButton.disabled = false;
+        pvpJoinButton.disabled = false;
+    }
+}
+
+async function joinPvpRoom() {
+    const uid = auth?.currentUser?.uid;
+    const code = String(pvpRoomCodeInput?.value || "").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "");
+    if (!firebaseReady || !db || !uid || guestMode) {
+        setPvpStatus("フレンド対戦にはログインが必要です。");
+        return;
+    }
+    if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) {
+        setPvpStatus("8文字の合言葉を入力してください。");
+        return;
+    }
+    pvpCreateButton.disabled = true;
+    pvpJoinButton.disabled = true;
+    setPvpStatus("ルームに参加中…");
+    try {
+        await runTransaction(db, async transaction => {
+            const roomRef = doc(db, "pvpRooms", code);
+            const snapshot = await transaction.get(roomRef);
+            if (!snapshot.exists()) throw new Error("ROOM_NOT_FOUND");
+            const room = snapshot.data();
+            if (room.status !== "waiting" || room.guestUid || room.hostUid === uid) throw new Error("ROOM_NOT_JOINABLE");
+            transaction.update(roomRef, {
+                guestUid: uid,
+                status: "playing",
+                updatedAt: serverTimestamp()
+            });
+        });
+        pvpRoomCode = code;
+        pvpIsHost = false;
+        const soloStartButton = document.getElementById("startBtn");
+        if (soloStartButton) soloStartButton.disabled = true;
+        pvpRoomCodeInput.value = "";
+        watchPvpRoom();
+    } catch (error) {
+        console.error("PvPルーム参加に失敗:", error);
+        setPvpStatus(error.message === "ROOM_NOT_FOUND"
+            ? "その合言葉のルームがありません。合言葉を確認してください。"
+            : error.message === "ROOM_NOT_JOINABLE"
+                ? "そのルームはすでに開始済みか、参加できません。"
+                : "参加できません。Firestoreルールが更新されているか確認してください。");
+        pvpCreateButton.disabled = false;
+        pvpJoinButton.disabled = false;
+    }
+}
+
+function beginPvpMatch() {
+    if (pvpStarted || !pvpRoomCode) return;
+    pvpStarted = true;
+    pvpFinished = false;
+    pvpLocalDead = false;
+    pvpOpponentState = null;
+    pvpLastOpponentUpdate = Date.now();
+    if (pvpPanel) pvpPanel.hidden = true;
+    if (pvpCancelButton) pvpCancelButton.hidden = true;
+    if (pvpHud) pvpHud.hidden = false;
+    if (pvpOpponentSummary) pvpOpponentSummary.textContent = "対戦相手を読み込み中…";
+    const leaderboardButton = document.getElementById("gameoverLeaderboardBtn");
+    if (leaderboardButton) leaderboardButton.hidden = true;
+    if (pauseGameBtn) pauseGameBtn.disabled = true;
+    pvpPlayersUnsubscribe = onSnapshot(
+        collection(db, "pvpRooms", pvpRoomCode, "players"),
+        snapshot => {
+            const opponent = snapshot.docs.map(entry => entry.data()).find(entry => entry.uid !== auth.currentUser?.uid);
+            if (!opponent) return;
+            pvpOpponentState = opponent;
+            const timestamp = opponent.updatedAt?.toMillis?.() || 0;
+            if (timestamp > 0 && timestamp !== pvpLastOpponentUpdate) pvpLastOpponentUpdate = timestamp;
+            if (pvpOpponentSummary) {
+                pvpOpponentSummary.textContent = `${opponent.displayName || "フレンド"}　SCORE ${opponent.score || 0}　WAVE ${opponent.wave || 1}　HP ${opponent.hp || 0}`;
+            }
+            if (!opponent.alive && !pvpFinished) finishPvpMatch(pvpLocalDead ? "draw" : "win");
+        },
+        error => {
+            console.error("PvP対戦相手の同期に失敗:", error);
+            setPvpStatus("対戦データを受信できません。Firestoreルールを確認してください。");
+        }
+    );
+    startGame();
+    pvpSyncTimer = setInterval(() => {
+        void syncPvpPlayerState();
+        if (Date.now() - pvpLastOpponentUpdate > 15000 && !pvpFinished) finishPvpMatch("win");
+    }, 2000);
+}
+
+async function syncPvpPlayerState() {
+    const uid = auth?.currentUser?.uid;
+    if (!pvpStarted || !pvpRoomCode || !uid || !db) return;
+    try {
+        await setDoc(doc(db, "pvpRooms", pvpRoomCode, "players", uid), {
+            uid,
+            displayName: String(currentUser?.displayName || currentUser?.username || "Player").slice(0, 48),
+            score: Math.max(0, Math.floor(Number(score) || 0)),
+            wave: Math.max(1, Math.floor(Number(wave) || 1)),
+            hp: Math.max(0, Math.floor(Number(hp) || 0)),
+            alive: !pvpLocalDead && (running || paused),
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.warn("PvP状態の同期に失敗:", error);
+    }
+}
+
+function finishPvpMatch(result) {
+    if (pvpFinished) return;
+    pvpFinished = true;
+    running = false;
+    paused = false;
+    clearHeldInputs();
+    if (pvpSyncTimer) clearInterval(pvpSyncTimer);
+    pvpSyncTimer = null;
+    if (pauseOverlay) pauseOverlay.style.display = "none";
+    if (pauseGameBtn) pauseGameBtn.style.display = "none";
+    const quitButton = document.getElementById("quitGameBtn");
+    if (quitButton) quitButton.style.display = "none";
+    document.getElementById("finalScore").textContent = String(score);
+    document.getElementById("finalWave").textContent = String(wave);
+    document.getElementById("comment").textContent = result === "win"
+        ? "フレンドとの対戦に勝利！"
+        : result === "draw"
+            ? "引き分け！二人とも同時に撃破されました。"
+            : "フレンドが切断したため勝利！";
+    const message = document.getElementById("pvpResultMessage");
+    if (message) {
+        message.hidden = false;
+        message.textContent = `相手 SCORE ${pvpOpponentState?.score || 0} / WAVE ${pvpOpponentState?.wave || 1}`;
+    }
+    document.getElementById("gameover").style.display = "flex";
+}
+
+async function leavePvpRoom() {
+    if (pvpStarted && !pvpLocalDead && !pvpFinished) {
+        pvpLocalDead = true;
+        await syncPvpPlayerState();
+    }
+    if (pvpSyncTimer) clearInterval(pvpSyncTimer);
+    pvpSyncTimer = null;
+    pvpRoomUnsubscribe?.();
+    pvpPlayersUnsubscribe?.();
+    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = null;
+    const oldRoomCode = pvpRoomCode;
+    if (oldRoomCode && !pvpStarted && pvpIsHost && auth?.currentUser) {
+        try {
+            await deleteDoc(doc(db, "pvpRooms", oldRoomCode));
+        } catch (error) {
+            console.warn("待機ルームの削除に失敗:", error);
+        }
+    }
+    pvpRoomCode = "";
+    pvpStarted = false;
+    pvpFinished = false;
+    pvpLocalDead = false;
+    pvpIsHost = false;
+    pvpOpponentState = null;
+    if (pvpPanel) pvpPanel.hidden = false;
+    if (pvpHud) pvpHud.hidden = true;
+    if (pvpRoomCodeDisplay) pvpRoomCodeDisplay.hidden = true;
+    if (pvpCreateButton) {
+        pvpCreateButton.disabled = false;
+        pvpCreateButton.textContent = "ルームを作る";
+    }
+    if (pvpJoinButton) pvpJoinButton.disabled = false;
+    if (pauseGameBtn) pauseGameBtn.disabled = false;
+    const soloStartButton = document.getElementById("startBtn");
+    if (soloStartButton) soloStartButton.disabled = !authReady;
+    if (pvpCancelButton) pvpCancelButton.hidden = true;
+    const leaderboardButton = document.getElementById("gameoverLeaderboardBtn");
+    if (leaderboardButton) leaderboardButton.hidden = false;
+    const pvpMessage = document.getElementById("pvpResultMessage");
+    if (pvpMessage) pvpMessage.hidden = true;
+    document.getElementById("gameover").style.display = "none";
+    document.getElementById("start").style.display = "flex";
+    updatePvpAccess();
+}
+
+pvpCreateButton?.addEventListener("click", () => void createPvpRoom());
+pvpJoinButton?.addEventListener("click", () => void joinPvpRoom());
+pvpCancelButton?.addEventListener("click", () => void leavePvpRoom());
+document.getElementById("retryBtn")?.addEventListener("click", event => {
+    if (!pvpRoomCode) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void leavePvpRoom();
+}, true);
+
 void initializeSharedAuth();
 /* =========================================================
    ボスギミック調整パッチ v2

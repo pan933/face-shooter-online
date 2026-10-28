@@ -476,6 +476,43 @@ canvas {
 }
 
 #skillNotice.show { animation: skillNoticePop 1.15s ease-out both; }
+
+#pvpPanel {
+    width: min(100%, 520px);
+    margin: 14px auto;
+    padding: 14px;
+    border: 2px solid rgba(125,232,255,.65);
+    border-radius: 14px;
+    background: linear-gradient(145deg,rgba(12,36,62,.96),rgba(7,16,33,.96));
+    color: #eef8ff;
+    box-sizing: border-box;
+}
+#pvpPanel h2 { margin: 0 0 6px; font-size: 18px; }
+#pvpPanel p { margin: 7px 0; font-size: 13px; line-height: 1.45; }
+#pvpPanel button {
+    min-height: 42px; padding: 8px 12px; border: 1px solid #8deaff;
+    border-radius: 9px; background: #12496a; color: #fff; font-weight: 900;
+    cursor: pointer; touch-action: manipulation;
+}
+#pvpPanel #pvpCreateButton { width: 100%; margin: 5px 0 9px; }
+#pvpPanel #pvpCancelButton { width: 100%; margin: 5px 0 9px; background:#5d2530; border-color:#ff9ba8; }
+#pvpPanel label { display: block; margin: 6px 0 4px; font-size: 12px; font-weight: 900; }
+.pvpJoinRow { display: flex; gap: 7px; }
+.pvpJoinRow input {
+    flex: 1; min-width: 0; min-height: 42px; padding: 7px 10px;
+    border: 1px solid #7590aa; border-radius: 9px; background: #071323;
+    color: #fff; font-weight: 900; letter-spacing: .12em; text-transform: uppercase;
+}
+#pvpRoomCodeDisplay { padding: 8px; border-radius: 8px; background: rgba(255,230,0,.12); color: #ffe600; font-weight: 1000; letter-spacing: .15em; text-align: center; }
+#pvpStatus { min-height: 1.3em; color: #bdefff; }
+#pvpHud {
+    position: absolute; z-index: 28; top: 72px; right: 12px; display: grid; gap: 3px;
+    max-width: min(45vw,320px); padding: 8px 11px; border: 1px solid #ff94b5;
+    border-radius: 10px; background: rgba(35,8,30,.9); color: white; text-align: right;
+    font: 900 12px system-ui,sans-serif; pointer-events: none;
+}
+#pvpHud[hidden] { display: none; }
+#pvpResultMessage { color: #ffe600; font-size: 16px; font-weight: 1000; }
 @keyframes skillNoticePop {
     0% { opacity: 0; transform: translate(-50%, -50%) scale(.65); }
     18%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }

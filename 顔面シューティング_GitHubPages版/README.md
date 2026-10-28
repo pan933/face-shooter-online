@@ -29,6 +29,12 @@
 6. **Build → Firestore Database → Create database** を開き、データベースを作成します。リージョンは日本から使うなら `asia-northeast1`（Tokyo）が候補です。リージョンは後から変更できないため確認してから作成してください。
 7. Firestoreの **Rules** タブに移動し、同梱の `firestore.rules` の内容を全部貼り付けて **Publish** します。公開読み取りはランキングだけで、プロフィールは本人のみが読み取れます。
 
+### フレンド対戦を有効にする
+
+ゲーム画面の「フレンドとオンライン対戦」から8文字の合言葉を発行し、フレンドが同じ画面で入力するとサバイバルPvPが始まります。両方のプレイヤーがログインしている必要があります。一人用の出撃ボタンとランキングは別モードのままです。
+
+この機能はFirestoreに `pvpRooms` を作成するため、変更後の `firestore.rules` をFirebase Consoleの **Firestore Database → Rules** にもう一度貼り付けて **Publish** してください。GitHubへコードをプッシュしただけではFirebaseのルールは更新されません。対戦中は各プレイヤーが2秒ごとにスコア・ウェーブ・HPを同期します。
+
 ## 2. FirebaseのWeb設定をHTMLに入れる
 
 1. Firebase Consoleの歯車 **Project settings → General → Your apps** を開きます。

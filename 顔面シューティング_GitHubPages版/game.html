@@ -26,6 +26,10 @@
 <canvas id="game"></canvas>
 
 <div id="skillNotice" role="status" aria-live="polite"></div>
+<div id="pvpHud" aria-live="polite" hidden>
+    <strong>⚔ フレンド対戦</strong>
+    <span id="pvpOpponentSummary">対戦相手を待っています…</span>
+</div>
 
 
 <!-- HUD -->
@@ -287,6 +291,20 @@
             <ol id="leaderboardList"><li class="rankEmpty">ランキングを読み込み中…</li></ol>
         </div>
 
+        <section id="pvpPanel" aria-labelledby="pvpTitle">
+            <h2 id="pvpTitle">⚔ フレンドとオンライン対戦</h2>
+            <p>8文字の合言葉でルームを共有。相手より長く生き残ったプレイヤーの勝ちです。</p>
+            <button id="pvpCreateButton" type="button">ルームを作る</button>
+            <button id="pvpCancelButton" type="button" hidden>待機をキャンセル</button>
+            <label for="pvpRoomCodeInput">フレンドの合言葉</label>
+            <div class="pvpJoinRow">
+                <input id="pvpRoomCodeInput" type="text" maxlength="8" autocomplete="off" placeholder="例：AB3K7MNP">
+                <button id="pvpJoinButton" type="button">参加</button>
+            </div>
+            <p id="pvpRoomCodeDisplay" hidden></p>
+            <p id="pvpStatus" role="status" aria-live="polite">対戦にはログインが必要です。</p>
+        </section>
+
         <div id="sensitivityPanel">
             <label for="cursorSensitivity">🎯 カーソル感度：<span id="cursorSensitivityValue">1.0</span></label>
             <input id="cursorSensitivity" type="range" min="0.5" max="3" step="0.1" value="1.0">
@@ -370,6 +388,7 @@
             顔に敗北しました。
 
         </p>
+        <p id="pvpResultMessage" role="status" aria-live="polite" hidden></p>
 
         <button
             class="mainButton"
