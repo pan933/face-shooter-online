@@ -57,8 +57,8 @@ service cloud.firestore {
     }
 
     function validPvpState(uid) {
-      return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'alive', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'alive', 'updatedAt'])
+      return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
         && request.resource.data.uid == uid
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 48
@@ -74,6 +74,10 @@ service cloud.firestore {
         && request.resource.data.x is number
         && request.resource.data.x >= 0
         && request.resource.data.x <= 1
+        && request.resource.data.faceId is string
+        && request.resource.data.faceId.size() <= 64
+        && request.resource.data.faceImageUrl is string
+        && request.resource.data.faceImageUrl.size() <= 1000
         && request.resource.data.alive is bool
         && request.resource.data.updatedAt == request.time;
     }

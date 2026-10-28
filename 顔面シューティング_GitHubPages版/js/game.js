@@ -64,6 +64,8 @@ let pvpLastSentX = -1;
 let pvpLastSentScore = -1;
 let pvpLastSentWave = -1;
 let pvpLastSentHp = -1;
+let pvpLastSentFaceId = "";
+let pvpLocalFaceImageUrl = "";
 const pvpProcessedHitIds = new Set();
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
@@ -600,6 +602,7 @@ applyControlMode();
 
 const FACE_GUEST = "face.png";
 const FACE_REGISTERED = CLOUDINARY_FACE_URLS.face2;
+pvpLocalFaceImageUrl = FACE_REGISTERED;
 
 function getGachaFaceImage(faceId) {
     if (!faceId) {
@@ -976,7 +979,8 @@ async function setFaceForMode(isGuest) {
         activeSkillData = normalizeSkillData({ ...ownedFace?.skill, progress: 0, totalKills: 0 });
         activeFaceSkill = await loadSkill(selectedFace) || await loadSkill("face2");
         updateSkillButton();
-        const imagePath = getGachaFaceImage(selectedFace);
+        const imagePath = ownedFace?.imageUrl || getGachaFaceImage(selectedFace);
+        pvpLocalFaceImageUrl = imagePath;
 
         console.log(
             "[FACE] 使用中:",
@@ -993,6 +997,7 @@ async function setFaceForMode(isGuest) {
 
             faceImage.onerror = null;
             faceImage.src = FACE_REGISTERED;
+            pvpLocalFaceImageUrl = FACE_REGISTERED;
         };
 
         faceImage.src = imagePath;
@@ -3824,12 +3829,19 @@ function update(dt) {
             )
         );
 
+    // PvPは敵やボスを倒すモードではなく、左右移動で相手の弾を避ける1対1の対面戦。
+    if (pvpStarted) player.y = H - 120;
+
 
     /*
         ボス
     */
 
-    if (boss) {
+    if (pvpStarted) {
+        enemies = [];
+        enemyBullets = [];
+        items = [];
+    } else if (boss) {
 
         updateBoss(dt);
 
@@ -3896,8 +3908,10 @@ function update(dt) {
 
     updateBullets(dt);
 
-    updateEnemyBullets(dt);
-    updateItems(dt);
+    if (!pvpStarted) {
+        updateEnemyBullets(dt);
+        updateItems(dt);
+    }
 
 
     /*
@@ -5714,6 +5728,8 @@ const pvpStatus = document.getElementById("pvpStatus");
 const pvpHud = document.getElementById("pvpHud");
 const pvpOpponentSummary = document.getElementById("pvpOpponentSummary");
 const pvpRemoteAvatar = document.getElementById("pvpRemoteAvatar");
+const pvpRemoteFace = document.getElementById("pvpRemoteFace");
+const pvpRemoteFaceFallback = document.getElementById("pvpRemoteFaceFallback");
 const pvpOpponentName = document.getElementById("pvpOpponentName");
 const pvpAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 pvpCreateButton.disabled = true;
@@ -5871,6 +5887,8 @@ function beginPvpMatch() {
     pvpLocalDead = false;
     pvpOpponentState = null;
     pvpProcessedHitIds.clear();
+    pvpLastSentX = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
+    pvpLastSentFaceId = "";
     pvpLastOpponentUpdate = Date.now();
     if (pvpPanel) pvpPanel.hidden = true;
     if (pvpCancelButton) pvpCancelButton.hidden = true;
@@ -5895,6 +5913,21 @@ function beginPvpMatch() {
                 const opponentX = Number.isFinite(Number(opponent.x)) ? Number(opponent.x) : 0.5;
                 pvpRemoteAvatar.style.left = `${Math.max(5, Math.min(95, opponentX * 100))}%`;
                 pvpRemoteAvatar.setAttribute("aria-label", `${opponent.displayName || "フレンド"} HP ${opponent.hp || 0}`);
+            }
+            if (pvpRemoteFace && opponent.faceImageUrl && pvpRemoteFace.dataset.imageUrl !== opponent.faceImageUrl) {
+                pvpRemoteFace.dataset.imageUrl = opponent.faceImageUrl;
+                pvpRemoteFace.onerror = () => {
+                    pvpRemoteFace.hidden = true;
+                    if (pvpRemoteFaceFallback) pvpRemoteFaceFallback.hidden = false;
+                };
+                pvpRemoteFace.onload = () => {
+                    pvpRemoteFace.hidden = false;
+                    if (pvpRemoteFaceFallback) pvpRemoteFaceFallback.hidden = true;
+                };
+                pvpRemoteFace.src = opponent.faceImageUrl;
+            } else if (!opponent.faceImageUrl && pvpRemoteFaceFallback) {
+                pvpRemoteFace.hidden = true;
+                pvpRemoteFaceFallback.hidden = false;
             }
             if (pvpOpponentName) pvpOpponentName.textContent = String(opponent.displayName || "フレンド").slice(0, 16);
             if (!opponent.alive && !pvpFinished) finishPvpMatch(pvpLocalDead ? "draw" : "win");
@@ -5942,7 +5975,8 @@ async function syncPvpPlayerState(force = false) {
     const changed = Math.abs(x - pvpLastSentX) >= 0.025
         || currentScore !== pvpLastSentScore
         || currentWave !== pvpLastSentWave
-        || currentHp !== pvpLastSentHp;
+        || currentHp !== pvpLastSentHp
+        || activeFaceId !== pvpLastSentFaceId;
     if (!force && !changed && now - pvpLastStateSyncAt < 1000) return;
     pvpSyncBusy = true;
     try {
@@ -5953,6 +5987,8 @@ async function syncPvpPlayerState(force = false) {
             wave: currentWave,
             hp: currentHp,
             x,
+            faceId: String(activeFaceId || "face2").slice(0, 64),
+            faceImageUrl: String(pvpLocalFaceImageUrl || faceImage?.src || FACE_REGISTERED).slice(0, 1000),
             alive: !pvpLocalDead && (running || paused),
             updatedAt: serverTimestamp()
         }, { merge: true });
@@ -5961,6 +5997,7 @@ async function syncPvpPlayerState(force = false) {
         pvpLastSentScore = currentScore;
         pvpLastSentWave = currentWave;
         pvpLastSentHp = currentHp;
+        pvpLastSentFaceId = activeFaceId;
     } catch (error) {
         console.warn("PvP状態の同期に失敗:", error);
     } finally {
