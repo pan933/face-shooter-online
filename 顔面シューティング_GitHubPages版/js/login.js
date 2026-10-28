@@ -139,35 +139,6 @@ async function ensureProfile(user, preferredUsername = "") {
   const existing = await getProfile(user);
 
   if (existing) return existing;
-    return {
-    ...profile,
-    createdAt: new Date()
-  };
-}
-// ========================================
-// ガチャ用ユーザーデータ
-// ========================================
-
-async function ensureGameUserData(user) {
-const userRef = doc(db, "users", user.uid);
-const snapshot = await getDoc(userRef);
-
-// すでにデータがあれば上書きしない
-if (snapshot.exists()) {
-return;
-}
-
-// 初回ログイン時に必要なデータを作成
-await setDoc(userRef, {
-points: 0,
-faces: [],
-selectedFace: "face2",
-skillTickets: 0,
-createdAt: serverTimestamp()
-});
-}
-
-
   let username = String(preferredUsername || "").trim();
 
   const isTwitterUser = user.providerData?.some(
@@ -205,17 +176,33 @@ createdAt: serverTimestamp()
 }
 
 // ========================================
+// ガチャ用ユーザーデータ
+// ========================================
+
+async function ensureGameUserData(user) {
+  const userRef = doc(db, "users", user.uid);
+  const snapshot = await getDoc(userRef);
+
+  // すでにデータがあれば上書きしない
+  if (snapshot.exists()) return;
+
+  await setDoc(userRef, {
+    points: 0,
+    faces: [],
+    selectedFace: "face2",
+    skillTickets: 0,
+    createdAt: serverTimestamp()
+  });
+}
+
+// ========================================
 // ログイン完了
 // ========================================
 
 async function finishLogin(user, preferredUsername = "") {
   await ensureProfile(user, preferredUsername);
+  await ensureGameUserData(user);
   redirectAfterLogin();
-}
-async function finishLogin(user, preferredUsername = "") {
-await ensureProfile(user, preferredUsername);
-await ensureGameUserData(user);
-redirectAfterLogin();
 }
 
 
@@ -340,14 +327,7 @@ $("registerForm").addEventListener("submit", async event => {
       displayName: username
     });
 
-    await setDoc(doc(db, "profiles", credential.user.uid), {
-      uid: credential.user.uid,
-      username,
-      displayName: username,
-      createdAt: serverTimestamp()
-    });
-
-    redirectAfterLogin();
+    await finishLogin(credential.user, username);
 
   } catch (error) {
     console.error("新規登録エラー:", error);

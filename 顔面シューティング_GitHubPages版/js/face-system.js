@@ -229,66 +229,62 @@ export async function discoverFaces() {
 // ============================================================
 
 export async function loadFaceData(uid) {
-if (!uid) {
-return {
-faces: [],
-selectedFace: INITIAL_FACE,
-skillTickets: 0
-};
-}
-
-```
-try {
-    const ref = doc(db, "users", uid);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : {};
-
-    let faces = Array.isArray(data.faces)
-        ? data.faces
-        : [];
-
-    // 所持顔が空の場合、初期顔を所持一覧に登録する
-    if (faces.length === 0) {
-        const initialFace = {
-            ...buildFace(INITIAL_FACE),
-            obtainedAt: Date.now()
+    if (!uid) {
+        return {
+            faces: [],
+            selectedFace: INITIAL_FACE,
+            skillTickets: 0
         };
-
-        faces = [initialFace];
-
-        await setDoc(
-            ref,
-            {
-                faces,
-                selectedFace: data.selectedFace || INITIAL_FACE,
-                skillTickets: Number(data.skillTickets) || 0,
-                updatedAt: serverTimestamp()
-            },
-            { merge: true }
-        );
-
-        console.log("[FaceSystem] 初期顔を登録しました:", initialFace);
     }
 
-    // 古い顔データにもスキル情報を追加
-    const normalizedFaces = faces.map(face => ({
-        ...face,
-        skill: normalizeSkillData(face.skill)
-    }));
+    try {
+        const ref = doc(db, "users", uid);
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : {};
 
-    return {
-        ...data,
-        faces: normalizedFaces,
-        selectedFace: data.selectedFace || INITIAL_FACE,
-        skillTickets: Number(data.skillTickets) || 0
-    };
+        let faces = Array.isArray(data.faces)
+            ? data.faces
+            : [];
 
-} catch (error) {
-    console.error("[FaceSystem] 顔データ読み込み失敗:", error);
-    throw error;
-}
-```
+        // 所持顔が空の場合、初期顔を所持一覧に登録する
+        if (faces.length === 0) {
+            const initialFace = {
+                ...buildFace(INITIAL_FACE),
+                obtainedAt: Date.now()
+            };
 
+            faces = [initialFace];
+
+            await setDoc(
+                ref,
+                {
+                    faces,
+                    selectedFace: data.selectedFace || INITIAL_FACE,
+                    skillTickets: Number(data.skillTickets) || 0,
+                    updatedAt: serverTimestamp()
+                },
+                { merge: true }
+            );
+
+            console.log("[FaceSystem] 初期顔を登録しました:", initialFace);
+        }
+
+        // 古い顔データにもスキル情報を追加
+        const normalizedFaces = faces.map(face => ({
+            ...face,
+            skill: normalizeSkillData(face.skill)
+        }));
+
+        return {
+            ...data,
+            faces: normalizedFaces,
+            selectedFace: data.selectedFace || INITIAL_FACE,
+            skillTickets: Number(data.skillTickets) || 0
+        };
+    } catch (error) {
+        console.error("[FaceSystem] 顔データ読み込み失敗:", error);
+        throw error;
+    }
 }
 
 
