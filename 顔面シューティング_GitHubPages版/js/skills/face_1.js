@@ -19,45 +19,40 @@ const skill = {
             // Lv1
             requiredKills: 24,
             damage: 80,
-            widthRatio: 0.58,
+            widthRatio: 0.70,
             heightRatio: 0.55,
-            maxTargets: 3
         },
 
         {
             // Lv2
             requiredKills: 22,
             damage: 105,
-            widthRatio: 0.66,
+            widthRatio: 0.76,
             heightRatio: 0.62,
-            maxTargets: 4
         },
 
         {
             // Lv3
             requiredKills: 20,
             damage: 135,
-            widthRatio: 0.74,
+            widthRatio: 0.82,
             heightRatio: 0.69,
-            maxTargets: 5
         },
 
         {
             // Lv4
             requiredKills: 18,
             damage: 175,
-            widthRatio: 0.82,
+            widthRatio: 0.88,
             heightRatio: 0.76,
-            maxTargets: 6
         },
 
         {
             // Lv5
             requiredKills: 15,
             damage: 225,
-            widthRatio: 0.90,
+            widthRatio: 0.94,
             heightRatio: 0.83,
-            maxTargets: 8
         },
 
         {
@@ -65,8 +60,7 @@ const skill = {
             requiredKills: 12,
             damage: 300,
             widthRatio: 1.00,
-            heightRatio: 0.92,
-            maxTargets: 10
+            heightRatio: 0.92
         }
     ],
 

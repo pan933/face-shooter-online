@@ -19,42 +19,48 @@ const skill = {
             // Lv1
             requiredKills: 20,
             damage: 100,
-            radius: 140
+            radius: 140,
+            radiusRatio: 0.30
         },
 
         {
             // Lv2
             requiredKills: 18,
             damage: 130,
-            radius: 160
+            radius: 160,
+            radiusRatio: 0.36
         },
 
         {
             // Lv3
             requiredKills: 16,
             damage: 170,
-            radius: 185
+            radius: 185,
+            radiusRatio: 0.42
         },
 
         {
             // Lv4
             requiredKills: 14,
             damage: 220,
-            radius: 210
+            radius: 210,
+            radiusRatio: 0.48
         },
 
         {
             // Lv5
             requiredKills: 12,
             damage: 280,
-            radius: 240
+            radius: 240,
+            radiusRatio: 0.54
         },
 
         {
             // Lv6
             requiredKills: 10,
             damage: 350,
-            radius: 280
+            radius: 280,
+            radiusRatio: 0.60
         }
     ],
 
@@ -99,7 +105,13 @@ const skill = {
 
             damage: levelData.damage,
 
-            radius: levelData.radius,
+            radius: Math.max(
+                levelData.radius,
+                Math.round(Math.min(
+                    Number(context.viewportWidth) || Number(canvas?.width) || 0,
+                    Number(context.viewportHeight) || Number(canvas?.height) || 0
+                ) * levelData.radiusRatio)
+            ),
 
             x: Number(context.viewportWidth) / 2 || (canvas ? canvas.width / 2 : player?.x || 0),
 

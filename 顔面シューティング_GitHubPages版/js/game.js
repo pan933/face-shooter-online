@@ -6,7 +6,6 @@ import {
     addMatchPoints,
     claimDailyLoginBonus,
     loadFaceData,
-    saveFaceData,
     CLOUDINARY_FACE_URLS
 } from "./face-system.js";
 import { loadSkill, getRequiredKills as getSkillRequiredKills, isSkillReady, consumeSkill, normalizeSkillData } from "./skill-system.js";
@@ -45,7 +44,6 @@ let cursorBaseY = 0;
 let activeFaceId = "face2";
 let activeFaceSkill = null;
 let activeSkillData = normalizeSkillData();
-let skillDataSaveTimer = null;
 let skillActivationBusy = false;
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
@@ -955,7 +953,7 @@ async function setFaceForMode(isGuest) {
         const selectedFace = data?.selectedFace || "face2";
         activeFaceId = selectedFace;
         const ownedFace = (data?.faces || []).find(face => face.id === selectedFace);
-        activeSkillData = normalizeSkillData(ownedFace?.skill);
+        activeSkillData = normalizeSkillData({ ...ownedFace?.skill, progress: 0, totalKills: 0 });
         activeFaceSkill = await loadSkill(selectedFace) || await loadSkill("face2");
         updateSkillButton();
         const imagePath = getGachaFaceImage(selectedFace);
@@ -985,6 +983,10 @@ async function setFaceForMode(isGuest) {
             error
         );
 
+        activeFaceId = "face2";
+        activeSkillData = normalizeSkillData({ progress: 0, totalKills: 0 });
+        activeFaceSkill = await loadSkill("face2");
+        updateSkillButton();
         faceImage.onerror = null;
         faceImage.src = FACE_REGISTERED;
     }
@@ -1018,25 +1020,13 @@ function showSkillNotice(text) {
 }
 
 function addSkillProgress(kills = 1) {
-    if (guestMode || !currentUser || !activeFaceSkill) return;
+    if (!running || !activeFaceSkill) return;
     activeSkillData = normalizeSkillData({
         ...activeSkillData,
         progress: activeSkillData.progress + kills,
         totalKills: activeSkillData.totalKills + kills
     });
     updateSkillButton();
-    if (skillDataSaveTimer) clearTimeout(skillDataSaveTimer);
-    skillDataSaveTimer = setTimeout(async () => {
-        try {
-            const data = await loadFaceData(currentUser.uid);
-            const faces = (data.faces || []).map(face => face.id === activeFaceId
-                ? { ...face, skill: activeSkillData }
-                : face);
-            await saveFaceData(currentUser.uid, { faces });
-        } catch (error) {
-            console.warn("スキルゲージの保存に失敗しました。", error);
-        }
-    }, 700);
 }
 
 function damageSkillTargets(targets, damage) {
@@ -1098,9 +1088,7 @@ async function activateFaceSkill() {
                         Math.abs(enemy.x - attackX) <= result.width / 2 + enemy.size / 2 &&
                         enemy.y - enemy.size / 2 < attackY &&
                         enemy.y + enemy.size / 2 > attackY - result.height
-                    )
-                    .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
-                    .slice(0, Math.max(1, Number(result.maxTargets) || enemies.length));
+                    );
                 damageSkillTargets(targets, result.damage);
                 if (boss && Math.abs(boss.x - attackX) <= result.width / 2 + boss.size / 2 && boss.y - boss.size / 2 < attackY && boss.y + boss.size / 2 > attackY - result.height) damageBossWithSkill(result.damage);
                 showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}・${targets.length}体に命中`);
@@ -1148,11 +1136,6 @@ async function activateFaceSkill() {
         const consumed = consumeSkill(activeFaceSkill, activeSkillData);
         if (consumed.success) {
             activeSkillData = consumed.data;
-            if (!guestMode && currentUser) {
-                const data = await loadFaceData(currentUser.uid);
-                const faces = (data.faces || []).map(face => face.id === activeFaceId ? { ...face, skill: activeSkillData } : face);
-                await saveFaceData(currentUser.uid, { faces });
-            }
         }
         updateHUD();
     } catch (error) {
@@ -1476,6 +1459,14 @@ resize();
 ================================================== */
 
 function resetGame() {
+
+    // スキルゲージの撃破数は1試合限り。レベル・重複成長は維持する。
+    activeSkillData = normalizeSkillData({
+        ...activeSkillData,
+        progress: 0,
+        totalKills: 0
+    });
+    updateSkillButton();
 
     score = 0;
 
@@ -5472,7 +5463,7 @@ async function initializeSharedAuth() {
         currentUser = { uid: "guest-local-only", username: "guest", displayName: "ゲスト" };
         authReady = true;
         authErrorMessage = "";
-        setFaceForMode(true);
+        await setFaceForMode(true);
         createGuestImagePicker();
         updateAuthUI();
         return;
@@ -5525,7 +5516,7 @@ async function initializeSharedAuth() {
                 ? `🎁 今日のログインボーナス +${dailyBonus.bonus}P を受け取りました！`
                 : "🎁 ログインボーナスは毎日1回（日本時間）受け取れます。";
         }
-        setFaceForMode(false);
+        await setFaceForMode(false);
         createGuestImagePicker();
         authErrorMessage = "";
         authReady = true;
