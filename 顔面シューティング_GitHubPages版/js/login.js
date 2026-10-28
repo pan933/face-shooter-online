@@ -363,6 +363,8 @@ if (xLoginBtn) {
       const profile = await getProfile(result.user);
 
       if (profile) {
+        // 既存のXアカウントにゲームデータがまだない場合も初期化してからゲームへ進む。
+        await ensureGameUserData(result.user);
         redirectAfterLogin();
         return;
       }
@@ -373,7 +375,7 @@ if (xLoginBtn) {
       $("xCompleteSection").hidden = false;
 
       setMessage(
-        "初回のXログインです。新規登録用パスワードを入力してください。"
+        "初回のXログインです。新規登録コードを入力して登録を完了してください。"
       );
 
     } catch (error) {
@@ -396,7 +398,10 @@ if (xLoginBtn) {
           "認証処理がキャンセルされました。もう一度試してください。",
 
         "auth/invalid-credential":
-          "Xの認証情報を確認できません。FirebaseのAPIキー・シークレットとXのコールバックURLを確認してください。",
+          "Xの認証情報を確認できません。FirebaseのTwitterプロバイダにXのAPI KeyとAPI Secretを設定し、X Developer PortalにFirebaseのコールバックURLを登録してください。",
+
+        "auth/account-exists-with-different-credential":
+          "このXアカウントと同じメールアドレスの別ログイン方法が既にあります。先に既存の方法でログインしてください。",
 
         "auth/network-request-failed":
           "通信に失敗しました。インターネット接続を確認してください。"
@@ -432,7 +437,7 @@ if (xCompleteForm) {
     }
 
     if ($("xRegistrationCode").value !== REGISTRATION_CODE) {
-      setMessage("新規登録用パスワードが違います。", true);
+      setMessage("新規登録コードが違います。", true);
       return;
     }
 

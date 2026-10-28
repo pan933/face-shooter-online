@@ -80,13 +80,14 @@ GitHubで **Commit changes** したあと、リポジトリの **Actions** タ�
 
 ## 5. Xログイン（任意）
 
-1. Firebase AuthenticationのSign-in providersで **Twitter** を有効にします。
-2. Firebaseが表示するコールバックURL（一般的には `https://<project-id>.firebaseapp.com/__/auth/handler`）をコピーします。
-3. X Developerアプリの認証設定に、FirebaseのAPI key/secretとコールバックURLを登録します。
-4. Firebase ConsoleでTwitter providerを有効化し、X側のキーとシークレットを保存します。
-5. GitHub Pagesの `login.html` から **Xでログイン / 新規登録** を試します。
+1. Firebase Consoleの **Authentication → Sign-in method → Twitter** を開き、プロバイダを有効にします。
+2. Firebaseに表示されるコールバックURL（このプロジェクトでは通常 `https://face-61ed.firebaseapp.com/__/auth/handler`）をコピーします。
+3. X Developer Portalでアプリの **User authentication settings** を開き、OAuth 1.0aログインを有効にして、手順2のFirebaseコールバックURLを登録します。
+4. X Developer Portalに表示される **API Key** と **API Secret** をコピーし、Firebase ConsoleのTwitterプロバイダ設定に貼り付けて保存します。XのシークレットはWebページやGitHubのファイルに書かないでください。
+5. Firebase Authenticationの **Authorized domains** に `pan933.github.io` があることを確認します。
+6. GitHub Pagesの `login.html` から **Xでログイン / 新規登録** を押します。初回登録時は、通常の新規登録と同じ登録コード `komakikouka` を入力します。2回目以降はX認証だけでログインできます。
 
-X Developer側の利用条件やアプリ設定はX側の管理画面で確認してください。FirebaseのWeb設定だけではXログインは有効になりません。
+FirebaseはTwitterという名称の認証プロバイダを使います。Firebaseの設定だけでなく、X Developer Portal側にもコールバックURLとユーザー認証設定が必要です。[Firebase公式の設定手順](https://firebase.google.com/docs/auth/web/twitter-login)も参照してください。
 
 ## 無料枠について
 
