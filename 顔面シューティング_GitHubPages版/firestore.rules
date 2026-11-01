@@ -1,349 +1,127 @@
 rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function isSelf(uid) {
-      return signedIn() && request.auth.uid == uid;
-    }
-
-    function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin'];
-    }
-
-    function isOwner() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
-    }
-
-    function validProfile(uid) {
-      return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'createdAt'])
-        && request.resource.data.uid == uid
-        && request.resource.data.username is string
-        && request.resource.data.username.matches('^[A-Za-z0-9_-]{2,24}$')
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() >= 1
-        && request.resource.data.displayName.size() <= 96
-        && request.resource.data.createdAt is timestamp;
-    }
-
-    function validScore(uid) {
-      let profile = get(/databases/$(database)/documents/profiles/$(uid)).data;
-      return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt'])
-        && request.resource.data.uid == uid
-        && request.resource.data.username == profile.username
-        && request.resource.data.displayName == profile.displayName
-        && request.resource.data.score is int
-        && request.resource.data.score >= 0
-        && request.resource.data.score <= 100000000
-        && request.resource.data.wave is int
-        && request.resource.data.wave >= 1
-        && request.resource.data.wave <= 999
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    function isPvpParticipant(roomId) {
-      let roomPath = /databases/$(database)/documents/pvpRooms/$(roomId);
-      return signedIn() && exists(roomPath)
-        && (get(roomPath).data.hostUid == request.auth.uid
-          || get(roomPath).data.guestUid == request.auth.uid);
-    }
-
-    function isFriend(ownerUid, friendUid) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/friendships/$(ownerUid)/friends/$(friendUid));
-    }
-
-    function hasAcceptedFriendRequest(fromUid, toUid) {
-      let requestPath = /databases/$(database)/documents/friendRequests/$(toUid)/incoming/$(fromUid);
-      let requestExists = existsAfter(requestPath);
-      let requestData = getAfter(requestPath).data;
-      return requestExists
-        && requestData.fromUid == fromUid
-        && requestData.toUid == toUid
-        && requestData.status == 'accepted';
-    }
-
-    function acceptedRequestForFriendship(ownerUid, friendUid) {
-      return isSelf(ownerUid)
-        ? hasAcceptedFriendRequest(friendUid, ownerUid)
-        : hasAcceptedFriendRequest(ownerUid, friendUid);
-    }
-
-    function validPvpState(uid) {
-      return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
-        && request.resource.data.uid == uid
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() <= 48
-        && request.resource.data.score is int
-        && request.resource.data.score >= 0
-        && request.resource.data.score <= 100000000
-        && request.resource.data.wave is int
-        && request.resource.data.wave >= 1
-        && request.resource.data.wave <= 999
-        && request.resource.data.hp is int
-        && request.resource.data.hp >= 0
-        && request.resource.data.hp <= 100
-        && request.resource.data.x is number
-        && request.resource.data.x >= 0
-        && request.resource.data.x <= 1
-        && request.resource.data.y is number
-        && request.resource.data.y >= 0.5
-        && request.resource.data.y <= 1
-        && request.resource.data.faceId is string
-        && request.resource.data.faceId.size() <= 64
-        && request.resource.data.faceImageUrl is string
-        && request.resource.data.faceImageUrl.size() <= 1000
-        && request.resource.data.alive is bool
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    // アカウントプロフィール。本人のみ読めて、管理者は一覧と管理操作が可能。
-    match /profiles/{uid} {
-      allow get: if isSelf(uid) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isSelf(uid) && validProfile(uid);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // ゲーム内データ（ポイント・所持顔・選択顔・スキル等）。本人が読み書きする。
-    // このブラウザー版ではゲーム内報酬がクライアント処理のため、改造クライアントによる
-    // ポイント等の不正をFirestoreルールだけで完全に防ぐことはできない。
-    match /users/{uid} {
-      allow get: if isSelf(uid) || isAdmin();
-      allow list: if isAdmin();
-      allow create, update: if isSelf(uid);
-      allow delete: if isOwner();
-    }
-
-    // 公開ランキング。ユーザーごとに自己ベストのみ登録できる。
-    match /leaderboard/{uid} {
-      allow read: if true;
-      allow create: if isSelf(uid) && validScore(uid);
-      allow update: if isSelf(uid)
-        && validScore(uid)
-        && (request.resource.data.score > resource.data.score
-          || (request.resource.data.score == resource.data.score
-            && request.resource.data.wave > resource.data.wave));
-      allow delete: if isAdmin();
-    }
-
-    // ゲーム・ガチャ設定。ログインユーザーに読み取りを許し、管理者のみ変更できる。
-    match /adminSettings/{settingId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // 利用停止フラグは本人と管理者が読める。変更は管理者だけ。
-    match /accessControl/{uid} {
-      allow get: if isSelf(uid) || isAdmin();
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // 管理者一覧。最初の owner はFirebase Consoleから手動登録する。
-    // その後の管理者追加・削除は owner のみ可能。
-    match /admins/{uid} {
-      allow get: if isSelf(uid) || isAdmin();
-      allow list: if isAdmin();
-      allow create, update, delete: if isOwner();
-    }
-
-    // 1対1対戦後のフレンド申請。受信者のUID配下に送信者UIDで一件だけ保存する。
-    match /friendRequests/{toUid}/incoming/{fromUid} {
-      allow get, list: if signedIn()
-        && (request.auth.uid == toUid || request.auth.uid == fromUid);
-      allow create: if isSelf(fromUid)
-        && fromUid != toUid
-        && request.resource.data.keys().hasAll(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt'])
-        && request.resource.data.fromUid == fromUid
-        && request.resource.data.toUid == toUid
-        && request.resource.data.senderName is string
-        && request.resource.data.senderName.size() <= 48
-        && request.resource.data.status == 'pending'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if (
-          isSelf(toUid)
-          && resource.data.status == 'pending'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
-          && request.resource.data.status in ['accepted', 'declined']
-          && request.resource.data.updatedAt == request.time
-        ) || (
-          isSelf(fromUid)
-          && resource.data.status == 'declined'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderName', 'status', 'createdAt', 'updatedAt'])
-          && request.resource.data.fromUid == fromUid
-          && request.resource.data.toUid == toUid
-          && request.resource.data.senderName is string
-          && request.resource.data.senderName.size() <= 48
-          && request.resource.data.status == 'pending'
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-        );
-      allow delete: if false;
-    }
-
-    // 双方のフレンド一覧をそれぞれのUID配下に作成する。承認トランザクション経由のみ許可。
-    match /friendships/{ownerUid}/friends/{friendUid} {
-      allow get, list: if isSelf(ownerUid);
-      allow create: if signedIn()
-        && (isSelf(ownerUid) || isSelf(friendUid))
-        && request.resource.data.keys().hasAll(['uid'])
-        && request.resource.data.keys().hasOnly(['uid'])
-        && request.resource.data.uid == friendUid
-        && acceptedRequestForFriendship(ownerUid, friendUid);
-      allow update: if signedIn()
-        && (isSelf(ownerUid) || isSelf(friendUid))
-        && request.resource.data.keys().hasAll(['uid'])
-        && request.resource.data.keys().hasOnly(['uid'])
-        && request.resource.data.uid == friendUid
-        && acceptedRequestForFriendship(ownerUid, friendUid);
-      allow delete: if false;
-    }
-
-    // 公開プレゼンスは友達だけがUID指定で取得できる。全件一覧は許可しない。
-    match /presence/{uid} {
-      allow get: if isSelf(uid) || isFriend(uid, request.auth.uid);
-      allow list: if false;
-      allow create, update: if isSelf(uid)
-        && request.resource.data.keys().hasAll(['uid', 'displayName', 'roomCode', 'lastSeen'])
-        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'roomCode', 'lastSeen'])
-        && request.resource.data.uid == uid
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() <= 48
-        && request.resource.data.roomCode is string
-        && request.resource.data.roomCode.size() <= 8
-        && request.resource.data.lastSeen == request.time;
-      allow delete: if isSelf(uid);
-    }
-
-    // 招待は既存フレンドにのみ送信可能。受信側は参加または辞退だけを書き換えられる。
-    match /pvpInvites/{inviteId} {
-      allow get: if signedIn()
-        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
-      allow list: if signedIn() && resource.data.toUid == request.auth.uid;
-      allow create: if signedIn()
-        && request.resource.data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt'])
-        && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.toUid is string
-        && request.resource.data.toUid != request.auth.uid
-        && request.resource.data.fromName is string
-        && request.resource.data.fromName.size() <= 48
-        && request.resource.data.roomCode is string
-        && request.resource.data.roomCode.matches('^[A-HJ-NP-Z2-9]{8}$')
-        && request.resource.data.status == 'pending'
-        && request.resource.data.createdAt == request.time
-        && exists(/databases/$(database)/documents/friendships/$(request.auth.uid)/friends/$(request.resource.data.toUid))
-        && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.hostUid == request.auth.uid
-        && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.status == 'waiting';
-      allow update: if signedIn()
-        && resource.data.toUid == request.auth.uid
-        && resource.data.status == 'pending'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
-        && request.resource.data.status in ['accepted', 'declined']
-        && request.resource.data.respondedAt == request.time;
-      allow delete: if false;
-    }
-
-    match /adminAuditLog/{logId} {
-      allow read: if isOwner();
-      allow create: if isOwner()
-        && request.resource.data.actorUid == request.auth.uid
-        && request.resource.data.action is string
-        && request.resource.data.createdAt == request.time;
-      allow update, delete: if false;
-    }
-
-    // 招待コード式のフレンドPvP。部屋一覧は禁止し、参加者だけ状態を共有する。
-    match /pvpRooms/{roomId} {
-      allow get: if signedIn();
-      allow list: if false;
-      allow create: if signedIn()
-        && roomId.matches('^[A-HJ-NP-Z2-9]{8}$')
-        && request.resource.data.keys().hasAll(['hostUid', 'guestUid', 'status', 'createdAt', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['hostUid', 'guestUid', 'status', 'createdAt', 'updatedAt'])
-        && request.resource.data.hostUid == request.auth.uid
-        && request.resource.data.guestUid == ''
-        && request.resource.data.status == 'waiting'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      allow update: if signedIn()
-        && resource.data.status == 'waiting'
-        && resource.data.guestUid == ''
-        && resource.data.hostUid != request.auth.uid
-        && request.resource.data.guestUid == request.auth.uid
-        && request.resource.data.status == 'playing'
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'status', 'updatedAt']);
-      allow delete: if signedIn()
-        && resource.data.hostUid == request.auth.uid
-        && resource.data.status == 'waiting';
-
-      match /players/{uid} {
-        allow read: if isPvpParticipant(roomId);
-        allow create, update: if isPvpParticipant(roomId)
-          && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
-          && isSelf(uid)
-          && validPvpState(uid);
-        allow delete: if false;
-      }
-
-      match /hits/{hitId} {
-        allow read: if isPvpParticipant(roomId);
-        allow create: if isPvpParticipant(roomId)
-          && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
-          && request.resource.data.keys().hasAll(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt'])
-          && request.resource.data.keys().hasOnly(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt'])
-          && request.resource.data.attackerUid == request.auth.uid
-          && request.resource.data.attackerName is string
-          && request.resource.data.attackerName.size() <= 48
-          && request.resource.data.targetUid != request.auth.uid
-          && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid
-            || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid)
-          && request.resource.data.damage == 1
-          && request.resource.data.createdAt == request.time;
-        allow delete: if isPvpParticipant(roomId)
-          && resource.data.targetUid == request.auth.uid;
-        allow update: if false;
-      }
-
-      // 弾そのものは発射時に一度だけ共有し、各クライアントで軌道を再生する。
-      match /shots/{shotId} {
-        allow read: if isPvpParticipant(roomId);
-        allow create: if isPvpParticipant(roomId)
-          && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
-          && request.resource.data.keys().hasAll(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt'])
-          && request.resource.data.keys().hasOnly(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt'])
-          && request.resource.data.attackerUid == request.auth.uid
-          && request.resource.data.targetUid != request.auth.uid
-          && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid
-            || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid)
-          && request.resource.data.x is number
-          && request.resource.data.x >= 0
-          && request.resource.data.x <= 1
-          && request.resource.data.y is number
-          && request.resource.data.y >= 0
-          && request.resource.data.y <= 1
-          && request.resource.data.speed is number
-          && request.resource.data.speed > 0
-          && request.resource.data.speed <= 2
-          && request.resource.data.createdAt == request.time;
-        allow delete: if isPvpParticipant(roomId)
-          && resource.data.attackerUid == request.auth.uid;
-        allow update: if false;
-      }
-    }
-  }
+service cloud.firestore { match /databases/{database}/documents {
+function signedIn() {
+return request.auth != null;
 }
+function isSelf(uid) {
+return signedIn() && request.auth.uid == uid;
+}
+function isAdmin() {
+return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['owner', 'admin'];
+}
+function isOwner() {
+return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
+}
+function validProfile(uid) {
+return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'createdAt']) && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'createdAt']) && request.resource.data.uid == uid && request.resource.data.username is string && request.resource.data.username.matches('^[A-Za-z0-9_-]{2,24}$') && request.resource.data.displayName is string && request.resource.data.displayName.size() >= 1 && request.resource.data.displayName.size() <= 96 && request.resource.data.createdAt is timestamp;
+}
+function validScore(uid) {
+let profile = get(/databases/$(database)/documents/profiles/$(uid)).data;
+return request.resource.data.keys().hasAll(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt']) && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'score', 'wave', 'updatedAt']) && request.resource.data.uid == uid && request.resource.data.username == profile.username && request.resource.data.displayName == profile.displayName && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 100000000 && request.resource.data.wave is int && request.resource.data.wave >= 1 && request.resource.data.wave <= 999 && request.resource.data.updatedAt == request.time;
+}
+function isPvpParticipant(roomId) {
+let roomPath = /databases/$(database)/documents/pvpRooms/$(roomId);
+return signedIn() && exists(roomPath) && (get(roomPath).data.hostUid == request.auth.uid || get(roomPath).data.guestUid == request.auth.uid);
+}
+function isFriend(ownerUid, friendUid) {
+return signedIn() && exists(/databases/$(database)/documents/friendships/$(ownerUid)/friends/$(friendUid));
+}
+function hasAcceptedFriendRequest(fromUid, toUid) {
+let requestPath = /databases/$(database)/documents/friendRequests/$(toUid)/incoming/$(fromUid);
+let requestExists = existsAfter(requestPath);
+let requestData = getAfter(requestPath).data;
+return requestExists && requestData.fromUid == fromUid && requestData.toUid == toUid && requestData.status == 'accepted';
+}
+function acceptedRequestForFriendship(ownerUid, friendUid) {
+return isSelf(ownerUid) ? hasAcceptedFriendRequest(friendUid, ownerUid) : hasAcceptedFriendRequest(ownerUid, friendUid);
+}
+function validPvpState(uid) {
+return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt']) && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt']) && request.resource.data.uid == uid && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 48 && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 100000000 && request.resource.data.wave is int && request.resource.data.wave >= 1 && request.resource.data.wave <= 999 && request.resource.data.hp is int && request.resource.data.hp >= 0 && request.resource.data.hp <= 100 && request.resource.data.x is number && request.resource.data.x >= 0 && request.resource.data.x <= 1 && request.resource.data.y is number && request.resource.data.y >= 0.5 && request.resource.data.y <= 1 && request.resource.data.faceId is string && request.resource.data.faceId.size() <= 64 && request.resource.data.faceImageUrl is string && request.resource.data.faceImageUrl.size() <= 1000 && request.resource.data.alive is bool && request.resource.data.updatedAt == request.time;
+}
+match /profiles/{uid} {
+allow get: if isSelf(uid) || isAdmin();
+allow list: if isAdmin();
+allow create: if isSelf(uid) && validProfile(uid);
+allow update: if isAdmin();
+allow delete: if isAdmin();
+}
+match /users/{uid} {
+allow get: if isSelf(uid) || isAdmin();
+allow list: if isAdmin();
+allow create, update: if isSelf(uid);
+allow delete: if isOwner();
+}
+match /leaderboard/{uid} {
+allow read: if true;
+allow create: if isSelf(uid) && validScore(uid);
+allow update: if isSelf(uid) && validScore(uid) && (request.resource.data.score > resource.data.score || (request.resource.data.score == resource.data.score && request.resource.data.wave > resource.data.wave));
+allow delete: if isAdmin();
+}
+match /adminSettings/{settingId} {
+allow read: if signedIn();
+allow create, update, delete: if isAdmin();
+}
+match /accessControl/{uid} {
+allow get: if isSelf(uid) || isAdmin();
+allow list: if isAdmin();
+allow create, update, delete: if isAdmin();
+}
+match /admins/{uid} {
+allow get: if isSelf(uid) || isAdmin();
+allow list: if isAdmin();
+allow create, update, delete: if isOwner();
+}
+match /friendRequests/{toUid}/incoming/{fromUid} {
+allow get, list: if signedIn() && (request.auth.uid == toUid || request.auth.uid == fromUid);
+allow create: if isSelf(fromUid) && fromUid != toUid && request.resource.data.keys().hasAll(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt']) && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt']) && request.resource.data.fromUid == fromUid && request.resource.data.toUid == toUid && request.resource.data.senderName is string && request.resource.data.senderName.size() <= 48 && request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+allow update: if ( isSelf(toUid) && resource.data.status == 'pending' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) && request.resource.data.status in ['accepted', 'declined'] && request.resource.data.updatedAt == request.time ) || ( isSelf(fromUid) && resource.data.status == 'declined' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderName', 'status', 'createdAt', 'updatedAt']) && request.resource.data.fromUid == fromUid && request.resource.data.toUid == toUid && request.resource.data.senderName is string && request.resource.data.senderName.size() <= 48 && request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time );
+allow delete: if false;
+}
+match /friendships/{ownerUid}/friends/{friendUid} {
+allow get, list: if isSelf(ownerUid);
+allow create: if signedIn() && (isSelf(ownerUid) || isSelf(friendUid)) && request.resource.data.keys().hasAll(['uid']) && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == friendUid && acceptedRequestForFriendship(ownerUid, friendUid);
+allow update: if signedIn() && (isSelf(ownerUid) || isSelf(friendUid)) && request.resource.data.keys().hasAll(['uid']) && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == friendUid && acceptedRequestForFriendship(ownerUid, friendUid);
+allow delete: if false;
+}
+match /presence/{uid} {
+allow get: if isSelf(uid) || isFriend(uid, request.auth.uid);
+allow list: if false;
+allow create, update: if isSelf(uid) && request.resource.data.keys().hasAll(['uid', 'displayName', 'roomCode', 'lastSeen']) && request.resource.data.keys().hasOnly(['uid', 'displayName', 'roomCode', 'lastSeen']) && request.resource.data.uid == uid && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 48 && request.resource.data.roomCode is string && request.resource.data.roomCode.size() <= 8 && request.resource.data.lastSeen == request.time;
+allow delete: if isSelf(uid);
+}
+match /pvpInvites/{inviteId} {
+allow get: if signedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+allow list: if signedIn() && resource.data.toUid == request.auth.uid;
+allow create: if signedIn() && request.resource.data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt']) && request.resource.data.keys().hasOnly(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt']) && request.resource.data.fromUid == request.auth.uid && request.resource.data.toUid is string && request.resource.data.toUid != request.auth.uid && request.resource.data.fromName is string && request.resource.data.fromName.size() <= 48 && request.resource.data.roomCode is string && request.resource.data.roomCode.matches('^[A-HJ-NP-Z2-9]{8}$') && request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time && exists(/databases/$(database)/documents/friendships/$(request.auth.uid)/friends/$(request.resource.data.toUid)) && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.hostUid == request.auth.uid && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.status == 'waiting';
+allow update: if signedIn() && resource.data.toUid == request.auth.uid && resource.data.status == 'pending' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']) && request.resource.data.status in ['accepted', 'declined'] && request.resource.data.respondedAt == request.time;
+allow delete: if false;
+}
+match /adminAuditLog/{logId} {
+allow read: if isOwner();
+allow create: if isOwner() && request.resource.data.actorUid == request.auth.uid && request.resource.data.action is string && request.resource.data.createdAt == request.time;
+allow update, delete: if false;
+}
+match /pvpRooms/{roomId} {
+allow get: if signedIn();
+allow list: if false;
+allow create: if signedIn() && roomId.matches('^[A-HJ-NP-Z2-9]{8}$') && request.resource.data.keys().hasAll(['hostUid', 'guestUid', 'status', 'createdAt', 'updatedAt']) && request.resource.data.keys().hasOnly(['hostUid', 'guestUid', 'status', 'createdAt', 'updatedAt']) && request.resource.data.hostUid == request.auth.uid && request.resource.data.guestUid == '' && request.resource.data.status == 'waiting' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+allow update: if signedIn() && resource.data.status == 'waiting' && resource.data.guestUid == '' && resource.data.hostUid != request.auth.uid && request.resource.data.guestUid == request.auth.uid && request.resource.data.status == 'playing' && request.resource.data.updatedAt == request.time && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'status', 'updatedAt']);
+allow delete: if signedIn() && resource.data.hostUid == request.auth.uid && resource.data.status == 'waiting';
+match /players/{uid} {
+allow read: if isPvpParticipant(roomId);
+allow create, update: if isPvpParticipant(roomId) && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing' && isSelf(uid) && validPvpState(uid);
+allow delete: if false;
+}
+match /hits/{hitId} {
+allow read: if isPvpParticipant(roomId);
+allow create: if isPvpParticipant(roomId) && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing' && request.resource.data.keys().hasAll(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt']) && request.resource.data.keys().hasOnly(['attackerUid', 'attackerName', 'targetUid', 'damage', 'createdAt']) && request.resource.data.attackerUid == request.auth.uid && request.resource.data.attackerName is string && request.resource.data.attackerName.size() <= 48 && request.resource.data.targetUid != request.auth.uid && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid) && request.resource.data.damage == 1 && request.resource.data.createdAt == request.time;
+allow delete: if isPvpParticipant(roomId) && resource.data.targetUid == request.auth.uid;
+allow update: if false;
+}
+match /shots/{shotId} {
+allow read: if isPvpParticipant(roomId);
+allow create: if isPvpParticipant(roomId) && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing' && request.resource.data.keys().hasAll(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt']) && request.resource.data.keys().hasOnly(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt']) && request.resource.data.attackerUid == request.auth.uid && request.resource.data.targetUid != request.auth.uid && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid) && request.resource.data.x is number && request.resource.data.x >= 0 && request.resource.data.x <= 1 && request.resource.data.y is number && request.resource.data.y >= 0 && request.resource.data.y <= 1 && request.resource.data.speed is number && request.resource.data.speed > 0 && request.resource.data.speed <= 2 && request.resource.data.createdAt == request.time;
+allow delete: if isPvpParticipant(roomId) && resource.data.attackerUid == request.auth.uid;
+allow update: if false;
+}
+} } }
