@@ -74,7 +74,64 @@ let pvpLastSentWave = -1;
 let pvpLastSentHp = -1;
 let pvpLastSentFaceId = "";
 let pvpLocalFaceImageUrl = "";
+
+// PvPの相手表示専用位置。
+// Firestoreから受信した位置を直接描画せず、毎フレーム補間して滑らかに表示する。
+let pvpSmoothOpponentX = null;
+let pvpSmoothOpponentY = null;
+let pvpSmoothLastFrameAt = 0;
+let pvpSmoothLoopRunning = false;
+
 const pvpProcessedHitIds = new Set();
+
+function startPvpSmoothRender() {
+    if (pvpSmoothLoopRunning) return;
+    pvpSmoothLoopRunning = true;
+    pvpSmoothLastFrameAt = performance.now();
+
+    const tick = (now) => {
+        if (!pvpSmoothLoopRunning) return;
+
+        const dt = Math.min(50, Math.max(1, now - pvpSmoothLastFrameAt));
+        pvpSmoothLastFrameAt = now;
+
+        if (pvpStarted && pvpOpponentState && pvpRemoteAvatar) {
+            const targetX = Number.isFinite(Number(pvpOpponentState.x))
+                ? Number(pvpOpponentState.x)
+                : 0.5;
+            const targetY = Number.isFinite(Number(pvpOpponentState.y))
+                ? Number(pvpOpponentState.y)
+                : 0.8;
+
+            if (!Number.isFinite(pvpSmoothOpponentX) ||
+                !Number.isFinite(pvpSmoothOpponentY)) {
+                pvpSmoothOpponentX = targetX;
+                pvpSmoothOpponentY = targetY;
+            } else {
+                // 約90msの追従。200ms周期の通信でもワープ感を抑える。
+                const alpha = 1 - Math.exp(-dt / 90);
+                pvpSmoothOpponentX += (targetX - pvpSmoothOpponentX) * alpha;
+                pvpSmoothOpponentY += (targetY - pvpSmoothOpponentY) * alpha;
+            }
+
+            const displayX = Math.max(5, Math.min(95, pvpSmoothOpponentX * 100));
+            const displayY = Math.max(5, Math.min(45, (1 - pvpSmoothOpponentY) * 100));
+
+            pvpRemoteAvatar.style.left = `${displayX}%`;
+            pvpRemoteAvatar.style.top = `${displayY}%`;
+        }
+
+        requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+}
+
+function resetPvpSmoothRender() {
+    pvpSmoothOpponentX = null;
+    pvpSmoothOpponentY = null;
+    pvpSmoothLastFrameAt = performance.now();
+}
 
 const CONTROL_LAYOUT_STORAGE_KEY = "faceShooterMobileLayoutV1";
 const DEFAULT_CONTROL_LAYOUT = {
@@ -6055,6 +6112,8 @@ function beginPvpMatch() {
     pvpFinished = false;
     pvpLocalDead = false;
     pvpOpponentState = null;
+    resetPvpSmoothRender();
+    startPvpSmoothRender();
     pvpProcessedHitIds.clear();
     pvpLastSentX = pvpLastSentY = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastSentFaceId = "";
@@ -6100,10 +6159,7 @@ function beginPvpMatch() {
             }
             setPvpSyncSuccess("対戦データ同期中");
             if (pvpRemoteAvatar) {
-                const opponentX = Number.isFinite(Number(opponent.x)) ? Number(opponent.x) : 0.5;
-                const opponentY = Number.isFinite(Number(opponent.y)) ? Number(opponent.y) : 0.8;
-                pvpRemoteAvatar.style.left = `${Math.max(5, Math.min(95, opponentX * 100))}%`;
-                pvpRemoteAvatar.style.top = `${Math.max(5, Math.min(45, (1 - opponentY) * 100))}%`;
+                // 位置はpvpOpponentStateへ保存し、表示位置はrequestAnimationFrame側で補間する。
                 pvpRemoteAvatar.setAttribute("aria-label", `${opponent.displayName || "フレンド"} HP ${opponent.hp || 0}`);
             }
             if (pvpRemoteFace && opponent.faceImageUrl && pvpRemoteFace.dataset.imageUrl !== opponent.faceImageUrl) {
@@ -6178,7 +6234,9 @@ async function syncPvpPlayerState(force = false) {
         || currentWave !== pvpLastSentWave
         || currentHp !== pvpLastSentHp
         || activeFaceId !== pvpLastSentFaceId;
-    if (!force && !changed && now - pvpLastStateSyncAt < 1000) return;
+    // 位置同期を1秒間隔から200ms間隔へ。
+    // 描画側では補間するため、通信が多少揺れても表示は滑らかに追従する。
+    if (!force && !changed && now - pvpLastStateSyncAt < 200) return;
     pvpSyncBusy = true;
     try {
         await setDoc(doc(db, "pvpRooms", pvpRoomCode, "players", uid), {
