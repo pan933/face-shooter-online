@@ -28,6 +28,10 @@ const touchShield = document.getElementById("touchShield");
 const touchSkill = document.getElementById("touchSkill");
 const skillBtn = document.getElementById("skillBtn");
 const skillNotice = document.getElementById("skillNotice");
+const startSkillFaceName = document.getElementById("startSkillFaceName");
+const startSkillName = document.getElementById("startSkillName");
+const startSkillDescription = document.getElementById("startSkillDescription");
+const startSkillFaceImage = document.getElementById("startSkillFaceImage");
 const touchBombCount = document.getElementById("touchBombCount");
 const touchShieldCount = document.getElementById("touchShieldCount");
 const controlModeBtn = document.getElementById("controlModeBtn");
@@ -1053,6 +1057,7 @@ async function setFaceForMode(isGuest) {
         activeSkillData = normalizeSkillData();
         updateSkillButton();
         faceImage.src = FACE_GUEST;
+        updateStartSkillPreview("初期顔", FACE_GUEST);
         return;
     }
 
@@ -1068,6 +1073,7 @@ async function setFaceForMode(isGuest) {
         activeFaceSkill = await loadSkill(selectedFace, ownedFace?.skillId || configuredFace?.skillId) || await loadSkill("face2");
         updateSkillButton();
         const imagePath = ownedFace?.imageUrl || getGachaFaceImage(selectedFace);
+        updateStartSkillPreview(ownedFace?.name || configuredFace?.name || selectedFace, imagePath);
         pvpLocalFaceImageUrl = imagePath;
 
         console.log(
@@ -1100,9 +1106,17 @@ async function setFaceForMode(isGuest) {
         activeSkillData = normalizeSkillData({ progress: 0, totalKills: 0 });
         activeFaceSkill = await loadSkill("face2");
         updateSkillButton();
+        updateStartSkillPreview("初期顔", FACE_REGISTERED);
         faceImage.onerror = null;
         faceImage.src = FACE_REGISTERED;
     }
+}
+
+function updateStartSkillPreview(faceName, imageUrl) {
+    if (startSkillFaceName) startSkillFaceName.textContent = faceName || "選択中の顔";
+    if (startSkillName) startSkillName.textContent = `✨ ${activeFaceSkill?.name || "スキル"}`;
+    if (startSkillDescription) startSkillDescription.textContent = activeFaceSkill?.description || "ゲージが満タンになると発動できます。";
+    if (startSkillFaceImage && imageUrl) startSkillFaceImage.src = imageUrl;
 }
 
 function updateSkillButton() {

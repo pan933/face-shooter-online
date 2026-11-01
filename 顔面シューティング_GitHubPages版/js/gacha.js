@@ -153,7 +153,7 @@ async function renderCollection(faces, selectedFaceId = "face2", uid = null) {
         rarity.textContent = displayFace.rarity || "N";
 
         const skill = normalizeFaceSkill(face.skill);
-        const skillDefinition = await loadSkill(face.id);
+        const skillDefinition = await loadSkill(face.id, displayFace.skillId || face.skillId);
 
         const skillLevel = document.createElement("p");
         skillLevel.textContent = `スキル Lv.${skill.level}`;
@@ -343,6 +343,8 @@ async function loadSettings() {
                                 ""
                             ),
 
+                        skillId: String(face.skillId || face.id || ""),
+
                         probability:
                             Number(
                                 face.probability
@@ -483,7 +485,7 @@ if (gachaFaces.length === 0) {
 // 管理画面で設定した排出ラインナップ
 // ==================================================
 
-function renderGachaLineup() {
+async function renderGachaLineup() {
     if (!gachaFacesGrid) return;
 
     gachaFacesGrid.replaceChildren();
@@ -518,7 +520,12 @@ function renderGachaLineup() {
             probability.textContent += `（設定 ${Number(face.probability).toFixed(2)}%・重み×${boostMultiplier}）`;
         }
 
-        card.append(image, name, rarity, probability);
+        const skill = await loadSkill(face.id, face.skillId);
+        const skillInfo = document.createElement("p");
+        skillInfo.className = "lineup-skill-info";
+        skillInfo.textContent = `✨ ${skill?.name || "スキル"}：${skill?.description || "ゲージ満タンで発動"}`;
+
+        card.append(image, name, rarity, probability, skillInfo);
         appendFaceDetails(card, face);
         gachaFacesGrid.appendChild(card);
     }
@@ -885,7 +892,7 @@ async function updatePointDisplay(
 // 結果表示
 // ==================================================
 
-function renderSingleResult(
+async function renderSingleResult(
     face,
     duplicateInfo = null
 ) {
@@ -898,6 +905,9 @@ function renderSingleResult(
         return;
 
     }
+
+    const resultSkill = await loadSkill(face.id, face.skillId);
+    const skillMarkup = `<p class="result-skill-info">✨ ${escapeHtml(resultSkill?.name || "スキル")}: ${escapeHtml(resultSkill?.description || "ゲージ満タンで発動")}</p>`;
 
 
     let extraText = "";
@@ -963,6 +973,8 @@ function renderSingleResult(
 
             ${getFaceDescriptionMarkup(face)}
 
+            ${skillMarkup}
+
             ${extraText}
 
         </div>
@@ -976,7 +988,7 @@ function renderSingleResult(
 // 10連結果表示
 // ==================================================
 
-function renderTenResults(
+async function renderTenResults(
     results,
     duplicateInfos = []
 ) {
@@ -989,11 +1001,14 @@ function renderTenResults(
 
     }
 
+    const resultSkills = await Promise.all(results.map(face => loadSkill(face.id, face.skillId)));
+
 
     resultGrid.innerHTML =
         results
             .map(
                 (face, index) => {
+                    const resultSkill = resultSkills[index];
 
                     const duplicateInfo =
                         duplicateInfos[index];
@@ -1073,6 +1088,8 @@ function renderTenResults(
                             </p>
 
                             ${getFaceDescriptionMarkup(face)}
+
+                            <p class="result-skill-info">✨ ${escapeHtml(resultSkill?.name || "スキル")}: ${escapeHtml(resultSkill?.description || "ゲージ満タンで発動")}</p>
 
                             ${extraText}
 
@@ -1666,7 +1683,7 @@ async function drawSingle() {
         // 表示
         // ------------------------------
 
-        renderSingleResult(
+        await renderSingleResult(
             face,
             duplicateInfo
         );
@@ -1878,7 +1895,7 @@ async function drawTen() {
         // 結果表示
         // ------------------------------
 
-        renderTenResults(
+        await renderTenResults(
             results,
             duplicateInfos
         );

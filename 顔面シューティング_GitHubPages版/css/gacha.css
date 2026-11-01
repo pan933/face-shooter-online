@@ -328,6 +328,20 @@ main {
     color: #bfdbfe;
 }
 
+.lineup-skill-info,
+.result-skill-info {
+    margin: 8px 0;
+    padding: 9px 10px;
+    border: 1px solid rgba(103,232,249,.28);
+    border-radius: 10px;
+    background: rgba(8,47,73,.48);
+    color: #cffafe;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
 .face-description {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

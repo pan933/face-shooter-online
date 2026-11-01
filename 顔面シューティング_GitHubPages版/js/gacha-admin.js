@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase-config.js";
-import { getSkillOptions } from "./skills/future-skill-catalog.js";
+import { createFutureSkill, getSkillOptions } from "./skills/future-skill-catalog.js";
 
 import {
     onAuthStateChanged
@@ -303,6 +303,13 @@ function createPanel() {
             "click",
             resetFaces
         );
+
+    document.getElementById("gachaFacesList")?.addEventListener("change", event => {
+        if (!event.target.matches(".gacha-face-skill")) return;
+        const selectedOption = event.target.selectedOptions[0];
+        const preview = event.target.closest(".gacha-face-card")?.querySelector(".gacha-face-skill-description");
+        if (preview) preview.textContent = selectedOption?.dataset.description || "スキルの説明はゲーム内の設定を読み込んで表示します。";
+    });
 
 
     renderFaces();
@@ -727,22 +734,24 @@ function createFaceCard(
 ) {
 
     const skillOptions = [
-        { id: "face2", name: "顔2・大爆発" },
-        { id: "face_1", name: "顔1・一掃" },
-        { id: "face_2", name: "顔2・暴走モード" },
-        { id: "face_3", name: "顔3・時止め" },
-        { id: "face_4", name: "顔4・完全防御" },
-        { id: "face_5", name: "顔5・弾幕返し" },
-        { id: "face_6", name: "顔6専用スキル" },
+        { id: "face2", name: "顔2・大爆発", description: "画面中央に大爆発を起こして周囲の敵に大ダメージを与える。" },
+        { id: "face_1", name: "顔1・一掃", description: "前方の敵をまとめて攻撃する。レベルが上がるほど範囲と威力が上昇。" },
+        { id: "face_2", name: "顔2・暴走モード", description: "一定時間、攻撃力と連射性能が上昇する。" },
+        { id: "face_3", name: "顔3・時止め", description: "敵の動きを止め、その間に攻撃する。" },
+        { id: "face_4", name: "顔4・完全防御", description: "HPを回復し、一定時間ダメージを防ぐシールドを展開。" },
+        { id: "face_5", name: "顔5・弾幕返し", description: "敵の弾を消し、近くの敵へ反撃する。" },
+        { id: "face_6", name: "顔6専用スキル", description: "顔6に設定された専用スキル。" },
         ...getSkillOptions()
     ];
     const selectedSkillId = face.skillId || face.id;
     if (!skillOptions.some(skill => skill.id === selectedSkillId)) {
-        skillOptions.push({ id: selectedSkillId, name: "自動（この顔専用）" });
+        const generatedSkill = createFutureSkill(face.id);
+        skillOptions.push({ id: selectedSkillId, name: `${generatedSkill.name}（自動）`, description: generatedSkill.description });
     }
     const skillSelectOptions = skillOptions.map(skill => `
-        <option value="${escapeHtml(skill.id)}" ${selectedSkillId === skill.id ? "selected" : ""}>${escapeHtml(skill.name)}</option>
+        <option value="${escapeHtml(skill.id)}" data-description="${escapeHtml(skill.description || "")}" ${selectedSkillId === skill.id ? "selected" : ""}>${escapeHtml(skill.name)}</option>
     `).join("");
+    const selectedSkillDescription = skillOptions.find(skill => skill.id === selectedSkillId)?.description || "スキルの説明はゲーム内の設定を読み込んで表示します。";
 
     const rarityOptions =
         RARITIES
@@ -922,6 +931,7 @@ function createFaceCard(
                         ${skillSelectOptions}
                     </select>
                     <small class="muted">この顔を選んだ時にゲームで使うスキルです。</small>
+                    <p class="gacha-face-skill-description">${escapeHtml(selectedSkillDescription)}</p>
                 </label>
 
 
