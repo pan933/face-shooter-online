@@ -311,6 +311,16 @@
             </div>
             <p id="pvpRoomCodeDisplay" hidden></p>
             <p id="pvpStatus" role="status" aria-live="polite">対戦にはログインが必要です。</p>
+            <section class="pvpSocialPanel" aria-label="フレンド">
+                <h3>🤝 フレンド</h3>
+                <p class="pvpSocialHint">対戦結果画面から申請できます。承認後、オンラインの相手を招待できます。</p>
+                <div id="pvpFriendsList" class="pvpSocialList"><p class="pvpSocialEmpty">ログインするとフレンドを表示します。</p></div>
+                <h4>届いたフレンド申請</h4>
+                <div id="pvpFriendRequestsList" class="pvpSocialList"><p class="pvpSocialEmpty">申請はありません。</p></div>
+                <h4>対戦への招待</h4>
+                <div id="pvpInvitesList" class="pvpSocialList"><p class="pvpSocialEmpty">招待はありません。</p></div>
+                <p id="pvpSocialStatus" class="pvpSocialStatus" role="status" aria-live="polite"></p>
+            </section>
         </section>
 
         <div id="sensitivityPanel">
@@ -397,6 +407,7 @@
 
         </p>
         <p id="pvpResultMessage" role="status" aria-live="polite" hidden></p>
+        <button id="pvpFriendRequestButton" class="mainButton" type="button" hidden>🤝 対戦相手にフレンド申請</button>
 
         <button
             class="mainButton"

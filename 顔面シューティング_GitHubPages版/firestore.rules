@@ -56,6 +56,27 @@ service cloud.firestore {
           || get(roomPath).data.guestUid == request.auth.uid);
     }
 
+    function isFriend(ownerUid, friendUid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/friendships/$(ownerUid)/friends/$(friendUid));
+    }
+
+    function hasAcceptedFriendRequest(fromUid, toUid) {
+      let requestPath = /databases/$(database)/documents/friendRequests/$(toUid)/incoming/$(fromUid);
+      let requestExists = existsAfter(requestPath);
+      let requestData = getAfter(requestPath).data;
+      return requestExists
+        && requestData.fromUid == fromUid
+        && requestData.toUid == toUid
+        && requestData.status == 'accepted';
+    }
+
+    function acceptedRequestForFriendship(ownerUid, friendUid) {
+      return isSelf(ownerUid)
+        ? hasAcceptedFriendRequest(friendUid, ownerUid)
+        : hasAcceptedFriendRequest(ownerUid, friendUid);
+    }
+
     function validPvpState(uid) {
       return request.resource.data.keys().hasAll(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
         && request.resource.data.keys().hasOnly(['uid', 'displayName', 'score', 'wave', 'hp', 'x', 'y', 'faceId', 'faceImageUrl', 'alive', 'updatedAt'])
@@ -137,6 +158,105 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
+    // 1対1対戦後のフレンド申請。受信者のUID配下に送信者UIDで一件だけ保存する。
+    match /friendRequests/{toUid}/incoming/{fromUid} {
+      allow get, list: if signedIn()
+        && (request.auth.uid == toUid || request.auth.uid == fromUid);
+      allow create: if isSelf(fromUid)
+        && fromUid != toUid
+        && request.resource.data.keys().hasAll(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'senderName', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.fromUid == fromUid
+        && request.resource.data.toUid == toUid
+        && request.resource.data.senderName is string
+        && request.resource.data.senderName.size() <= 48
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if (
+          isSelf(toUid)
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status in ['accepted', 'declined']
+          && request.resource.data.updatedAt == request.time
+        ) || (
+          isSelf(fromUid)
+          && resource.data.status == 'declined'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderName', 'status', 'createdAt', 'updatedAt'])
+          && request.resource.data.fromUid == fromUid
+          && request.resource.data.toUid == toUid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 48
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+        );
+      allow delete: if false;
+    }
+
+    // 双方のフレンド一覧をそれぞれのUID配下に作成する。承認トランザクション経由のみ許可。
+    match /friendships/{ownerUid}/friends/{friendUid} {
+      allow get, list: if isSelf(ownerUid);
+      allow create: if signedIn()
+        && (isSelf(ownerUid) || isSelf(friendUid))
+        && request.resource.data.keys().hasAll(['uid'])
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == friendUid
+        && acceptedRequestForFriendship(ownerUid, friendUid);
+      allow update: if signedIn()
+        && (isSelf(ownerUid) || isSelf(friendUid))
+        && request.resource.data.keys().hasAll(['uid'])
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == friendUid
+        && acceptedRequestForFriendship(ownerUid, friendUid);
+      allow delete: if false;
+    }
+
+    // 公開プレゼンスは友達だけがUID指定で取得できる。全件一覧は許可しない。
+    match /presence/{uid} {
+      allow get: if isSelf(uid) || isFriend(uid, request.auth.uid);
+      allow list: if false;
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasAll(['uid', 'displayName', 'roomCode', 'lastSeen'])
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'roomCode', 'lastSeen'])
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 48
+        && request.resource.data.roomCode is string
+        && request.resource.data.roomCode.size() <= 8
+        && request.resource.data.lastSeen == request.time;
+      allow delete: if isSelf(uid);
+    }
+
+    // 招待は既存フレンドにのみ送信可能。受信側は参加または辞退だけを書き換えられる。
+    match /pvpInvites/{inviteId} {
+      allow get: if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow list: if signedIn() && resource.data.toUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['fromUid', 'fromName', 'toUid', 'roomCode', 'status', 'createdAt'])
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.fromName is string
+        && request.resource.data.fromName.size() <= 48
+        && request.resource.data.roomCode is string
+        && request.resource.data.roomCode.matches('^[A-HJ-NP-Z2-9]{8}$')
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/friendships/$(request.auth.uid)/friends/$(request.resource.data.toUid))
+        && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.hostUid == request.auth.uid
+        && get(/databases/$(database)/documents/pvpRooms/$(request.resource.data.roomCode)).data.status == 'waiting';
+      allow update: if signedIn()
+        && resource.data.toUid == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.respondedAt == request.time;
+      allow delete: if false;
+    }
+
     match /adminAuditLog/{logId} {
       allow read: if isOwner();
       allow create: if isOwner()
@@ -196,6 +316,32 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
         allow delete: if isPvpParticipant(roomId)
           && resource.data.targetUid == request.auth.uid;
+        allow update: if false;
+      }
+
+      // 弾そのものは発射時に一度だけ共有し、各クライアントで軌道を再生する。
+      match /shots/{shotId} {
+        allow read: if isPvpParticipant(roomId);
+        allow create: if isPvpParticipant(roomId)
+          && get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.status == 'playing'
+          && request.resource.data.keys().hasAll(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['attackerUid', 'targetUid', 'x', 'y', 'speed', 'createdAt'])
+          && request.resource.data.attackerUid == request.auth.uid
+          && request.resource.data.targetUid != request.auth.uid
+          && (request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.hostUid
+            || request.resource.data.targetUid == get(/databases/$(database)/documents/pvpRooms/$(roomId)).data.guestUid)
+          && request.resource.data.x is number
+          && request.resource.data.x >= 0
+          && request.resource.data.x <= 1
+          && request.resource.data.y is number
+          && request.resource.data.y >= 0
+          && request.resource.data.y <= 1
+          && request.resource.data.speed is number
+          && request.resource.data.speed > 0
+          && request.resource.data.speed <= 2
+          && request.resource.data.createdAt == request.time;
+        allow delete: if isPvpParticipant(roomId)
+          && resource.data.attackerUid == request.auth.uid;
         allow update: if false;
       }
     }

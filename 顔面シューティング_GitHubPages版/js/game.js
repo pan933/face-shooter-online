@@ -1,6 +1,6 @@
 import { firebaseReady, firebaseConfigError, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 import {
     addMatchPoints,
@@ -51,6 +51,7 @@ let pvpRoomCode = "";
 let pvpRoomUnsubscribe = null;
 let pvpPlayersUnsubscribe = null;
 let pvpHitsUnsubscribe = null;
+let pvpShotsUnsubscribe = null;
 let pvpSyncTimer = null;
 let pvpSyncBusy = false;
 let pvpSyncFailureCount = 0;
@@ -81,16 +82,31 @@ let pvpSmoothOpponentX = null;
 let pvpSmoothOpponentY = null;
 let pvpSmoothLastFrameAt = 0;
 let pvpSmoothLoopRunning = false;
+let pvpSmoothRenderGeneration = 0;
 
 const pvpProcessedHitIds = new Set();
+const pvpRemoteShots = new Map();
+const pvpFriendIds = new Set();
+const pvpFriendPresence = new Map();
+const pvpFriendPresenceUnsubscribers = new Map();
+const pvpIncomingRequests = new Map();
+const pvpIncomingInvites = new Map();
+let pvpFriendsUnsubscribe = null;
+let pvpRequestsUnsubscribe = null;
+let pvpInvitesUnsubscribe = null;
+let pvpInviteWatchUnsubscribe = null;
+let pvpPresenceHeartbeat = null;
+let pvpPresenceRefresh = null;
+let pvpLastShotSentAt = 0;
 
 function startPvpSmoothRender() {
     if (pvpSmoothLoopRunning) return;
     pvpSmoothLoopRunning = true;
+    const generation = ++pvpSmoothRenderGeneration;
     pvpSmoothLastFrameAt = performance.now();
 
     const tick = (now) => {
-        if (!pvpSmoothLoopRunning) return;
+        if (!pvpSmoothLoopRunning || generation !== pvpSmoothRenderGeneration) return;
 
         const dt = Math.min(50, Math.max(1, now - pvpSmoothLastFrameAt));
         pvpSmoothLastFrameAt = now;
@@ -125,6 +141,11 @@ function startPvpSmoothRender() {
     };
 
     requestAnimationFrame(tick);
+}
+
+function stopPvpSmoothRender() {
+    pvpSmoothLoopRunning = false;
+    pvpSmoothRenderGeneration++;
 }
 
 function resetPvpSmoothRender() {
@@ -2145,6 +2166,9 @@ function shoot() {
             pierceTimer > 0
 
     });
+
+    // PvPでは弾の発射イベントを一度だけFirestoreへ送り、相手側で軌道を再生する。
+    if (pvpStarted) sendPvpShot();
 
 }
 
@@ -4189,6 +4213,8 @@ function draw() {
 
     }
 
+    drawPvpRemoteShots();
+
 
     /*
         SHIELD
@@ -5676,6 +5702,7 @@ async function initializeSharedAuth() {
         authReady = true;
         updateAuthUI();
         updatePvpAccess();
+        startPvpSocial(user);
         await renderLeaderboard();
     } catch (error) {
         console.error("Firebase auth/profile initialization failed:", error);
@@ -5815,6 +5842,11 @@ const pvpRemoteAvatar = document.getElementById("pvpRemoteAvatar");
 const pvpRemoteFace = document.getElementById("pvpRemoteFace");
 const pvpRemoteFaceFallback = document.getElementById("pvpRemoteFaceFallback");
 const pvpOpponentName = document.getElementById("pvpOpponentName");
+const pvpFriendsList = document.getElementById("pvpFriendsList");
+const pvpFriendRequestsList = document.getElementById("pvpFriendRequestsList");
+const pvpInvitesList = document.getElementById("pvpInvitesList");
+const pvpSocialStatus = document.getElementById("pvpSocialStatus");
+const pvpFriendRequestButton = document.getElementById("pvpFriendRequestButton");
 const pvpAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 pvpCreateButton.disabled = true;
 pvpJoinButton.disabled = true;
@@ -5829,6 +5861,299 @@ function updatePvpAccess() {
 function setPvpStatus(message) {
     if (pvpStatus) pvpStatus.textContent = message;
 }
+
+function setPvpSocialStatus(message) {
+    if (pvpSocialStatus) pvpSocialStatus.textContent = message || "";
+}
+
+function setPvpPresence(roomCode = "") {
+    const user = auth?.currentUser;
+    if (!user || !db || guestMode) return Promise.resolve();
+    return setDoc(doc(db, "presence", user.uid), {
+        uid: user.uid,
+        displayName: String(currentUser?.displayName || currentUser?.username || "Player").slice(0, 48),
+        roomCode: String(roomCode || "").slice(0, 8),
+        lastSeen: serverTimestamp()
+    }, { merge: true }).catch(error => {
+        console.warn("フレンド用オンライン状態を更新できません:", error);
+    });
+}
+
+function renderPvpFriends() {
+    if (!pvpFriendsList) return;
+    pvpFriendsList.replaceChildren();
+    if (!pvpFriendIds.size) {
+        const empty = document.createElement("p");
+        empty.className = "pvpSocialEmpty";
+        empty.textContent = "まだフレンドがいません。対戦後に申請できます。";
+        pvpFriendsList.append(empty);
+        return;
+    }
+
+    const now = Date.now();
+    for (const uid of pvpFriendIds) {
+        const presence = pvpFriendPresence.get(uid) || null;
+        const lastSeen = presence?.lastSeen?.toMillis?.() || 0;
+        const online = lastSeen > 0 && now - lastSeen < 45000;
+        const busy = !!presence?.roomCode;
+        const row = document.createElement("div");
+        row.className = "pvpSocialItem";
+        const label = document.createElement("span");
+        label.className = "pvpSocialName";
+        label.textContent = presence?.displayName || `フレンド ${uid.slice(0, 8)}`;
+        const state = document.createElement("small");
+        state.className = "pvpSocialPresence";
+        state.textContent = online ? (busy ? "対戦中" : "オンライン") : "オフライン";
+        label.append(state);
+        const invite = document.createElement("button");
+        invite.type = "button";
+        invite.dataset.friendAction = "invite";
+        invite.dataset.uid = uid;
+        invite.textContent = "対戦に招待";
+        invite.disabled = !online || busy || !!pvpRoomCode;
+        row.append(label, invite);
+        pvpFriendsList.append(row);
+    }
+}
+
+function renderPvpFriendRequests() {
+    if (!pvpFriendRequestsList) return;
+    pvpFriendRequestsList.replaceChildren();
+    if (!pvpIncomingRequests.size) {
+        const empty = document.createElement("p");
+        empty.className = "pvpSocialEmpty";
+        empty.textContent = "申請はありません。";
+        pvpFriendRequestsList.append(empty);
+        return;
+    }
+    for (const request of pvpIncomingRequests.values()) {
+        const row = document.createElement("div");
+        row.className = "pvpSocialItem";
+        const name = document.createElement("span");
+        name.className = "pvpSocialName";
+        name.textContent = request.senderName || `プレイヤー ${request.fromUid.slice(0, 8)}`;
+        const actions = document.createElement("span");
+        for (const [action, text] of [["accept", "承認"], ["decline", "拒否"]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.requestAction = action;
+            button.dataset.uid = request.fromUid;
+            button.textContent = text;
+            actions.append(button);
+        }
+        row.append(name, actions);
+        pvpFriendRequestsList.append(row);
+    }
+}
+
+function renderPvpInvites() {
+    if (!pvpInvitesList) return;
+    pvpInvitesList.replaceChildren();
+    if (!pvpIncomingInvites.size) {
+        const empty = document.createElement("p");
+        empty.className = "pvpSocialEmpty";
+        empty.textContent = "招待はありません。";
+        pvpInvitesList.append(empty);
+        return;
+    }
+    for (const invite of pvpIncomingInvites.values()) {
+        const row = document.createElement("div");
+        row.className = "pvpSocialItem";
+        const name = document.createElement("span");
+        name.className = "pvpSocialName";
+        name.textContent = `${invite.fromName || "フレンド"} から対戦招待`;
+        const actions = document.createElement("span");
+        for (const [action, text] of [["accept", "参加"], ["decline", "辞退"]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.inviteAction = action;
+            button.dataset.id = invite.id;
+            button.textContent = text;
+            button.disabled = !!pvpRoomCode;
+            actions.append(button);
+        }
+        row.append(name, actions);
+        pvpInvitesList.append(row);
+    }
+}
+
+function syncPvpFriendPresence(friendIds) {
+    const wanted = new Set(friendIds);
+    for (const [uid, unsubscribe] of pvpFriendPresenceUnsubscribers) {
+        if (!wanted.has(uid)) {
+            unsubscribe();
+            pvpFriendPresenceUnsubscribers.delete(uid);
+            pvpFriendPresence.delete(uid);
+        }
+    }
+    for (const uid of wanted) {
+        if (pvpFriendPresenceUnsubscribers.has(uid)) continue;
+        const unsubscribe = onSnapshot(doc(db, "presence", uid), snapshot => {
+            pvpFriendPresence.set(uid, snapshot.exists() ? snapshot.data() : null);
+            renderPvpFriends();
+        }, error => {
+            console.warn("フレンドのオンライン状態を取得できません:", error);
+            pvpFriendPresence.set(uid, null);
+            renderPvpFriends();
+        });
+        pvpFriendPresenceUnsubscribers.set(uid, unsubscribe);
+    }
+    renderPvpFriends();
+}
+
+function startPvpSocial(user) {
+    pvpFriendsUnsubscribe?.();
+    pvpRequestsUnsubscribe?.();
+    pvpInvitesUnsubscribe?.();
+    for (const unsubscribe of pvpFriendPresenceUnsubscribers.values()) unsubscribe();
+    pvpFriendPresenceUnsubscribers.clear();
+    pvpFriendIds.clear();
+    pvpFriendPresence.clear();
+    pvpIncomingRequests.clear();
+    pvpIncomingInvites.clear();
+    if (pvpPresenceHeartbeat) clearInterval(pvpPresenceHeartbeat);
+    if (pvpPresenceRefresh) clearInterval(pvpPresenceRefresh);
+
+    void setPvpPresence(pvpRoomCode);
+    pvpPresenceHeartbeat = setInterval(() => void setPvpPresence(pvpRoomCode), 15000);
+    pvpPresenceRefresh = setInterval(renderPvpFriends, 10000);
+    pvpFriendsUnsubscribe = onSnapshot(collection(db, "friendships", user.uid, "friends"), snapshot => {
+        for (const change of snapshot.docChanges()) {
+            if (change.type === "removed") pvpFriendIds.delete(change.doc.id);
+            else pvpFriendIds.add(change.doc.id);
+        }
+        syncPvpFriendPresence(pvpFriendIds);
+        if (pvpFriendRequestButton && pvpFriendIds.has(pvpOpponentState?.uid)) {
+            pvpFriendRequestButton.disabled = true;
+            pvpFriendRequestButton.textContent = "✅ フレンドです";
+        }
+    }, error => {
+        console.error("フレンド一覧を読み込めません:", error);
+        setPvpSocialStatus("フレンド情報を読み込めません。最新のFirestoreルールを公開してください。");
+    });
+    pvpRequestsUnsubscribe = onSnapshot(collection(db, "friendRequests", user.uid, "incoming"), snapshot => {
+        pvpIncomingRequests.clear();
+        for (const item of snapshot.docs) {
+            const request = item.data();
+            if (request.status === "pending") pvpIncomingRequests.set(item.id, { ...request, fromUid: item.id });
+        }
+        renderPvpFriendRequests();
+    }, error => {
+        console.error("フレンド申請を読み込めません:", error);
+        setPvpSocialStatus("申請を読み込めません。最新のFirestoreルールを公開してください。");
+    });
+    pvpInvitesUnsubscribe = onSnapshot(query(collection(db, "pvpInvites"), where("toUid", "==", user.uid)), snapshot => {
+        pvpIncomingInvites.clear();
+        for (const item of snapshot.docs) {
+            const invite = item.data();
+            if (invite.status === "pending") pvpIncomingInvites.set(item.id, { ...invite, id: item.id });
+        }
+        renderPvpInvites();
+    }, error => {
+        console.error("対戦招待を読み込めません:", error);
+        setPvpSocialStatus("招待を読み込めません。最新のFirestoreルールを公開してください。");
+    });
+}
+
+async function sendPvpFriendRequest(targetUid) {
+    const sender = auth?.currentUser;
+    if (!sender || !currentUser || !targetUid || targetUid === sender.uid) return;
+    const friendRef = doc(db, "friendships", sender.uid, "friends", targetUid);
+    if ((await getDoc(friendRef)).exists()) {
+        pvpFriendRequestButton.textContent = "✅ フレンドです";
+        pvpFriendRequestButton.disabled = true;
+        return;
+    }
+    const requestRef = doc(db, "friendRequests", targetUid, "incoming", sender.uid);
+    const existing = await getDoc(requestRef);
+    if (existing.exists() && existing.data().status !== "declined") {
+        pvpFriendRequestButton.textContent = "⏳ フレンド申請済み";
+        pvpFriendRequestButton.disabled = true;
+        return;
+    }
+    await setDoc(requestRef, {
+        fromUid: sender.uid,
+        toUid: targetUid,
+        senderName: String(currentUser.displayName || currentUser.username || "Player").slice(0, 48),
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    });
+    pvpFriendRequestButton.textContent = "⏳ フレンド申請済み";
+    pvpFriendRequestButton.disabled = true;
+    setPvpSocialStatus("フレンド申請を送りました。");
+}
+
+async function respondToFriendRequest(fromUid, accept) {
+    const user = auth?.currentUser;
+    if (!user || !fromUid) return;
+    const requestRef = doc(db, "friendRequests", user.uid, "incoming", fromUid);
+    if (!accept) {
+        await updateDoc(requestRef, { status: "declined", updatedAt: serverTimestamp() });
+        setPvpSocialStatus("フレンド申請を拒否しました。");
+        return;
+    }
+    await runTransaction(db, async transaction => {
+        const requestSnapshot = await transaction.get(requestRef);
+        if (!requestSnapshot.exists() || requestSnapshot.data().status !== "pending") {
+            throw new Error("FRIEND_REQUEST_NOT_PENDING");
+        }
+        const ownFriendRef = doc(db, "friendships", user.uid, "friends", fromUid);
+        const otherFriendRef = doc(db, "friendships", fromUid, "friends", user.uid);
+        transaction.update(requestRef, { status: "accepted", updatedAt: serverTimestamp() });
+        transaction.set(ownFriendRef, { uid: fromUid });
+        transaction.set(otherFriendRef, { uid: user.uid });
+    });
+    setPvpSocialStatus("フレンドになりました。オンラインなら招待できます。");
+}
+
+async function respondToPvpInvite(invite, accept) {
+    if (!auth?.currentUser || pvpRoomCode) return;
+    if (!accept) {
+        await updateDoc(doc(db, "pvpInvites", invite.id), { status: "declined", respondedAt: serverTimestamp() });
+        setPvpSocialStatus("対戦招待を辞退しました。");
+        return;
+    }
+    const joined = await joinPvpRoom(invite.roomCode, invite.id);
+    if (!joined) renderPvpInvites();
+}
+
+pvpFriendsList?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-friend-action]");
+    if (!button || button.disabled) return;
+    void createPvpRoom(button.dataset.uid);
+});
+pvpFriendRequestsList?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-request-action]");
+    if (!button) return;
+    button.disabled = true;
+    void respondToFriendRequest(button.dataset.uid, button.dataset.requestAction === "accept").catch(error => {
+        console.error("フレンド申請の処理に失敗:", error);
+        setPvpSocialStatus("申請を処理できません。Firestoreルールを確認してください。");
+        button.disabled = false;
+    });
+});
+pvpInvitesList?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-invite-action]");
+    const invite = pvpIncomingInvites.get(button?.dataset.id);
+    if (!button || button.disabled || !invite) return;
+    button.disabled = true;
+    void respondToPvpInvite(invite, button.dataset.inviteAction === "accept").catch(error => {
+        console.error("対戦招待の処理に失敗:", error);
+        setPvpSocialStatus("招待を処理できません。部屋が終了していないか確認してください。");
+        button.disabled = false;
+    });
+});
+pvpFriendRequestButton?.addEventListener("click", () => {
+    const opponentUid = pvpOpponentState?.uid;
+    if (!opponentUid) return;
+    pvpFriendRequestButton.disabled = true;
+    void sendPvpFriendRequest(opponentUid).catch(error => {
+        console.error("フレンド申請の送信に失敗:", error);
+        pvpFriendRequestButton.disabled = false;
+        setPvpSocialStatus("申請を送れません。Firestoreルールが最新版か確認してください。");
+    });
+});
 
 function setPvpMatchNotice(message) {
     setPvpStatus(message);
@@ -6001,7 +6326,11 @@ function watchPvpRoom() {
     );
 }
 
-async function createPvpRoom() {
+async function createPvpRoom(inviteToUid = "") {
+    if (pvpRoomCode) {
+        setPvpSocialStatus("すでに対戦ルームへ接続しています。");
+        return;
+    }
     const uid = auth?.currentUser?.uid;
     if (!firebaseReady || !db || !uid || guestMode) {
         setPvpStatus("フレンド対戦にはログインが必要です。");
@@ -6039,11 +6368,37 @@ async function createPvpRoom() {
             pvpRoomCodeDisplay.textContent = `合言葉：${pvpRoomCode}`;
             pvpRoomCodeDisplay.hidden = false;
         }
+        void setPvpPresence(pvpRoomCode);
+        renderPvpFriends();
         pvpCreateButton.textContent = "フレンドを待っています…";
         const soloStartButton = document.getElementById("startBtn");
         if (soloStartButton) soloStartButton.disabled = true;
         if (pvpCancelButton) pvpCancelButton.hidden = false;
         watchPvpRoom();
+        if (inviteToUid) {
+            const inviteRef = doc(collection(db, "pvpInvites"));
+            try {
+                await setDoc(inviteRef, {
+                    fromUid: uid,
+                    fromName: String(currentUser?.displayName || currentUser?.username || "Player").slice(0, 48),
+                    toUid: inviteToUid,
+                    roomCode: pvpRoomCode,
+                    status: "pending",
+                    createdAt: serverTimestamp()
+                });
+                pvpInviteWatchUnsubscribe?.();
+                pvpInviteWatchUnsubscribe = onSnapshot(inviteRef, snapshot => {
+                    if (snapshot.exists() && snapshot.data().status === "declined" && !pvpStarted) {
+                        void leavePvpRoom().then(() => setPvpStatus("フレンドが招待を辞退しました。"));
+                    }
+                });
+                setPvpStatus("オンラインのフレンドに対戦招待を送りました。参加を待っています…");
+            } catch (inviteError) {
+                console.error("対戦招待を送れません:", inviteError);
+                setPvpStatus("招待を送れません。最新のFirestoreルールを公開し、フレンド関係を確認してください。");
+                await leavePvpRoom();
+            }
+        }
     } catch (error) {
         console.error("PvPルーム作成に失敗:", error);
         setPvpStatus("ルームを作成できませんでした。Firestoreルールが更新されているか確認してください。");
@@ -6052,9 +6407,13 @@ async function createPvpRoom() {
     }
 }
 
-async function joinPvpRoom() {
+async function joinPvpRoom(invitedCode = "", inviteId = "") {
+    if (pvpRoomCode) {
+        setPvpSocialStatus("先に現在の対戦ルームを終了してください。");
+        return false;
+    }
     const uid = auth?.currentUser?.uid;
-    const code = String(pvpRoomCodeInput?.value || "").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "");
+    const code = String(invitedCode || pvpRoomCodeInput?.value || "").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "");
     if (!firebaseReady || !db || !uid || guestMode) {
         setPvpStatus("フレンド対戦にはログインが必要です。");
         return;
@@ -6084,10 +6443,22 @@ async function joinPvpRoom() {
         });
         pvpRoomCode = code;
         pvpIsHost = false;
+        void setPvpPresence(pvpRoomCode);
+        renderPvpFriends();
         const soloStartButton = document.getElementById("startBtn");
         if (soloStartButton) soloStartButton.disabled = true;
         pvpRoomCodeInput.value = "";
         watchPvpRoom();
+        if (inviteId) {
+            try {
+                await updateDoc(doc(db, "pvpInvites", inviteId), {
+                    status: "accepted",
+                    respondedAt: serverTimestamp()
+                });
+            } catch (inviteError) {
+                console.warn("招待への参加状態を更新できません:", inviteError);
+            }
+        }
     } catch (error) {
         console.error("PvPルーム参加に失敗:", error);
         setPvpStatus(error.message === "ROOM_NOT_FOUND"
@@ -6103,7 +6474,9 @@ async function joinPvpRoom() {
                 : "参加できません。Firestoreルールが更新されているか確認してください。");
         pvpCreateButton.disabled = false;
         pvpJoinButton.disabled = false;
+        return false;
     }
+    return true;
 }
 
 function beginPvpMatch() {
@@ -6207,6 +6580,34 @@ function beginPvpMatch() {
             setPvpMatchNotice(`被弾データ受信失敗 (${getPvpErrorCode(error)})。最新のfirestore.rulesを再公開してください。`);
         }
     );
+    pvpRemoteShots.clear();
+    pvpShotsUnsubscribe = onSnapshot(
+        collection(db, "pvpRooms", pvpRoomCode, "shots"),
+        snapshot => {
+            for (const change of snapshot.docChanges()) {
+                if (change.type === "removed") {
+                    pvpRemoteShots.delete(change.doc.id);
+                    continue;
+                }
+                const shot = change.doc.data();
+                const shotCreatedAt = shot.createdAt?.toMillis?.() || 0;
+                if (shot.attackerUid === auth.currentUser?.uid && shotCreatedAt && Date.now() - shotCreatedAt > 2500) {
+                    void deleteDoc(change.doc.ref).catch(error => console.warn("古いPvP弾を整理できません:", error));
+                    continue;
+                }
+                if (shot.targetUid === auth.currentUser?.uid) {
+                    pvpRemoteShots.set(change.doc.id, {
+                        ...shot,
+                        createdAtMs: shotCreatedAt || Date.now()
+                    });
+                }
+            }
+        },
+        error => {
+            console.error("PvPの弾データを受信できません:", error);
+            setPvpMatchNotice(`弾の同期失敗 (${getPvpErrorCode(error)})。最新のFirestoreルールを公開してください。`);
+        }
+    );
     startGame();
     void syncPvpPlayerState(true);
     pvpSyncTimer = setInterval(() => {
@@ -6291,9 +6692,62 @@ function sendPvpHit() {
     });
 }
 
+function sendPvpShot() {
+    const uid = auth?.currentUser?.uid;
+    const now = Date.now();
+    if (!pvpStarted || pvpFinished || !pvpRoomCode || !uid || !pvpOpponentState?.uid) return;
+    // 連射スキル中もFirestoreへの発射イベントを最大約7回/秒に抑える。
+    if (now - pvpLastShotSentAt < 140) return;
+    pvpLastShotSentAt = now;
+    void addDoc(collection(db, "pvpRooms", pvpRoomCode, "shots"), {
+        attackerUid: uid,
+        targetUid: pvpOpponentState.uid,
+        x: Math.max(0, Math.min(1, (Number(player?.x) || W / 2) / Math.max(1, W))),
+        y: Math.max(0, Math.min(1, (Number(player?.y) - 48 || H * .75) / Math.max(1, H))),
+        speed: 850 / Math.max(1, H),
+        createdAt: serverTimestamp()
+    }).then(shotRef => {
+        setTimeout(() => {
+            void deleteDoc(shotRef).catch(error => console.warn("古いPvP弾を削除できません:", error));
+        }, 2500);
+    }).catch(error => {
+        console.warn("PvPの弾を送信できません:", error);
+    });
+}
+
+function drawPvpRemoteShots() {
+    if (!pvpStarted || !pvpRemoteShots.size) return;
+    const now = Date.now();
+    for (const [id, shot] of pvpRemoteShots) {
+        const age = Math.max(0, (now - shot.createdAtMs) / 1000);
+        if (age > 1.25) {
+            pvpRemoteShots.delete(id);
+            continue;
+        }
+        const x = shot.x * W;
+        const y = (1 - shot.y) * H + (shot.speed || 850 / Math.max(1, H)) * H * age;
+        ctx.save();
+        ctx.strokeStyle = "#ff5f9d";
+        ctx.shadowColor = "#ff2c72";
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 7;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x, y - 14);
+        ctx.lineTo(x, y + 10);
+        ctx.stroke();
+        ctx.fillStyle = "#fff1f6";
+        ctx.beginPath();
+        ctx.arc(x, y + 12, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
 function finishPvpMatch(result) {
     if (pvpFinished) return;
     pvpFinished = true;
+    stopPvpSmoothRender();
     pvpRapidFireActive = false;
     if (pvpGimmickNotice) pvpGimmickNotice.hidden = true;
     if (pvpLaserLane) pvpLaserLane.hidden = true;
@@ -6305,7 +6759,8 @@ function finishPvpMatch(result) {
     pvpRoomUnsubscribe?.();
     pvpPlayersUnsubscribe?.();
     pvpHitsUnsubscribe?.();
-    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = null;
+    pvpShotsUnsubscribe?.();
+    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = pvpShotsUnsubscribe = null;
     if (pauseOverlay) pauseOverlay.style.display = "none";
     if (pauseGameBtn) pauseGameBtn.style.display = "none";
     const quitButton = document.getElementById("quitGameBtn");
@@ -6322,6 +6777,14 @@ function finishPvpMatch(result) {
         message.hidden = false;
         message.textContent = `相手 SCORE ${pvpOpponentState?.score || 0} / WAVE ${pvpOpponentState?.wave || 1}`;
     }
+    if (pvpFriendRequestButton) {
+        const opponentUid = pvpOpponentState?.uid;
+        pvpFriendRequestButton.hidden = !opponentUid || opponentUid === auth?.currentUser?.uid;
+        pvpFriendRequestButton.disabled = pvpFriendIds.has(opponentUid);
+        pvpFriendRequestButton.textContent = pvpFriendIds.has(opponentUid)
+            ? "✅ フレンドです"
+            : "🤝 対戦相手にフレンド申請";
+    }
     document.getElementById("gameover").style.display = "flex";
 }
 
@@ -6335,7 +6798,9 @@ async function leavePvpRoom() {
     pvpRoomUnsubscribe?.();
     pvpPlayersUnsubscribe?.();
     pvpHitsUnsubscribe?.();
-    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = null;
+    pvpShotsUnsubscribe?.();
+    pvpInviteWatchUnsubscribe?.();
+    pvpRoomUnsubscribe = pvpPlayersUnsubscribe = pvpHitsUnsubscribe = pvpShotsUnsubscribe = pvpInviteWatchUnsubscribe = null;
     const oldRoomCode = pvpRoomCode;
     if (oldRoomCode && !pvpStarted && pvpIsHost && auth?.currentUser) {
         try {
@@ -6345,17 +6810,21 @@ async function leavePvpRoom() {
         }
     }
     pvpRoomCode = "";
+    stopPvpSmoothRender();
+    renderPvpFriends();
     pvpStarted = false;
     pvpFinished = false;
     pvpLocalDead = false;
     pvpIsHost = false;
     pvpOpponentState = null;
+    pvpRemoteShots.clear();
     pvpRoundStartedAt = 0;
     pvpLastGimmickCycleHit = -1;
     pvpRapidFireActive = false;
     pvpProcessedHitIds.clear();
     pvpLastSentX = pvpLastSentY = pvpLastSentScore = pvpLastSentWave = pvpLastSentHp = -1;
     pvpLastStateSyncAt = 0;
+    void setPvpPresence("");
     if (pvpPanel) pvpPanel.hidden = false;
     if (pvpHud) pvpHud.hidden = true;
     if (pvpSyncNotice) pvpSyncNotice.hidden = true;
@@ -6376,6 +6845,10 @@ async function leavePvpRoom() {
     if (leaderboardButton) leaderboardButton.hidden = false;
     const pvpMessage = document.getElementById("pvpResultMessage");
     if (pvpMessage) pvpMessage.hidden = true;
+    if (pvpFriendRequestButton) {
+        pvpFriendRequestButton.hidden = true;
+        pvpFriendRequestButton.disabled = false;
+    }
     document.getElementById("gameover").style.display = "none";
     document.getElementById("start").style.display = "flex";
     updatePvpAccess();
