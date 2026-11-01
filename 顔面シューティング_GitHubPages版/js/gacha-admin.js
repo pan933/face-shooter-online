@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { getSkillOptions } from "./skills/future-skill-catalog.js";
 
 import {
     onAuthStateChanged
@@ -442,6 +443,8 @@ function normalizeFace(
                 ""
             ),
 
+        skillId: String(face?.skillId || face?.id || "face2"),
+
         rarity:
             RARITIES.includes(
                 face?.rarity
@@ -723,6 +726,24 @@ function createFaceCard(
     index
 ) {
 
+    const skillOptions = [
+        { id: "face2", name: "顔2・大爆発" },
+        { id: "face_1", name: "顔1・一掃" },
+        { id: "face_2", name: "顔2・暴走モード" },
+        { id: "face_3", name: "顔3・時止め" },
+        { id: "face_4", name: "顔4・完全防御" },
+        { id: "face_5", name: "顔5・弾幕返し" },
+        { id: "face_6", name: "顔6専用スキル" },
+        ...getSkillOptions()
+    ];
+    const selectedSkillId = face.skillId || face.id;
+    if (!skillOptions.some(skill => skill.id === selectedSkillId)) {
+        skillOptions.push({ id: selectedSkillId, name: "自動（この顔専用）" });
+    }
+    const skillSelectOptions = skillOptions.map(skill => `
+        <option value="${escapeHtml(skill.id)}" ${selectedSkillId === skill.id ? "selected" : ""}>${escapeHtml(skill.name)}</option>
+    `).join("");
+
     const rarityOptions =
         RARITIES
             .map(
@@ -895,6 +916,14 @@ function createFaceCard(
 
                 </label>
 
+                <label>
+                    キャラのスキル
+                    <select class="gacha-face-skill" aria-label="キャラのスキル">
+                        ${skillSelectOptions}
+                    </select>
+                    <small class="muted">この顔を選んだ時にゲームで使うスキルです。</small>
+                </label>
+
 
                 <div
                     style="
@@ -987,6 +1016,9 @@ function addFace() {
 
         description:
             "",
+
+        skillId:
+            id,
 
         rarity:
             "N",
@@ -1318,6 +1350,8 @@ async function saveFaces() {
                     ?.trim() ||
                 "";
 
+            face.skillId = card.querySelector(".gacha-face-skill")?.value || face.id;
+
 
             face.rarity =
                 card
@@ -1541,6 +1575,9 @@ async function saveFaces() {
 
                             description:
                                 face.description || "",
+
+                            skillId:
+                                face.skillId || face.id,
 
                             rarity:
                                 face.rarity,

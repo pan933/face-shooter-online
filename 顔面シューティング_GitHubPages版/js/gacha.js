@@ -1381,6 +1381,9 @@ async function addFacesToCollection(
                 description:
                     face.description || "",
 
+                skillId:
+                    face.skillId || face.id,
+
                 probability:
                     face.probability,
 
@@ -1481,6 +1484,7 @@ async function addFacesToCollection(
             } else {
                 faceData.faces.push({
                     ...rewardFace,
+                    skillId: rewardFace.skillId || rewardFace.id,
                     obtainedAt: Date.now(),
                     skill: {
                         level: 1,

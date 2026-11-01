@@ -14,14 +14,24 @@ const TEMPLATES = [
     { name: "クロスカッター", description: "前方を広く切り裂いて敵を攻撃する。", type: "line_clear", damage: 58, width: 300, height: 185, maxTargets: 4 },
     { name: "カウンターシールド", description: "敵弾を消し、守りながら近くへ反撃する。", type: "bullet_counter", damagePerBullet: 10, radius: 185, maxBullets: 14 },
     { name: "時空バリア", description: "敵弾を消して敵の動きを止める。", type: "time_stop", damage: 38, stopDuration: 2.1 },
-    { name: "リカバリーフィールド", description: "HPとシールドを回復する。", type: "defense", heal: 3, shieldDuration: 3 }
+    { name: "リカバリーフィールド", description: "HPとシールドを回復する。", type: "defense", heal: 3, shieldDuration: 3 },
+    { id: "skill_bomb", name: "ころころ爆弾", description: "狙った場所に大きな爆弾を落として周囲を吹き飛ばす。", type: "explosion", damage: 145, radius: 165 },
+    { id: "skill_laser", name: "一直線レーザー", description: "画面上端まで伸びるレーザーで前方の敵を貫く。", type: "laser", damage: 125, width: 110 },
+    { id: "skill_sweep", name: "画面一掃", description: "画面内の敵全員にダメージ。ピンチの時に便利。", type: "screen_clear", damage: 62 },
+    { id: "skill_homing", name: "おっかけミサイル", description: "近くの敵を追尾するミサイルを最大5体に発射。", type: "homing_volley", damage: 115, maxTargets: 5 },
+    { id: "skill_teleport", name: "ワープ回避", description: "画面下の安全な場所へワープし、敵弾を消す。", type: "teleport", damage: 75 },
+    { id: "skill_score", name: "ポイントシャワー", description: "敵を攻撃しながらスコアボーナスを獲得。", type: "score_boost", damage: 52, score: 500 },
+    { id: "skill_shockwave", name: "地震ウェーブ", description: "足元から衝撃波を広げ、近くの敵をまとめて攻撃。", type: "explosion", damage: 95, radius: 225 },
+    { id: "skill_snipe", name: "ボスハンター", description: "最も強い敵とボスを狙い撃ちする。", type: "homing_volley", damage: 230, maxTargets: 2 },
+    { id: "skill_guard", name: "くるくるガード", description: "敵弾を消してシールドを展開。", type: "orbit_guard", shieldDuration: 4 },
+    { id: "skill_freeze", name: "氷結フィールド", description: "敵を傷つけて動きを止め、反撃の時間を作る。", type: "time_stop", damage: 72, stopDuration: 2.8 }
 ];
 
 function getLevelStats(template, index) {
     const scale = LEVELS[index];
     const stats = { requiredKills: REQUIRED_KILLS[index] };
     for (const [key, value] of Object.entries(template)) {
-        if (["name", "description", "type"].includes(key)) continue;
+        if (["id", "name", "description", "type"].includes(key)) continue;
         if (key === "radius" || key === "width" || key === "height" || key === "maxTargets" || key === "maxBullets") {
             stats[key] = Math.round(value + index * (key === "maxTargets" || key === "maxBullets" ? 1 : 12));
         } else if (key === "duration" || key === "stopDuration" || key === "shieldDuration") {
@@ -43,8 +53,12 @@ function stableIndex(faceId) {
 
 export function createFutureSkill(faceId) {
     const template = TEMPLATES[stableIndex(faceId)];
+    return createSkillFromTemplate(faceId, template);
+}
+
+function createSkillFromTemplate(id, template) {
     return {
-        id: String(faceId),
+        id: String(id),
         name: template.name,
         description: template.description,
         maxLevel: 6,
@@ -55,10 +69,27 @@ export function createFutureSkill(faceId) {
             if (template.type === "explosion") {
                 stats.x = context.player?.x ?? context.canvas?.width / 2 ?? 0;
                 stats.y = context.player?.y ?? context.canvas?.height / 2 ?? 0;
+            } else if (template.type === "laser") {
+                stats.x = context.player?.x ?? 0;
+                stats.y = context.player?.y ?? 0;
             }
             return stats;
         }
     };
+}
+
+export function getSkillOptions() {
+    return TEMPLATES.map((skill, index) => ({
+        id: skill.id || `future_${index}`,
+        name: skill.name,
+        description: skill.description
+    }));
+}
+
+export function createCatalogSkill(skillId, faceId = skillId) {
+    const index = TEMPLATES.findIndex((skill, i) => (skill.id || `future_${i}`) === skillId);
+    if (index < 0) return null;
+    return createSkillFromTemplate(faceId, TEMPLATES[index]);
 }
 
 export const FUTURE_SKILL_TEMPLATE_COUNT = TEMPLATES.length;

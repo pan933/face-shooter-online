@@ -6,6 +6,7 @@ import {
     addMatchPoints,
     claimDailyLoginBonus,
     loadFaceData,
+    loadGachaFaces,
     CLOUDINARY_FACE_URLS
 } from "./face-system.js";
 import { loadSkill, getRequiredKills as getSkillRequiredKills, isSkillReady, consumeSkill, normalizeSkillData } from "./skill-system.js";
@@ -1062,8 +1063,9 @@ async function setFaceForMode(isGuest) {
         const selectedFace = data?.selectedFace || "face2";
         activeFaceId = selectedFace;
         const ownedFace = (data?.faces || []).find(face => face.id === selectedFace);
+        const configuredFace = (await loadGachaFaces()).find(face => face.id === selectedFace);
         activeSkillData = normalizeSkillData({ ...ownedFace?.skill, progress: 0, totalKills: 0 });
-        activeFaceSkill = await loadSkill(selectedFace) || await loadSkill("face2");
+        activeFaceSkill = await loadSkill(selectedFace, ownedFace?.skillId || configuredFace?.skillId) || await loadSkill("face2");
         updateSkillButton();
         const imagePath = ownedFace?.imageUrl || getGachaFaceImage(selectedFace);
         pvpLocalFaceImageUrl = imagePath;
@@ -1188,6 +1190,7 @@ async function activateFaceSkill() {
                 damageSkillTargets(targets, result.damage);
                 if (boss && Math.hypot(boss.x - result.x, boss.y - result.y) <= result.radius + boss.size * .5) damageBossWithSkill(result.damage);
                 boom(result.x, result.y, true);
+                skillVisuals.push({ type: "bomb", x: result.x, y: result.y, radius: result.radius, until: performance.now() + 720 });
                 showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}・${targets.length}体に命中`);
                 break;
             }
@@ -1203,6 +1206,16 @@ async function activateFaceSkill() {
                 damageSkillTargets(targets, result.damage);
                 if (boss && Math.abs(boss.x - attackX) <= result.width / 2 + boss.size / 2 && boss.y - boss.size / 2 < attackY && boss.y + boss.size / 2 > attackY - result.height) damageBossWithSkill(result.damage);
                 showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}・${targets.length}体に命中`);
+                skillVisuals.push({ type: "sweep", x: attackX, y: attackY, width: result.width, height: result.height, until: performance.now() + 420 });
+                break;
+            }
+            case "laser": {
+                const x = Number(result.x ?? player.x);
+                const width = Math.max(24, Number(result.width) || 100);
+                const targets = enemies.filter(enemy => Math.abs(enemy.x - x) <= width / 2 + enemy.size / 2 && enemy.y <= player.y);
+                damageSkillTargets(targets, result.damage);
+                if (boss && Math.abs(boss.x - x) <= width / 2 + boss.size / 2 && boss.y <= player.y) damageBossWithSkill(result.damage);
+                skillVisuals.push({ type: "laser", x, y: player.y, width, until: performance.now() + 620 });
                 break;
             }
             case "power_up":
@@ -1221,6 +1234,7 @@ async function activateFaceSkill() {
                 hp = Math.min(5, hp + (result.heal || 0));
                 shields += 1;
                 shieldTime = Math.max(shieldTime, result.shieldDuration || 3);
+                skillVisuals.push({ type: "shield", x: player.x, y: player.y, until: performance.now() + 700 });
                 break;
             case "bullet_counter":
                 enemyBullets = [];
@@ -1240,6 +1254,36 @@ async function activateFaceSkill() {
                 enemyBullets = [];
                 break;
                 }
+            case "screen_clear":
+                damageSkillTargets([...enemies], result.damage);
+                if (boss) damageBossWithSkill(result.damage);
+                skillVisuals.push({ type: "screen", until: performance.now() + 520 });
+                break;
+            case "homing_volley": {
+                const targets = [...enemies].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y)).slice(0, Math.max(1, result.maxTargets || 3));
+                damageSkillTargets(targets, result.damage);
+                if (boss) damageBossWithSkill(result.damage);
+                for (const target of targets) skillVisuals.push({ type: "missile", x: target.x, y: target.y, until: performance.now() + 500 });
+                break;
+            }
+            case "teleport":
+                player.x = Math.max(player.size, Math.min(W - player.size, W * (Math.random() < .5 ? .25 : .75)));
+                player.y = H * .78;
+                enemyBullets = [];
+                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) < 125), result.damage);
+                skillVisuals.push({ type: "warp", x: player.x, y: player.y, until: performance.now() + 700 });
+                break;
+            case "score_boost":
+                score += Math.max(0, Number(result.score) || 300);
+                damageSkillTargets(enemies.filter(enemy => Math.hypot(enemy.x - player.x, enemy.y - player.y) < 175), result.damage);
+                skillVisuals.push({ type: "score", x: player.x, y: player.y, until: performance.now() + 850 });
+                break;
+            case "orbit_guard":
+                enemyBullets = [];
+                shields += 1;
+                shieldTime = Math.max(shieldTime, result.shieldDuration || 4);
+                skillVisuals.push({ type: "shield", x: player.x, y: player.y, until: performance.now() + 850 });
+                break;
             default:
                 console.warn("未対応のスキル効果:", result.type);
                 return;
@@ -1382,6 +1426,7 @@ let enemies = [];
 let enemyBullets = [];
 
 let particles = [];
+let skillVisuals = [];
 
 let stars = [];
 
@@ -1892,6 +1937,8 @@ function updateHUD() {
 ================================================== */
 
 function startGame() {
+
+    skillVisuals = [];
 
     if (pvpRoomCode && !pvpStarted) {
         setPvpStatus("合言葉ルームの待機中です。対戦をキャンセルするか、フレンドの参加を待ってください。");
@@ -5037,6 +5084,38 @@ function draw() {
 
     }
 
+
+    const visualNow = performance.now();
+    skillVisuals = skillVisuals.filter(effect => effect.until > visualNow);
+    for (const effect of skillVisuals) {
+        const life = Math.max(0, Math.min(1, (effect.until - visualNow) / 850));
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, life * 1.8);
+        if (effect.type === "bomb") {
+            const radius = effect.radius * (1.15 - life * .15);
+            ctx.strokeStyle = "#ffb52e"; ctx.lineWidth = 10 * life; ctx.shadowColor = "#ff4b18"; ctx.shadowBlur = 30;
+            ctx.beginPath(); ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2); ctx.stroke();
+        } else if (effect.type === "laser") {
+            const gradient = ctx.createLinearGradient(effect.x, 0, effect.x, effect.y);
+            gradient.addColorStop(0, "rgba(255,255,255,.12)"); gradient.addColorStop(1, "#51f6ff");
+            ctx.strokeStyle = gradient; ctx.lineWidth = effect.width; ctx.shadowColor = "#38eaff"; ctx.shadowBlur = 28;
+            ctx.beginPath(); ctx.moveTo(effect.x, 0); ctx.lineTo(effect.x, effect.y); ctx.stroke();
+            ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.max(5, effect.width * .16); ctx.beginPath(); ctx.moveTo(effect.x, 0); ctx.lineTo(effect.x, effect.y); ctx.stroke();
+        } else if (effect.type === "sweep") {
+            ctx.fillStyle = "rgba(70,210,255,.24)"; ctx.strokeStyle = "#8cf5ff"; ctx.lineWidth = 3;
+            ctx.fillRect(effect.x - effect.width / 2, effect.y - effect.height, effect.width, effect.height);
+            ctx.strokeRect(effect.x - effect.width / 2, effect.y - effect.height, effect.width, effect.height);
+        } else if (effect.type === "screen") {
+            ctx.fillStyle = `rgba(160,220,255,${.15 * life})`; ctx.fillRect(0, 0, W, H);
+        } else if (effect.x != null) {
+            ctx.strokeStyle = effect.type === "missile" ? "#ffeb68" : "#8bfff0"; ctx.lineWidth = 4; ctx.shadowBlur = 16; ctx.shadowColor = ctx.strokeStyle;
+            const radius = effect.type === "shield" ? 58 : 30 + (1 - life) * 38;
+            ctx.beginPath(); ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2); ctx.stroke();
+            if (effect.type === "score") { ctx.fillStyle = "#fff26b"; ctx.font = "bold 24px system-ui"; ctx.fillText("+POINT!", effect.x, effect.y - 55); }
+            if (effect.type === "warp") { ctx.fillStyle = "#fff"; ctx.font = "bold 18px system-ui"; ctx.fillText("WARP!", effect.x, effect.y - 45); }
+        }
+        ctx.restore();
+    }
 
     ctx.restore();
 

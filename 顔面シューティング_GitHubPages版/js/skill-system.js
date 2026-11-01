@@ -32,18 +32,28 @@ function isValidFaceId(faceId) {
 // face_1 → ./skills/face_1.js
 // ------------------------------------------------------------
 
-export async function loadSkill(faceId) {
+export async function loadSkill(faceId, selectedSkillId = "") {
 
     if (!isValidFaceId(faceId)) {
         console.warn("[Skill] 不正なfaceId:", faceId);
         return null;
     }
 
-    if (skillCache.has(faceId)) {
-        return skillCache.get(faceId);
+    const cacheKey = selectedSkillId ? `${faceId}:${selectedSkillId}` : faceId;
+    if (skillCache.has(cacheKey)) {
+        return skillCache.get(cacheKey);
     }
 
     try {
+
+        if (selectedSkillId) {
+            const catalog = await import("./skills/future-skill-catalog.js");
+            const selectedSkill = catalog.createCatalogSkill(selectedSkillId, faceId);
+            if (selectedSkill) {
+                skillCache.set(cacheKey, selectedSkill);
+                return selectedSkill;
+            }
+        }
 
         const module = await import(
             `./skills/${faceId}.js`
@@ -59,7 +69,7 @@ export async function loadSkill(faceId) {
             return null;
         }
 
-        skillCache.set(faceId, skill);
+        skillCache.set(cacheKey, skill);
 
         console.log(
             `[Skill] ${faceId} のスキルを読み込みました`
@@ -72,7 +82,7 @@ export async function loadSkill(faceId) {
         try {
             const catalog = await import("./skills/future-skill-catalog.js");
             const skill = catalog.createFutureSkill(faceId);
-            skillCache.set(faceId, skill);
+            skillCache.set(cacheKey, skill);
             console.info(`[Skill] ${faceId} に汎用スキル「${skill.name}」を割り当てました`);
             return skill;
         } catch (fallbackError) {
