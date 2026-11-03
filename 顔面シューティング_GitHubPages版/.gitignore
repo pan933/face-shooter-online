@@ -5,3 +5,5 @@ node_modules/
 service-account*.json
 *serviceAccountKey*.json
 firebase-debug.log
+desktop/dist/
+desktop/game/
