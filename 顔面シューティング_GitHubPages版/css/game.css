@@ -1058,6 +1058,35 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
     background: rgba(8,47,73,.52);
     font-size: 12px !important;
 }
+.pcDownloadPanel {
+    max-width: 580px;
+    margin: 12px auto;
+    padding: 14px;
+    border: 1px solid rgba(167, 139, 250, .48);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(49, 35, 91, .82), rgba(12, 31, 58, .9));
+    text-align: left;
+}
+.pcDownloadPanel h2 { margin: 0 0 5px; font-size: 18px; text-align: center; }
+.pcDownloadPanel > p { margin: 5px 0 10px; font-size: 12px; }
+.pcDownloadButton {
+    display: block;
+    padding: 11px 14px;
+    border: 2px solid #c4b5fd;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #6d28d9, #4338ca);
+    color: #fff;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: none;
+}
+.pcDownloadButton:hover { filter: brightness(1.12); }
+.pcDownloadButton span { display: block; margin-top: 3px; color: #ddd6fe; font-size: 11px; font-weight: 600; }
+.pcDownloadHelp { margin-top: 10px; color: #e2e8f0; font-size: 12px; line-height: 1.55; }
+.pcDownloadHelp summary { color: #fde68a; font-weight: 900; cursor: pointer; }
+.pcDownloadHelp ol { padding-left: 21px; }
+.pcDownloadHelp li { margin: 6px 0; }
+.pcDownloadCaution { color: #fecaca; font-weight: 800; }
 @media (max-width: 650px) {
     #controlModeBtn { display:block; top:58px; right:10px; font-size:12px; padding:7px 9px; }
     #moveControlBtn { top:208px; right:10px; font-size:12px; padding:7px 9px; }
