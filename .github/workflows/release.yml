@@ -35,12 +35,17 @@ jobs:
       - name: バージョンを自動で設定
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
 
-      - name: タグを作成
-        run: |
-          git tag v1.0.${{ github.run_number }}
-          git push origin v1.0.${{ github.run_number }} || true
+      - name: ビルド
+        run: npx electron-builder --win --publish never
 
-      - name: ビルドして公開
-        run: npx electron-builder --win --publish always
+      - name: Releaseを作成してアップロード
+        run: |
+          gh release create v1.0.${{ github.run_number }} \
+            dist/FaceShooting-Setup-*.exe \
+            dist/FaceShooting-Setup-*.exe.blockmap \
+            dist/latest.yml \
+            --title "1.0.${{ github.run_number }}" \
+            --notes "自動ビルド" \
+            --target ${{ github.sha }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
