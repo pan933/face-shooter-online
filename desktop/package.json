@@ -7,6 +7,7 @@
     "build": "electron-builder --win"
   },
   "build": {
+    "artifactName": "FaceShooting-Setup-${version}.${ext}",
     "appId": "com.example.faceshooting",
     "productName": "FaceShooting",
     "files": [
