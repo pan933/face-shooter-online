@@ -153,7 +153,7 @@ export class TsumPhysicsBoard {
     }
     // 消した数と同じ数だけ補充する。盤面の顔の総数は増やさない。
     // 初期配置と同じく、スマホ42個・PC70個を上限にする。
-    const maxBalls = this.width <= 400 ? 42 : 70;
+    const maxBalls = this.width < 480 ? 42 : 70;
     const refillCount = Math.min(balls.length, Math.max(0, maxBalls - this.balls.length));
     for (let i = 0; i < refillCount; i++) {
       // 顔を補充するたび、少なくとも1個は必ずマイツムを落とす。
