@@ -24,7 +24,29 @@ const TEMPLATES = [
     { id: "skill_shockwave", name: "地震ウェーブ", description: "足元から衝撃波を広げ、近くの敵をまとめて攻撃。", type: "explosion", damage: 95, radius: 225 },
     { id: "skill_snipe", name: "ボスハンター", description: "最も強い敵とボスを狙い撃ちする。", type: "homing_volley", damage: 230, maxTargets: 2 },
     { id: "skill_guard", name: "くるくるガード", description: "敵弾を消してシールドを展開。", type: "orbit_guard", shieldDuration: 4 },
-    { id: "skill_freeze", name: "氷結フィールド", description: "敵を傷つけて動きを止め、反撃の時間を作る。", type: "time_stop", damage: 72, stopDuration: 2.8 }
+    { id: "skill_freeze", name: "氷結フィールド", description: "敵を傷つけて動きを止め、反撃の時間を作る。", type: "time_stop", damage: 72, stopDuration: 2.8 },
+
+    // 追加スキル：斬撃・属性攻撃・大技
+    { id: "skill_iaido", name: "一閃・居合斬り", description: "一瞬のタメから画面を横切る超高速斬撃。", type: "slash", damage: 155, width: 620, height: 210 },
+    { id: "skill_cross_slash", name: "十文字斬り", description: "二本の巨大な斬撃で敵を十字に切り裂く。", type: "slash", damage: 135, width: 700, height: 260 },
+    { id: "skill_infinite_slash", name: "無限連斬", description: "連続する斬撃で広範囲の敵を攻撃。", type: "slash", damage: 92, width: 760, height: 300 },
+    { id: "skill_flying_slash", name: "飛ぶ斬撃", description: "前方へ巨大な三日月状の斬撃を飛ばす。", type: "line_clear", damage: 118, width: 520, height: 390, maxTargets: 8 },
+    { id: "skill_meteor", name: "メテオレイン", description: "無数の隕石が降り注ぎ敵を一掃する。", type: "screen_clear", damage: 88 },
+    { id: "skill_thunder_god", name: "雷神・天轟", description: "画面全体に雷を落として敵を貫く。", type: "screen_clear", damage: 105 },
+    { id: "skill_ice_age", name: "絶対零度", description: "氷の波動で敵を攻撃し時間を止める。", type: "time_stop", damage: 82, stopDuration: 3.4 },
+    { id: "skill_inferno", name: "煉獄の炎", description: "炎の渦で周囲を焼き尽くす。", type: "explosion", damage: 125, radius: 205 },
+    { id: "skill_phoenix", name: "不死鳥の加護", description: "HPを回復し強力なシールドを展開。", type: "defense", heal: 4, shieldDuration: 5 },
+    { id: "skill_clone", name: "残像分身", description: "分身の連続攻撃で複数の敵を狙う。", type: "homing_volley", damage: 105, maxTargets: 9 },
+    { id: "skill_void", name: "虚無領域", description: "重力で敵を引き寄せて一気に攻撃。", type: "black_hole", damage: 118, radius: 260, pullPower: 1.15, duration: 2.5 },
+    { id: "skill_god_beam", name: "神の裁き", description: "天から巨大な光線を落とす。", type: "laser", damage: 210, width: 210 },
+    { id: "skill_face_beam", name: "顔面極太ビーム", description: "超極太ビームで前方をなぎ払う。", type: "laser", damage: 165, width: 310 },
+    { id: "skill_hammer", name: "超重量ハンマー", description: "巨大ハンマーの衝撃で広範囲を吹き飛ばす。", type: "explosion", damage: 145, radius: 245 },
+    { id: "skill_drill", name: "ドリルブレイク", description: "貫通ドリルで前方の敵をまとめて攻撃。", type: "line_clear", damage: 148, width: 260, height: 520, maxTargets: 10 },
+    { id: "skill_storm", name: "テンペスト", description: "嵐を呼び敵弾を消しながら攻撃。", type: "bullet_counter", damagePerBullet: 22, radius: 320, maxBullets: 22 },
+    { id: "skill_mirror", name: "ミラーリフレクト", description: "敵弾を消して強烈な反撃を放つ。", type: "bullet_counter", damagePerBullet: 28, radius: 360, maxBullets: 24 },
+    { id: "skill_overdrive", name: "限界突破", description: "一定時間、攻撃力と連射速度が大幅上昇。", type: "power_up", damageMultiplier: 1.75, fireRateMultiplier: 1.55, duration: 7 },
+    { id: "skill_warp", name: "次元跳躍", description: "瞬間移動して敵弾を消し周囲を攻撃。", type: "teleport", damage: 145 },
+    { id: "skill_final", name: "ファイナルインパクト", description: "画面全体を揺るがす必殺の大爆発。", type: "screen_clear", damage: 185 }
 ];
 
 function getLevelStats(template, index) {
