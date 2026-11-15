@@ -110,7 +110,7 @@ export class TsumPhysicsBoard {
 
   setChain(chain) { this.chain = chain.slice(); }
 
-  hitTest(point, extra = 1.35) {
+  hitTest(point, extra = 1.8) {
     let best = null, bestD = Infinity;
     for (const ball of this.balls) {
       const d = Math.hypot(ball.body.position.x - point.x, ball.body.position.y - point.y);
@@ -119,9 +119,26 @@ export class TsumPhysicsBoard {
     return best;
   }
 
+  hitTestSegment(start, end, extra = 1.8) {
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const lengthSq = dx * dx + dy * dy || 1;
+    const hits = [];
+    for (const ball of this.balls) {
+      const px = ball.body.position.x - start.x;
+      const py = ball.body.position.y - start.y;
+      const t = Math.max(0, Math.min(1, (px * dx + py * dy) / lengthSq));
+      const nearestX = start.x + dx * t;
+      const nearestY = start.y + dy * t;
+      const distance = Math.hypot(ball.body.position.x - nearestX, ball.body.position.y - nearestY);
+      if (distance <= ball.radius * extra) hits.push({ ball, t, distance });
+    }
+    hits.sort((a, b) => a.t - b.t || a.distance - b.distance);
+    return hits.map(hit => hit.ball);
+  }
+
   neighbors(a, b) {
     return Math.hypot(a.body.position.x - b.body.position.x, a.body.position.y - b.body.position.y)
-      <= (a.radius + b.radius) * 1.48;
+      <= (a.radius + b.radius) * 1.62;
   }
 
   removeAndDrop(balls) {
