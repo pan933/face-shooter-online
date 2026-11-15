@@ -178,8 +178,8 @@ function createPanel() {
 
 
         <p class="muted">
-            顔ごとに名前・画像URL・レア度・排出確率を設定できます。
-            排出確率は基本値です。チェックした顔は設定倍率で抽選重みが上がります。
+            顔を追加したりレア度を変更すると、レア度ごとの基本配分から排出確率を自動計算します。
+            排出停止にチェックした顔はガチャ候補から外れ、残りの顔へ確率を再配分します。
         </p>
 
 
@@ -490,6 +490,8 @@ function renderGachaSettings() {
     rewardFaceSelect.addEventListener("change", () => {
         gachaSettings.mudDangoRewardFaceIds = [...rewardFaceSelect.selectedOptions].map(option => option.value);
         gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
+        recalculateFaceProbabilities();
+        refreshProbabilityInputs();
     });
 }
 
@@ -1459,21 +1461,6 @@ async function saveFaces() {
     }
 
 
-    recalculateFaceProbabilities();
-    const total = faces.filter(face => !face.excludeFromGacha && !(gachaSettings.mudDangoRewardFaceIds || []).includes(face.id))
-        .reduce((sum, face) => sum + Number(face.probability || 0), 0);
-
-
-    if (total <= 0 || Math.abs(total - 100) > 0.001) {
-
-        showToast(
-            `排出確率の合計を100%にしてください。（現在 ${total.toFixed(2)}%）`
-        );
-
-        return;
-
-    }
-
     gachaSettings.guaranteeRarity =
         document.getElementById("gachaGuaranteeRarity")?.value || "SSR";
     gachaSettings.boostMultiplier = Math.max(
@@ -1491,6 +1478,14 @@ async function saveFaces() {
     const rewardSelect = document.getElementById("mudDangoRewardFaceId");
     gachaSettings.mudDangoRewardFaceIds = [...(rewardSelect?.selectedOptions || [])].map(option => option.value);
     gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
+
+    recalculateFaceProbabilities();
+    const total = faces.filter(face => !face.excludeFromGacha && !gachaSettings.mudDangoRewardFaceIds.includes(face.id))
+        .reduce((sum, face) => sum + Number(face.probability || 0), 0);
+    if (total <= 0 || Math.abs(total - 100) > 0.001) {
+        showToast(`ガチャに出る顔の確率を計算できません。（現在 ${total.toFixed(2)}%）排出停止や交換専用の設定を確認してください。`);
+        return;
+    }
 
     const guaranteeRank = RARITIES.indexOf(gachaSettings.guaranteeRarity);
     if (!faces.some(face => !face.excludeFromGacha && RARITIES.indexOf(face.rarity) >= guaranteeRank && !gachaSettings.mudDangoRewardFaceIds.includes(face.id))) {
