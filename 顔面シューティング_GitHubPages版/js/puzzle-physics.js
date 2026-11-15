@@ -85,16 +85,20 @@ export class TsumPhysicsBoard {
     return ball;
   }
 
-  setFacePool(faces) {
+  setFacePool(faces, guaranteedFace = null) {
     this.faces = faces.filter(Boolean);
+    this.guaranteedFace = guaranteedFace && this.faces.some(face => String(face.id) === String(guaranteedFace.id))
+      ? this.faces.find(face => String(face.id) === String(guaranteedFace.id))
+      : this.faces[0] || null;
     this.randomFace = () => this.faces[Math.floor(Math.random() * this.faces.length)];
   }
 
-  seed(faces, count = 70) {
-    this.setFacePool(faces);
+  seed(faces, count = 70, guaranteedFace = null) {
+    this.setFacePool(faces, guaranteedFace);
     this.clear();
     for (let i = 0; i < count; i++) {
-      const face = this.randomFace();
+      // 最初の1個は必ずマイツム。残りは通常抽選。
+      const face = i === 0 && this.guaranteedFace ? this.guaranteedFace : this.randomFace();
       const col = i % 7, row = Math.floor(i / 7);
       const x = (col + 0.5 + (Math.random() - 0.5) * 0.2) * this.width / 7;
       const y = -row * this.radius * 2.05 - Math.random() * this.radius;
@@ -152,7 +156,8 @@ export class TsumPhysicsBoard {
     const extra = Math.max(2, Math.ceil(balls.length * 0.55));
     const refillCount = Math.min(balls.length + extra, Math.max(0, 88 - this.balls.length));
     for (let i = 0; i < refillCount; i++) {
-      const face = this.randomFace();
+      // 顔を補充するたび、少なくとも1個は必ずマイツムを落とす。
+      const face = i === 0 && this.guaranteedFace ? this.guaranteedFace : this.randomFace();
       const x = (i % 7 + 0.5) * this.width / 7 + (Math.random() - 0.5) * this.radius;
       const y = -this.radius * (2 + Math.floor(i / 7) * 2.15 + Math.random());
       this.addBall(face, x, y);
@@ -165,6 +170,8 @@ export class TsumPhysicsBoard {
 
     // 顔の種類をランダムに入れ替える。
     const faces = this.balls.map(() => this.randomFace());
+    // シャッフル後もマイツムが盤面から消えないよう最低1個を保証。
+    if (faces.length && this.guaranteedFace) faces[0] = this.guaranteedFace;
     for (let i = faces.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [faces[i], faces[j]] = [faces[j], faces[i]];
