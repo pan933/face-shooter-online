@@ -314,6 +314,21 @@ gameCursorStyle.textContent = `
     #gameCursor::after {
         top:50%; left:-25%; height:2px; width:150%; transform:translateY(-50%);
     }
+    #gameCursor.iaido-active {
+        border:0; border-radius:0; background:transparent; box-shadow:none;
+        width:42px !important; height:42px !important;
+    }
+    #gameCursor.iaido-active::before {
+        left:50%; top:-12%; width:5px; height:124%;
+        transform:translateX(-50%) rotate(45deg); border-radius:4px;
+        background:linear-gradient(90deg,#b9f7ff,#fff,#67dfff);
+        box-shadow:0 0 8px #39dfff, 0 0 2px #000;
+    }
+    #gameCursor.iaido-active::after {
+        top:50%; left:12%; width:76%; height:4px;
+        transform:translateY(-50%) rotate(45deg); border-radius:4px;
+        background:#ffd65a; box-shadow:0 0 7px #ffb52e;
+    }
     #bossSupplyNotice {
         position:absolute; z-index:26; left:50%; bottom:148px; transform:translateX(-50%);
         display:none; max-width:90%; padding:10px 16px; border:2px solid #7ffcff;
@@ -773,7 +788,7 @@ if (canvas) {
     };
 
     canvas.addEventListener("pointerdown", event => {
-        if (!running || paused || pvpStarted) return;
+        if (!running || paused || pvpStarted || !isIaidoModeActive()) return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
         event.preventDefault();
         slashGesture = { pointerId: event.pointerId, points: [getSlashPoint(event)] };
@@ -796,7 +811,7 @@ if (canvas) {
         if (!slashGesture || (event && event.pointerId !== undefined && event.pointerId !== slashGesture.pointerId)) return;
         const gesture = slashGesture;
         slashGesture = null;
-        if (gesture.points.length < 2 || !running || paused) return;
+        if (gesture.points.length < 2 || !running || paused || !isIaidoModeActive()) return;
         performSwipeSlash(gesture.points);
     };
     canvas.addEventListener("pointerup", finishSlashGesture);
@@ -823,7 +838,7 @@ function distanceToSlashPath(point, points) {
 
 function performSwipeSlash(points) {
     const now = performance.now();
-    if (now < slashCooldownUntil || points.length < 2) return;
+    if (!isIaidoModeActive() || now < slashCooldownUntil || points.length < 2) return;
     const totalLength = points.reduce((sum, point, index) => {
         if (index === 0) return sum;
         return sum + Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y);
@@ -835,10 +850,10 @@ function performSwipeSlash(points) {
     const targets = enemies.filter(enemy =>
         distanceToSlashPath({ x: enemy.x, y: enemy.y }, points) <= hitWidth + enemy.size * 0.42
     );
-    const hitCount = damageSkillTargets(targets, 2);
+    const hitCount = damageSkillTargets(targets, iaidoSkillDamage);
 
     if (boss && distanceToSlashPath({ x: boss.x, y: boss.y }, points) <= hitWidth + boss.size * 0.48) {
-        damageBossWithSkill(8);
+        damageBossWithSkill(Math.max(1, iaidoSkillDamage * 2));
     }
 
     slashEffects.push({ points: points.map(point => ({ ...point })), until: now + 360 });
@@ -1290,29 +1305,9 @@ async function activateFaceSkill() {
         showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}`);
         switch (result.type) {
             case "slash": {
-                // 敵が降りてくる高さに合わせて横一閃。通常敵とボスの両方に判定する。
-                const centerY = Math.max(H * 0.22, Math.min(player.y - 105, H * 0.82));
-                const bandHeight = Math.max(150, Number(result.height) || 220);
-                const bandWidth = Math.max(W * 0.78, Number(result.width) || W);
-                const targets = enemies.filter(enemy =>
-                    Math.abs(enemy.y - centerY) <= bandHeight / 2 + enemy.size / 2 &&
-                    enemy.x >= W / 2 - bandWidth / 2 - enemy.size &&
-                    enemy.x <= W / 2 + bandWidth / 2 + enemy.size
-                );
-                damageSkillTargets(targets, result.damage);
-                if (boss && Math.abs(boss.y - centerY) <= bandHeight / 2 + boss.size / 2) {
-                    damageBossWithSkill(result.damage);
-                }
-                skillVisuals.push({
-                    type: "slash",
-                    x: W / 2,
-                    y: centerY,
-                    width: bandWidth,
-                    height: bandHeight,
-                    cross: result.id === "skill_cross_slash",
-                    until: performance.now() + 920
-                });
-                showSkillNotice(`${activeFaceSkill.name}・${targets.length}体を斬撃！`);
+                // 居合斬りスキルは即時攻撃ではなく、5秒間のスワイプ斬撃モードを開始する。
+                iaidoSkillDamage = Math.max(1, Number(result.damage) || 2);
+                setIaidoMode(true);
                 break;
             }
             case "explosion": {
@@ -1561,6 +1556,35 @@ let skillVisuals = [];
 let slashGesture = null;
 let slashEffects = [];
 let slashCooldownUntil = 0;
+let iaidoModeUntil = 0;
+let iaidoSkillDamage = 2;
+let iaidoModeTimer = null;
+
+function setIaidoMode(active) {
+    if (iaidoModeTimer) clearTimeout(iaidoModeTimer);
+    iaidoModeTimer = null;
+    iaidoModeUntil = active ? performance.now() + 5000 : 0;
+    if (gameCursor) gameCursor.classList.toggle("iaido-active", !!active);
+    if (active) {
+        showSkillNotice("居合斬りモード！ 5秒間スワイプ可能");
+        iaidoModeTimer = setTimeout(() => {
+            iaidoModeUntil = 0;
+            if (gameCursor) gameCursor.classList.remove("iaido-active");
+            showSkillNotice("居合斬り終了");
+            iaidoModeTimer = null;
+        }, 5000);
+    } else if (gameCursor) {
+        gameCursor.classList.remove("iaido-active");
+    }
+}
+
+function isIaidoModeActive() {
+    if (iaidoModeUntil && performance.now() >= iaidoModeUntil) {
+        setIaidoMode(false);
+        return false;
+    }
+    return iaidoModeUntil > 0;
+}
 
 let stars = [];
 
