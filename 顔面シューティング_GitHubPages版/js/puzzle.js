@@ -1,12 +1,13 @@
 import { firebaseReady, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 import { loadFaceData, loadGachaFaces, CLOUDINARY_FACE_URLS, saveFaceData, addMatchPoints } from "./face-system.js";
 import { TsumPhysicsBoard } from "./puzzle-physics.js";
 
 const $ = id => document.getElementById(id);
 const ROUND_SECONDS = 60;
-let physics, uid = "", ownedFaces = [], activeFace = null, chain = [];
+let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
+let points = 0, fourTypesUnlocked = false, faceTypeCount = 5;
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
 let running = false, paused = false, roundEnded = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false;
@@ -14,7 +15,70 @@ let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false;
 function say(text) { $("message").textContent = text; }
 function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] || CLOUDINARY_FACE_URLS.face2 || ""; }
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
-function randomFace() { return ownedFaces[Math.floor(Math.random() * ownedFaces.length)] || ownedFaces[0]; }
+function randomFace() { return gameFaces[Math.floor(Math.random() * gameFaces.length)] || gameFaces[0] || ownedFaces[0]; }
+function chooseGameFaces() {
+  const pool = [...ownedFaces];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  gameFaces = pool.slice(0, Math.min(faceTypeCount, pool.length));
+  physics?.setFacePool(gameFaces);
+}
+function updateFaceModeUI() {
+  $("pointsBalance").textContent = points.toLocaleString();
+  $("faceMode").textContent = faceTypeCount + "種類";
+  const button = $("unlockFour");
+  if (fourTypesUnlocked) {
+    button.textContent = "✓ 4種類モード解放済み";
+    button.disabled = true;
+  } else {
+    button.textContent = "4種類モードを解放（5,000pt）";
+    button.disabled = running || points < 5000;
+  }
+}
+async function unlockFourTypes() {
+  if (fourTypesUnlocked || !uid || running) return;
+  const button = $("unlockFour");
+  button.disabled = true;
+  try {
+    const ref = doc(db, "users", uid);
+    const result = await runTransaction(db, async transaction => {
+      const snap = await transaction.get(ref);
+      const data = snap.exists() ? snap.data() : {};
+      if (data.puzzleFourTypesUnlocked === true) {
+        return { success: true, points: Math.max(0, Number(data.points) || 0), already: true };
+      }
+      const current = Math.max(0, Number(data.points) || 0);
+      if (current < 5000) return { success: false, points: current };
+      const next = current - 5000;
+      transaction.set(ref, {
+        points: next,
+        puzzleFourTypesUnlocked: true,
+        puzzleFaceTypeCount: 4,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      return { success: true, points: next, already: false };
+    });
+    if (!result.success) {
+      points = result.points;
+      updateFaceModeUI();
+      say("ポイントが足りません。5,000ポイント必要です。");
+      return;
+    }
+    points = result.points;
+    fourTypesUnlocked = true;
+    faceTypeCount = 4;
+    chooseGameFaces();
+    if (physics) physics.seed(gameFaces, 70);
+    updateFaceModeUI();
+    say(result.already ? "4種類モードは解放済みです！" : "4種類モードを解放！5,000ポイントを消費しました。");
+  } catch (error) {
+    console.error("[Puzzle] 4種類モード解放失敗", error);
+    say("解放に失敗しました。通信状態を確認してね。");
+    updateFaceModeUI();
+  }
+}
 function updateHud() {
   $("score").textContent = score.toLocaleString();
   $("time").textContent = String(timeLeft);
@@ -75,8 +139,8 @@ function startRound() {
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
   pointerDown = false; setChain([]);
-  physics.setFacePool(ownedFaces);
-  physics.seed(ownedFaces, 43);
+  chooseGameFaces();
+  physics.seed(gameFaces, 70);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
@@ -95,6 +159,7 @@ function showResult() {
   roundEnded = true; running = false; paused = false;
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
+  updateFaceModeUI();
   $("pause").disabled = true; $("shuffle").disabled = true; $("fever").disabled = true;
   const earned = Math.floor(score / 1000);
   $("resultText").textContent = "スコア：" + score.toLocaleString() + "点 / " + combo + "コンボ。ポイント " + earned + " を獲得しました。";
@@ -162,7 +227,7 @@ async function initialize() {
   ownedFaces = actual.length ? actual : [{
     id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
   }];
-  if (ownedFaces.length < 3) {
+  if (ownedFaces.length < 5) {
     for (const face of catalog || []) {
       if (ownedFaces.length >= 5) break;
       if (!ownedFaces.some(item => item.id === String(face.id))) {
@@ -170,6 +235,10 @@ async function initialize() {
       }
     }
   }
+  points = Math.max(0, Number(data.points) || 0);
+  fourTypesUnlocked = data.puzzleFourTypesUnlocked === true;
+  faceTypeCount = fourTypesUnlocked ? 4 : 5;
+  updateFaceModeUI();
   const selectedId = String(data.selectedFace || ownedFaces[0].id);
   activeFace = ownedFaces.find(face => face.id === selectedId) || ownedFaces[0];
   populateFaces(actual.length ? actual : ownedFaces.slice(0, 1));
@@ -180,8 +249,8 @@ async function initialize() {
   img.src = imageFor(activeFace);
   img.onerror = () => { img.hidden = true; $("leaderFallback").hidden = false; };
   physics = new TsumPhysicsBoard($("boardCanvas"));
-  physics.setFacePool(ownedFaces);
-  physics.seed(ownedFaces, 43);
+  chooseGameFaces();
+  physics.seed(gameFaces, 70);
   $("start").disabled = false;
   say("準備完了！ボールが重力で落ちて積み重なるよ。");
 }
@@ -205,6 +274,7 @@ $("boardCanvas").addEventListener("pointercancel", finishChain);
 $("start").addEventListener("click", startRound);
 $("fever").addEventListener("click", useFever);
 $("shuffle").addEventListener("click", shuffleBoard);
+$("unlockFour").addEventListener("click", unlockFourTypes);
 $("pause").addEventListener("click", () => {
   if (!running) return;
   paused = !paused;
