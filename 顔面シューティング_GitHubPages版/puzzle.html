@@ -24,7 +24,48 @@ button,select{font:inherit}button{cursor:pointer}.shell{width:min(100%,760px);ma
 .primary{background:linear-gradient(135deg,#ffe48a,#ffad4b);color:#241a0a;border:0}.secondary{background:#293950;color:white;border:1px solid #526782}
 button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-size:13px;line-height:1.65;text-align:center;margin:10px 4px 0}.message{min-height:23px;text-align:center;color:var(--cyan);font-weight:750;margin-top:10px}
 .overlay{position:fixed;inset:0;background:#050812dc;display:grid;place-items:center;padding:16px;z-index:10}.dialog{width:min(100%,420px);background:#1b2435;border:1px solid #596780;border-radius:20px;padding:22px;text-align:center}.dialog h2{margin:0 0 8px;font-size:26px}.dialog p{color:var(--muted);line-height:1.6}.hidden{display:none!important}
-@media(max-width:420px){.shell{padding:10px 8px 22px}.panel{padding:10px}.stats{gap:5px}.stat{padding:7px 2px}.actions{gap:6px}.actions button{flex:1 1 42%;padding:10px 8px}}
+/* スマホではHUDを詰めて、横幅からはみ出さず一画面内で見渡しやすくする */
+@media(max-width:600px){
+ .shell{width:100%;padding:7px 7px 16px}
+ .top{gap:6px;align-items:center}
+ .brand{font-size:clamp(19px,5.5vw,25px)}
+ .sub{font-size:11px}
+ .top a,.top button{min-height:36px;padding:7px 8px;font-size:12px}
+ .panel{margin-top:8px;padding:8px;border-radius:14px}
+ .profile{gap:8px;flex-wrap:nowrap}
+ .portrait{width:44px;height:44px}
+ .profileInfo{min-width:0}
+ .profileInfo strong{font-size:15px}
+ .profileInfo small{font-size:10px;line-height:1.25}
+ .profile select{width:100%;max-width:100%;font-size:13px;padding:6px;margin-top:4px}
+ .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}
+ .stat{min-width:0;padding:5px 2px;border-radius:9px}
+ .stat span{font-size:10px}
+ .stat strong{font-size:clamp(17px,5vw,22px);overflow-wrap:anywhere}
+ .progress{height:7px;margin-top:7px}
+ .modeBar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px;padding:7px;font-size:11px}
+ .modeBar>span{min-width:0;text-align:center;overflow-wrap:anywhere}
+ .modeBar button{grid-column:1/-1;width:100%;min-height:36px;padding:6px;font-size:11px}
+ .skillPanel{margin-top:7px;padding:8px;border-radius:10px}
+ .skillTitle{font-size:12px}
+ .skillProgress{height:9px;margin-top:6px}
+ .skillDescription{font-size:10px;line-height:1.35;margin:5px 0}
+ .skillButton{min-height:40px;font-size:13px}
+ .help{font-size:10px;line-height:1.4;margin:6px 2px 0}
+ .boardWrap{margin-top:7px;padding:5px;border-radius:14px}
+ .boardWrap,#boardCanvas{max-width:100%}
+ .actions{gap:5px;margin-top:8px}
+ .actions button{flex:1 1 calc(50% - 5px);min-width:0;min-height:40px;padding:7px 5px;font-size:12px}
+ .message{font-size:11px;min-height:18px;margin-top:6px}
+}
+@media(max-width:360px){
+ .shell{padding-left:5px;padding-right:5px}
+ .panel{padding:6px}
+ .top a,.top button{font-size:11px;padding:6px}
+ .stat strong{font-size:17px}
+ .modeBar{font-size:10px}
+ .actions button{font-size:11px}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
 </head>
