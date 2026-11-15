@@ -1199,6 +1199,32 @@ async function activateFaceSkill() {
         if (!result?.success) return;
         showSkillNotice(`${activeFaceSkill.name} Lv.${activeSkillData.level}`);
         switch (result.type) {
+            case "slash": {
+                // 敵が降りてくる高さに合わせて横一閃。通常敵とボスの両方に判定する。
+                const centerY = Math.max(H * 0.22, Math.min(player.y - 105, H * 0.82));
+                const bandHeight = Math.max(150, Number(result.height) || 220);
+                const bandWidth = Math.max(W * 0.78, Number(result.width) || W);
+                const targets = enemies.filter(enemy =>
+                    Math.abs(enemy.y - centerY) <= bandHeight / 2 + enemy.size / 2 &&
+                    enemy.x >= W / 2 - bandWidth / 2 - enemy.size &&
+                    enemy.x <= W / 2 + bandWidth / 2 + enemy.size
+                );
+                damageSkillTargets(targets, result.damage);
+                if (boss && Math.abs(boss.y - centerY) <= bandHeight / 2 + boss.size / 2) {
+                    damageBossWithSkill(result.damage);
+                }
+                skillVisuals.push({
+                    type: "slash",
+                    x: W / 2,
+                    y: centerY,
+                    width: bandWidth,
+                    height: bandHeight,
+                    cross: result.id === "skill_cross_slash",
+                    until: performance.now() + 920
+                });
+                showSkillNotice(`${activeFaceSkill.name}・${targets.length}体を斬撃！`);
+                break;
+            }
             case "explosion": {
                 const targets = enemies.filter(enemy => Math.hypot(enemy.x - result.x, enemy.y - result.y) <= result.radius + enemy.size * 0.5);
                 damageSkillTargets(targets, result.damage);
@@ -5105,7 +5131,40 @@ function draw() {
         const life = Math.max(0, Math.min(1, (effect.until - visualNow) / 850));
         ctx.save();
         ctx.globalAlpha = Math.min(1, life * 1.8);
-        if (effect.type === "bomb") {
+        if (effect.type === "slash") {
+            const progress = 1 - life;
+            const sweepX = effect.x - effect.width * 0.58 + effect.width * progress * 1.16;
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            ctx.translate(sweepX, effect.y);
+            ctx.rotate(-0.16);
+            ctx.shadowColor = "#67f7ff";
+            ctx.shadowBlur = 32;
+            ctx.strokeStyle = "#d9ffff";
+            ctx.lineWidth = 15 * Math.max(0.25, life);
+            ctx.beginPath();
+            ctx.moveTo(-effect.width * 0.62, -effect.height * 0.18);
+            ctx.lineTo(effect.width * 0.62, effect.height * 0.18);
+            ctx.stroke();
+            ctx.strokeStyle = "#36bfff";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(-effect.width * 0.62, -effect.height * 0.18 - 13);
+            ctx.lineTo(effect.width * 0.62, effect.height * 0.18 - 13);
+            ctx.stroke();
+            if (effect.cross) {
+                ctx.rotate(0.32);
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth = 10 * Math.max(0.25, life);
+                ctx.beginPath();
+                ctx.moveTo(-effect.width * 0.52, effect.height * 0.2);
+                ctx.lineTo(effect.width * 0.52, -effect.height * 0.2);
+                ctx.stroke();
+            }
+            ctx.restore();
+            ctx.fillStyle = `rgba(210,250,255,${0.16 * life})`;
+            ctx.fillRect(0, effect.y - effect.height / 2, W, effect.height);
+        } else if (effect.type === "bomb") {
             const radius = effect.radius * (1.15 - life * .15);
             ctx.strokeStyle = "#ffb52e"; ctx.lineWidth = 10 * life; ctx.shadowColor = "#ff4b18"; ctx.shadowBlur = 30;
             ctx.beginPath(); ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2); ctx.stroke();
