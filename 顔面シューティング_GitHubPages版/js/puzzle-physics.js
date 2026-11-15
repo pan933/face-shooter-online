@@ -90,7 +90,7 @@ export class TsumPhysicsBoard {
     this.randomFace = () => this.faces[Math.floor(Math.random() * this.faces.length)];
   }
 
-  seed(faces, count = 43) {
+  seed(faces, count = 70) {
     this.setFacePool(faces);
     this.clear();
     for (let i = 0; i < count; i++) {
@@ -130,32 +130,63 @@ export class TsumPhysicsBoard {
       Composite.remove(this.engine.world, ball.body);
       this.balls = this.balls.filter(item => item !== ball);
     }
-    for (let i = 0; i < balls.length; i++) {
+    // 消した数より少し多めに補充して、上から顔がどんどん降る感覚にする。
+    // 盤面が極端に膨らみすぎないよう上限を設ける。
+    const extra = Math.max(2, Math.ceil(balls.length * 0.55));
+    const refillCount = Math.min(balls.length + extra, Math.max(0, 88 - this.balls.length));
+    for (let i = 0; i < refillCount; i++) {
       const face = this.randomFace();
-      const x = Math.random() * (this.width - this.radius * 2) + this.radius;
-      this.addBall(face, x, -this.radius * (2 + Math.random() * 5));
+      const x = (i % 7 + 0.5) * this.width / 7 + (Math.random() - 0.5) * this.radius;
+      const y = -this.radius * (2 + Math.floor(i / 7) * 2.15 + Math.random());
+      this.addBall(face, x, y);
     }
     this.kickNearby();
   }
 
   shuffle() {
     if (!this.balls.length || !this.faces?.length) return;
+
+    // 顔の種類をランダムに入れ替える。
     const faces = this.balls.map(() => this.randomFace());
     for (let i = faces.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [faces[i], faces[j]] = [faces[j], faces[i]];
     }
-    this.balls.forEach((ball, i) => {
-      ball.face = faces[i];
-      ball.body.plugin.faceId = String(faces[i].id);
-      ball.body.plugin.face = faces[i];
-      this.loadImage(faces[i].imageUrl || "");
-      Body.applyForce(ball.body, ball.body.position, {
-        x: (Math.random() - 0.5) * 0.012, y: -0.008 - Math.random() * 0.009
+
+    // 扇風機の風のように、盤面全体へ渦巻く流れを作る。
+    // 中心から外へ押し出しつつ、接線方向の速度を与えてぐるっと回す。
+    const cx = this.width / 2;
+    const cy = this.height * 0.56;
+    for (let i = 0; i < this.balls.length; i++) {
+      const ball = this.balls[i];
+      const face = faces[i];
+      ball.face = face;
+      ball.body.plugin.faceId = String(face.id);
+      ball.body.plugin.face = face;
+      this.loadImage(face.imageUrl || "");
+
+      const dx = ball.body.position.x - cx;
+      const dy = ball.body.position.y - cy;
+      const distance = Math.max(24, Math.hypot(dx, dy));
+      const nx = dx / distance;
+      const ny = dy / distance;
+      const direction = Math.random() < 0.5 ? -1 : 1;
+      const tangentX = -ny * direction;
+      const tangentY = nx * direction;
+
+      // 既存の落下速度も活かしながら、渦に巻き込まれるように加速。
+      const spin = 5.5 + Math.random() * 3.5;
+      const outward = 1.2 + Math.random() * 1.8;
+      Body.setVelocity(ball.body, {
+        x: tangentX * spin + nx * outward,
+        y: tangentY * spin + ny * outward - 1.5
       });
-      Body.setAngularVelocity(ball.body, (Math.random() - 0.5) * 0.12);
-    });
-    this.kickNearby();
+      Body.setAngularVelocity(ball.body, direction * (0.18 + Math.random() * 0.24));
+      Body.applyForce(ball.body, ball.body.position, {
+        x: tangentX * 0.0018 + nx * 0.0008,
+        y: tangentY * 0.0018 + ny * 0.0008
+      });
+    }
   }
 
   kickNearby() {
