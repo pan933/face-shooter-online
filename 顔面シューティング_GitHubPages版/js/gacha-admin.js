@@ -17,13 +17,8 @@ import {
 // 初期設定
 // ==================================================
 
-const RARITIES = [
-    "N",
-    "R",
-    "SR",
-    "SSR",
-    "UR"
-];
+const RARITIES = ["N", "R", "SR", "SSR", "UR"];
+const RARITY_WEIGHTS = { N: 60, R: 25, SR: 10, SSR: 4, UR: 1 };
 
 const DEFAULT_FACES = [
     {
@@ -467,9 +462,8 @@ function normalizeFace(
                 ) || 0
             ),
 
-        boosted:
-            Boolean(face?.boosted)
-
+        boosted: Boolean(face?.boosted),
+        excludeFromGacha: Boolean(face?.excludeFromGacha)
     };
 
 }
@@ -666,8 +660,9 @@ function renderFaces() {
                     "change",
                     event => {
 
-                        face.rarity =
-                            event.target.value;
+                        face.rarity = event.target.value;
+                        recalculateFaceProbabilities();
+                        refreshProbabilityInputs();
                         updateRewardFaceOptions();
 
                     }
@@ -691,12 +686,15 @@ function renderFaces() {
                     }
                 );
 
-                boostedInput?.addEventListener(
-                    "change",
-                    event => {
-                        face.boosted = event.target.checked;
-                    }
-                );
+                boostedInput?.addEventListener("change", event => {
+                    face.boosted = event.target.checked;
+                });
+
+                card.querySelector(".gacha-face-excluded")?.addEventListener("change", event => {
+                    face.excludeFromGacha = event.target.checked;
+                    recalculateFaceProbabilities();
+                    refreshProbabilityInputs();
+                });
 
 
                 card
@@ -959,29 +957,19 @@ function createFaceCard(
 
 
                     <label>
-
-                        排出確率（%）
-
-                        <input
-                            class="gacha-face-probability"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value="${face.probability}"
-                        >
-
+                        自動計算された排出確率（%）
+                        <input class="gacha-face-probability" type="number" value="${Number(face.probability || 0).toFixed(2)}" readonly aria-readonly="true">
                     </label>
 
                 </div>
 
                 <label style="display:flex;align-items:center;gap:8px;">
-                    <input
-                        class="gacha-face-boosted"
-                        type="checkbox"
-                        ${face.boosted ? "checked" : ""}
-                    >
+                    <input class="gacha-face-boosted" type="checkbox" ${face.boosted ? "checked" : ""}>
                     この顔を出やすくする
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#fca5a5;">
+                    <input class="gacha-face-excluded" type="checkbox" ${face.excludeFromGacha ? "checked" : ""}>
+                    この顔の排出を停止（ガチャに出さない）
                 </label>
 
             </div>
@@ -1033,15 +1021,13 @@ function addFace() {
         rarity:
             "N",
 
-        probability:
-            0,
-
-        boosted:
-            false
+        probability: 0,
+        boosted: false,
+        excludeFromGacha: false
 
     });
 
-
+    recalculateFaceProbabilities();
     renderFaces();
 
 
@@ -1116,12 +1102,8 @@ function deleteFace(
     }
 
 
-    faces.splice(
-        index,
-        1
-    );
-
-
+    faces.splice(index, 1);
+    recalculateFaceProbabilities();
     renderFaces();
 
 }
@@ -1209,10 +1191,46 @@ function updatePreview(
 // 確率合計表示
 // ==================================================
 
+function recalculateFaceProbabilities() {
+    const exchangeOnly = new Set(gachaSettings.mudDangoRewardFaceIds || []);
+    const eligible = faces.filter(face => !face.excludeFromGacha && !exchangeOnly.has(face.id));
+    const activeRarities = RARITIES.filter(rarity => eligible.some(face => face.rarity === rarity));
+    const weightTotal = activeRarities.reduce((sum, rarity) => sum + RARITY_WEIGHTS[rarity], 0);
+
+    for (const face of faces) face.probability = 0;
+    if (!eligible.length || weightTotal <= 0) {
+        updateProbabilitySummary();
+        return;
+    }
+
+    for (const rarity of activeRarities) {
+        const group = eligible.filter(face => face.rarity === rarity);
+        const rarityTotal = RARITY_WEIGHTS[rarity] / weightTotal * 100;
+        const each = rarityTotal / group.length;
+        group.forEach(face => { face.probability = each; });
+    }
+
+    const rounded = eligible.map(face => Math.round(face.probability * 10000) / 10000);
+    const difference = 100 - rounded.reduce((sum, value) => sum + value, 0);
+    if (rounded.length) rounded[rounded.length - 1] = Math.round((rounded[rounded.length - 1] + difference) * 10000) / 10000;
+    eligible.forEach((face, index) => { face.probability = rounded[index]; });
+    updateProbabilitySummary();
+}
+
+function refreshProbabilityInputs() {
+    document.querySelectorAll(".gacha-face-card").forEach(card => {
+        const face = faces[Number(card.dataset.faceIndex)];
+        const input = card.querySelector(".gacha-face-probability");
+        if (face && input) input.value = Number(face.probability || 0).toFixed(2);
+    });
+    updateProbabilitySummary();
+}
+
 function updateProbabilitySummary() {
 
+    const exchangeOnly = new Set(gachaSettings.mudDangoRewardFaceIds || []);
     const total =
-        faces.reduce(
+        faces.filter(face => !face.excludeFromGacha && !exchangeOnly.has(face.id)).reduce(
             (
                 sum,
                 face
@@ -1253,11 +1271,7 @@ function updateProbabilitySummary() {
         statusElement
     ) {
 
-        if (
-            Math.abs(
-                total - 100
-            ) < 0.001
-        ) {
+        if (total > 0 && Math.abs(total - 100) < 0.001) {
 
             statusElement.textContent =
                 "✓ OK";
@@ -1372,21 +1386,10 @@ async function saveFaces() {
                 "N";
 
 
-            face.probability =
-                Math.max(
-                    0,
-                    Number(
-                        card
-                            .querySelector(
-                                ".gacha-face-probability"
-                            )
-                            ?.value
-                    ) || 0
-                );
+            // 排出確率はレア度・排出停止状態から自動計算する。手入力値は採用しない。
 
-            face.boosted = Boolean(
-                card.querySelector(".gacha-face-boosted")?.checked
-            );
+            face.boosted = Boolean(card.querySelector(".gacha-face-boosted")?.checked);
+            face.excludeFromGacha = Boolean(card.querySelector(".gacha-face-excluded")?.checked);
 
         }
     );
@@ -1456,23 +1459,12 @@ async function saveFaces() {
     }
 
 
-    const total =
-        faces.reduce(
-            (
-                sum,
-                face
-            ) =>
-                sum +
-                face.probability,
-            0
-        );
+    recalculateFaceProbabilities();
+    const total = faces.filter(face => !face.excludeFromGacha && !(gachaSettings.mudDangoRewardFaceIds || []).includes(face.id))
+        .reduce((sum, face) => sum + Number(face.probability || 0), 0);
 
 
-    if (
-        Math.abs(
-            total - 100
-        ) > 0.001
-    ) {
+    if (total <= 0 || Math.abs(total - 100) > 0.001) {
 
         showToast(
             `排出確率の合計を100%にしてください。（現在 ${total.toFixed(2)}%）`
@@ -1501,7 +1493,7 @@ async function saveFaces() {
     gachaSettings.mudDangoRewardFaceId = gachaSettings.mudDangoRewardFaceIds[0] || "";
 
     const guaranteeRank = RARITIES.indexOf(gachaSettings.guaranteeRarity);
-    if (!faces.some(face => RARITIES.indexOf(face.rarity) >= guaranteeRank && !gachaSettings.mudDangoRewardFaceIds.includes(face.id))) {
+    if (!faces.some(face => !face.excludeFromGacha && RARITIES.indexOf(face.rarity) >= guaranteeRank && !gachaSettings.mudDangoRewardFaceIds.includes(face.id))) {
         showToast(`保証レア度 ${gachaSettings.guaranteeRarity} 以上の顔を1つ以上設定してください。`);
         return;
     }
@@ -1595,8 +1587,8 @@ async function saveFaces() {
                             probability:
                                 face.probability,
 
-                            boosted:
-                                Boolean(face.boosted)
+                            boosted: Boolean(face.boosted),
+                            excludeFromGacha: Boolean(face.excludeFromGacha)
                         })
                     ),
 
