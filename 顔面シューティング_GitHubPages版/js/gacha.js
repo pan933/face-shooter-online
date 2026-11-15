@@ -335,6 +335,9 @@ async function loadSettings() {
                         boosted:
                             Boolean(face.boosted),
 
+                        excludeFromGacha:
+                            Boolean(face.excludeFromGacha),
+
                         description:
                             String(
                                 face.description ||
@@ -602,7 +605,7 @@ function getProbabilityTotal() {
 
 function getNormalGachaFaces() {
     const excluded = new Set(mudDangoRewardFaceIds);
-    return gachaFaces.filter(face => !excluded.has(face.id));
+    return gachaFaces.filter(face => !face.excludeFromGacha && !excluded.has(face.id));
 }
 
 
