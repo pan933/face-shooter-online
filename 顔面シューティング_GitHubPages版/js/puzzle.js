@@ -87,21 +87,53 @@ async function activateMyTsumSkill() {
   const balls = [...physics.balls];
   let targets = [];
   const type = result.type || "explosion";
-  if (["screen_clear", "explosion", "black_hole", "time_stop", "bullet_counter", "laser", "slash"].includes(type)) {
-    const amount = type === "screen_clear" ? balls.length
-      : Math.min(balls.length, Math.max(5, Math.round((Number(result.damage) || 70) / 5)));
+  const levelBonus = Math.max(0, level - 1);
+
+  // シューティング専用効果も、パズルで意味のある消去効果へ変換する。
+  if (type === "screen_clear") {
+    targets = balls;
+  } else if (["explosion", "black_hole", "time_stop", "bullet_counter", "laser", "slash"].includes(type)) {
+    const amount = Math.min(balls.length, Math.max(6, Math.round((Number(result.damage) || 70) / 4) + levelBonus));
     targets = balls.sort(() => Math.random() - 0.5).slice(0, amount);
-  } else if (["line_clear"].includes(type)) {
+  } else if (type === "line_clear") {
     const centerY = physics.height * 0.55;
-    targets = balls.filter(ball => Math.abs(ball.body.position.y - centerY) < Math.max(70, Number(result.height) || 130))
-      .slice(0, Math.max(5, Number(result.maxTargets) || 12));
+    targets = balls
+      .filter(ball => Math.abs(ball.body.position.y - centerY) < Math.max(75, Number(result.height) || 145))
+      .sort((a, b) => a.body.position.x - b.body.position.x)
+      .slice(0, Math.max(8, Number(result.maxTargets) || 12));
+  } else if (type === "power_up") {
+    // 攻撃力・連射強化は「連鎖ボーナス」に置き換え、追加で顔を消す。
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus * 2));
+    score += Math.max(200, Math.round((Number(result.damageMultiplier) || 1) * 300));
+  } else if (type === "homing_volley") {
+    // 追尾攻撃は盤面で最も多い顔をまとめて消す効果に変換。
+    const counts = new Map();
+    for (const ball of balls) {
+      const id = String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "");
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    const targetId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    targets = balls.filter(ball => String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "") === targetId)
+      .slice(0, Math.max(8, Number(result.maxTargets) || 10) + levelBonus * 2);
+  } else if (type === "score_boost") {
+    // スコア系は小規模消去＋スコア加算にする。
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 6 + levelBonus));
+    score += Math.max(300, Number(result.score) || 500);
   } else if (type === "defense" || type === "teleport" || type === "orbit_guard") {
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.max(3, Number(result.heal) || 5));
+    // 回復・回避・防御系は、盤面中央を巻き込む「お助けボム」に変換。
+    const cx = physics.width / 2, cy = physics.height * 0.58;
+    targets = balls
+      .map(ball => ({ ball, distance: Math.hypot(ball.body.position.x - cx, ball.body.position.y - cy) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, Math.min(balls.length, 7 + levelBonus * 2))
+      .map(item => item.ball);
   } else {
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, 8);
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus));
   }
+
   if (targets.length) clearBalls(targets, "skill");
   else say((skillModule.name || "スキル") + " 発動！");
+  updateHud();
   skillBusy = false;
   updateSkillUI();
 }
@@ -153,8 +185,15 @@ function clearBalls(balls, source = "chain") {
   combo = now - lastClearAt < 2400 ? combo + 1 : 1;
   lastClearAt = now;
   const n = balls.length;
-  const myTsumCount = balls.filter(ball => String(ball.face?.id) === String(activeFace?.id)).length;
-  if (source !== "skill" && myTsumCount > 0) skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
+  // 物理演算で顔データの参照が入れ替わっても、保存されたfaceIdでマイツムを判定する。
+  const activeId = String(activeFace?.id ?? "");
+  const myTsumCount = balls.filter(ball =>
+    String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "") === activeId
+  ).length;
+  // マイツムを消した数だけゲージ加算。スキルで消した分は再充填対象外。
+  if (source !== "skill" && activeId && myTsumCount > 0) {
+    skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
+  }
   const gained = Math.round(n * n * 12 * Math.min(combo, 6));
   score += gained;
   fever = Math.min(100, fever + n * 6);
