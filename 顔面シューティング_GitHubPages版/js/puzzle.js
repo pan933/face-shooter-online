@@ -34,11 +34,11 @@ function updateFaceModeUI() {
     button.disabled = true;
   } else {
     button.textContent = "4種類モードを解放（5,000pt）";
-    button.disabled = points < 5000;
+    button.disabled = running || points < 5000;
   }
 }
 async function unlockFourTypes() {
-  if (fourTypesUnlocked || !uid) return;
+  if (fourTypesUnlocked || !uid || running) return;
   const button = $("unlockFour");
   button.disabled = true;
   try {
@@ -159,6 +159,7 @@ function showResult() {
   roundEnded = true; running = false; paused = false;
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
+  updateFaceModeUI();
   $("pause").disabled = true; $("shuffle").disabled = true; $("fever").disabled = true;
   const earned = Math.floor(score / 1000);
   $("resultText").textContent = "スコア：" + score.toLocaleString() + "点 / " + combo + "コンボ。ポイント " + earned + " を獲得しました。";
