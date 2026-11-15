@@ -177,8 +177,31 @@ function finishChain() {
     if (selected.length) say("同じ顔を3個以上つなげてね！");
     return;
   }
+  const center = selected.reduce((point, ball) => ({
+    x: point.x + ball.body.position.x / selected.length,
+    y: point.y + ball.body.position.y / selected.length
+  }), { x: 0, y: 0 });
+  let bombType = null;
+  if (selected.length >= 13) bombType = "star";
+  else if (selected.length >= 10) bombType = "time";
+  else if (selected.length >= 7) bombType = "normal";
+  if (bombType) physics.createBomb(bombType, center.x, center.y);
   clearBalls(selected, "chain");
+  if (bombType) say((bombType === "time" ? "⏱ タイムボム！" : bombType === "star" ? "🌟 スターボム！" : "💣 ボム！") + " タップして爆発させよう！");
 }
+function activateBomb(bomb) {
+  if (!running || paused || !bomb) return;
+  const radius = bomb.type === "star" ? physics.radius * 5.2 : bomb.type === "time" ? physics.radius * 3.8 : physics.radius * 4.3;
+  const targets = physics.balls.filter(ball => Math.hypot(ball.body.position.x - bomb.x, ball.body.position.y - bomb.y) <= radius);
+  physics.removeBomb(bomb);
+  if (bomb.type === "time") { timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + 3); score += 300; }
+  else if (bomb.type === "star") score += 500;
+  else score += 150;
+  if (targets.length) clearBalls(targets, "bomb");
+  updateHud();
+  say(bomb.type === "time" ? "⏱ タイムボム！残り時間 +3秒！" : bomb.type === "star" ? "🌟 スターボム！広範囲を消去！" : "💣 ボム！周りの顔を消去！");
+}
+
 function clearBalls(balls, source = "chain") {
   if (!running || paused || !balls.length) return;
   const now = Date.now();
@@ -194,7 +217,8 @@ function clearBalls(balls, source = "chain") {
   if (source !== "skill" && activeId && myTsumCount > 0) {
     skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
   }
-  const gained = Math.round(n * n * 12 * Math.min(combo, 6));
+  const chainBonus = source === "chain" && n >= 3 ? Math.max(0, n - 3) * 35 : 0;
+  const gained = Math.round(n * n * 12 * Math.min(combo, 6)) + chainBonus;
   score += gained;
   fever = Math.min(100, fever + n * 6);
   physics.removeAndDrop(balls);
@@ -235,6 +259,7 @@ async function startRound() {
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
   pointerDown = false; previousPointer = null; setChain([]);
+  physics?.clearBombs();
   skillCharge = 0; skillBusy = false;
   chooseGameFaces();
   physics.seed(gameFaces, physics.width < 480 ? 42 : 70, activeFace);
@@ -364,9 +389,11 @@ $("boardCanvas").addEventListener("pointerdown", event => {
   if (!running || paused) return;
   event.preventDefault();
   $("boardCanvas").setPointerCapture?.(event.pointerId);
+  previousPointer = physics.pointerPoint(event);
+  const bomb = physics.hitTestBomb(previousPointer);
+  if (bomb) { pointerDown = false; activateBomb(bomb); return; }
   pointerDown = true;
   setChain([]);
-  previousPointer = physics.pointerPoint(event);
   const ball = physics.hitTest(previousPointer, 1.85);
   tryAddBall(ball);
 });
