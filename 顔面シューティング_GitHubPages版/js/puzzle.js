@@ -10,7 +10,7 @@ const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
 let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
-let running = false, paused = false, roundEnded = false, timer = null;
+let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false;
 
 function say(text) { $("message").textContent = text; }
@@ -165,6 +165,9 @@ function clearBalls(balls, source = "chain") {
     : n + "個つなげた！ +" + gained.toLocaleString() + "点" + (combo > 1 ? " / " + combo + "コンボ" : ""));
 }
 async function startRound() {
+  if (running || roundStarting) return;
+  roundStarting = true;
+  $("start").disabled = true;
   if (faceTypeCount === 4) {
     const ref = doc(db, "users", uid);
     try {
@@ -178,13 +181,16 @@ async function startRound() {
       });
       points = purchase.points;
       updateFaceModeUI();
-      if (!purchase.ok) { faceTypeCount = 5; updateFaceModeUI(); say("ポイント不足で5種類モードに戻しました。"); return; }
+      if (!purchase.ok) { faceTypeCount = 5; roundStarting = false; $("start").disabled = false; updateFaceModeUI(); say("ポイント不足で5種類モードに戻しました。"); return; }
     } catch (error) {
       console.error("[Puzzle] 4種類モード購入失敗", error);
+      roundStarting = false;
+      $("start").disabled = false;
       say("購入に失敗しました。通信状態を確認してください。");
       return;
     }
   }
+  roundStarting = false;
   clearInterval(timer);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
