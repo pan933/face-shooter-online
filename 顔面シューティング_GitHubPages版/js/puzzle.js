@@ -131,7 +131,7 @@ async function activateMyTsumSkill() {
     targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus));
   }
 
-  if (targets.length) clearBalls(targets, "skill");
+  playSfx("skill");\n  if (targets.length) clearBalls(targets, "skill");
   else say((skillModule.name || "スキル") + " 発動！");
   updateHud();
   skillBusy = false;
@@ -271,7 +271,7 @@ async function startRound() {
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
   $("shuffle").disabled = false;
   updateHud();
-  say("スタート！顔をなぞって3個以上つなげよう！");
+  unlockSound();\n  playSfx("start");\n  say("スタート！顔をなぞって3個以上つなげよう！");
   timer = setInterval(() => {
     if (!running || paused) return;
     timeLeft--;
@@ -415,7 +415,7 @@ $("pause").addEventListener("click", () => {
   if (!running) return;
   paused = !paused;
   $("pause").textContent = paused ? "▶ 再開" : "⏸ 一時停止";
-  say(paused ? "一時停止中" : "再開！");
+  if (!paused) playSfx("start");\n  say(paused ? "一時停止中" : "再開！");
 });
 $("faceSelect").addEventListener("change", event => void selectFace(event.target.value));
 $("again").addEventListener("click", () => { $("result").classList.add("hidden"); startRound(); });
