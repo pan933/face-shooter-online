@@ -1070,7 +1070,8 @@ async function setFaceForMode(isGuest) {
         const ownedFace = (data?.faces || []).find(face => face.id === selectedFace);
         const configuredFace = (await loadGachaFaces()).find(face => face.id === selectedFace);
         activeSkillData = normalizeSkillData({ ...ownedFace?.skill, progress: 0, totalKills: 0 });
-        activeFaceSkill = await loadSkill(selectedFace, ownedFace?.skillId || configuredFace?.skillId) || await loadSkill("face2");
+        // 管理画面の現在の設定を優先する。所持データのskillIdは取得時点の古い値の場合がある。
+        activeFaceSkill = await loadSkill(selectedFace, configuredFace?.skillId || ownedFace?.skillId) || await loadSkill("face2");
         updateSkillButton();
         const imagePath = ownedFace?.imageUrl || getGachaFaceImage(selectedFace);
         updateStartSkillPreview(ownedFace?.name || configuredFace?.name || selectedFace, imagePath);
