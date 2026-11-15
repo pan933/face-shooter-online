@@ -13,6 +13,41 @@ let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
 
+let soundContext = null;
+function unlockSound() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  if (!soundContext) soundContext = new AudioCtx();
+  if (soundContext.state === "suspended") void soundContext.resume();
+}
+function playSfx(kind) {
+  if (!soundContext || soundContext.state !== "running") return;
+  const patterns = {
+    chain: [[520, 0, .07], [680, .07, .08]],
+    bomb: [[260, 0, .12], [390, .09, .13]],
+    time: [[620, 0, .08], [820, .09, .1], [1040, .19, .14]],
+    star: [[440, 0, .08], [660, .08, .08], [880, .16, .1], [1180, .26, .18]],
+    explode: [[180, 0, .16], [110, .06, .2]],
+    skill: [[660, 0, .07], [880, .08, .07], [1120, .16, .14]],
+    fever: [[440, 0, .08], [550, .08, .08], [660, .16, .08], [880, .24, .18]],
+    shuffle: [[360, 0, .06], [520, .08, .06], [420, .16, .12]],
+    start: [[440, 0, .08], [660, .1, .16]],
+    end: [[660, 0, .12], [440, .13, .2]]
+  };
+  for (const [frequency, offset, duration] of (patterns[kind] || patterns.chain)) {
+    const oscillator = soundContext.createOscillator();
+    const gain = soundContext.createGain();
+    const at = soundContext.currentTime + offset;
+    oscillator.type = kind === "explode" ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(frequency, at);
+    gain.gain.setValueAtTime(.0001, at);
+    gain.gain.exponentialRampToValueAtTime(.12, at + .012);
+    gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
+    oscillator.connect(gain); gain.connect(soundContext.destination);
+    oscillator.start(at); oscillator.stop(at + duration + .02);
+  }
+}
+
 function say(text) { $("message").textContent = text; }
 function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] || CLOUDINARY_FACE_URLS.face2 || ""; }
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
@@ -131,6 +166,7 @@ async function activateMyTsumSkill() {
     targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus));
   }
 
+  playSfx("skill");
   if (targets.length) clearBalls(targets, "skill");
   else say((skillModule.name || "スキル") + " 発動！");
   updateHud();
@@ -185,7 +221,8 @@ function finishChain() {
   if (selected.length >= 13) bombType = "star";
   else if (selected.length >= 10) bombType = "time";
   else if (selected.length >= 7) bombType = "normal";
-  if (bombType) physics.createBomb(bombType, center.x, center.y);
+  if (bombType) { physics.createBomb(bombType, center.x, center.y); playSfx(bombType === "time" ? "time" : bombType === "star" ? "star" : "bomb"); }
+  else playSfx("chain");
   clearBalls(selected, "chain");
   if (bombType) say((bombType === "time" ? "⏱ タイムボム！" : bombType === "star" ? "🌟 スターボム！" : "💣 ボム！") + " タップして爆発させよう！");
 }
@@ -194,6 +231,7 @@ function activateBomb(bomb) {
   const radius = bomb.type === "star" ? physics.radius * 5.2 : bomb.type === "time" ? physics.radius * 3.8 : physics.radius * 4.3;
   const targets = physics.balls.filter(ball => Math.hypot(ball.body.position.x - bomb.x, ball.body.position.y - bomb.y) <= radius);
   physics.removeBomb(bomb);
+  playSfx("explode");
   if (bomb.type === "time") { timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + 3); score += 300; }
   else if (bomb.type === "star") score += 500;
   else score += 150;
@@ -271,6 +309,8 @@ async function startRound() {
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
   $("shuffle").disabled = false;
   updateHud();
+  unlockSound();
+  playSfx("start");
   say("スタート！顔をなぞって3個以上つなげよう！");
   timer = setInterval(() => {
     if (!running || paused) return;
@@ -282,6 +322,7 @@ async function startRound() {
 function showResult() {
   if (roundEnded) return;
   roundEnded = true; running = false; paused = false;
+  playSfx("end");
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
   $("faceSelect").disabled = false;
@@ -300,6 +341,7 @@ function showResult() {
 function useFever() {
   if (!running || paused || fever < 100) return;
   fever = 0;
+  playSfx("fever");
   const balls = [...physics.balls].sort(() => Math.random() - 0.5)
     .slice(0, Math.min(physics.balls.length, 7 + Math.max(0, (Number(activeFace?.skill?.level) || 1) - 1) * 2));
   clearBalls(balls, "fever");
@@ -307,6 +349,7 @@ function useFever() {
 function shuffleBoard() {
   if (!running || paused || performance.now() < shuffleReadyAt) return;
   physics.shuffle();
+  playSfx("shuffle");
   shuffleReadyAt = performance.now() + 5000;
   setChain([]);
   updateHud();
@@ -388,6 +431,7 @@ async function initialize() {
 $("boardCanvas").addEventListener("pointerdown", event => {
   if (!running || paused) return;
   event.preventDefault();
+  unlockSound();
   $("boardCanvas").setPointerCapture?.(event.pointerId);
   previousPointer = physics.pointerPoint(event);
   const bomb = physics.hitTestBomb(previousPointer);
@@ -414,7 +458,9 @@ $("skillButton").addEventListener("click", activateMyTsumSkill);
 $("pause").addEventListener("click", () => {
   if (!running) return;
   paused = !paused;
+  unlockSound();
   $("pause").textContent = paused ? "▶ 再開" : "⏸ 一時停止";
+  if (!paused) playSfx("start");
   say(paused ? "一時停止中" : "再開！");
 });
 $("faceSelect").addEventListener("change", event => void selectFace(event.target.value));
