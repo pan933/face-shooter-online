@@ -25,7 +25,7 @@ function chooseGameFaces() {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   gameFaces = pool.slice(0, Math.min(faceTypeCount, pool.length));
-  physics?.setFacePool(gameFaces);
+  physics?.setFacePool(gameFaces, activeFace);
 }
 function updateFaceModeUI() {
   $("pointsBalance").textContent = points.toLocaleString();
@@ -237,7 +237,7 @@ async function startRound() {
   pointerDown = false; previousPointer = null; setChain([]);
   skillCharge = 0; skillBusy = false;
   chooseGameFaces();
-  physics.seed(gameFaces, physics.width < 480 ? 42 : 70);
+  physics.seed(gameFaces, physics.width < 480 ? 42 : 70, activeFace);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
   $("faceSelect").disabled = true;
