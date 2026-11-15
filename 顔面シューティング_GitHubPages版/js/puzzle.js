@@ -167,7 +167,6 @@ async function activateMyTsumSkill() {
   }
 
   playSfx("skill");
-  playSfx("skill");
   if (targets.length) clearBalls(targets, "skill");
   else say((skillModule.name || "スキル") + " 発動！");
   updateHud();
@@ -310,8 +309,6 @@ async function startRound() {
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
   $("shuffle").disabled = false;
   updateHud();
-  unlockSound();
-  playSfx("start");
   unlockSound();
   playSfx("start");
   say("スタート！顔をなぞって3個以上つなげよう！");
@@ -463,7 +460,6 @@ $("pause").addEventListener("click", () => {
   paused = !paused;
   unlockSound();
   $("pause").textContent = paused ? "▶ 再開" : "⏸ 一時停止";
-  if (!paused) playSfx("start");
   if (!paused) playSfx("start");
   say(paused ? "一時停止中" : "再開！");
 });
