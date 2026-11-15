@@ -663,9 +663,9 @@ function renderFaces() {
                     event => {
 
                         face.rarity = event.target.value;
+                        updateRewardFaceOptions();
                         recalculateFaceProbabilities();
                         refreshProbabilityInputs();
-                        updateRewardFaceOptions();
 
                     }
                 );
