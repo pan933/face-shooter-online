@@ -758,6 +758,95 @@ if (gameWrap && canvas) {
     });
 
 }
+
+// PCは左ドラッグ、スマホ・タブレットは画面スワイプで居合斬り。
+// ゲーム画面上の軌跡に沿って一度だけ判定し、連続入力にはクールダウンを設ける。
+if (canvas) {
+    canvas.style.touchAction = "none";
+
+    const getSlashPoint = event => {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: Math.max(0, Math.min(W, (event.clientX - rect.left) * W / Math.max(1, rect.width))),
+            y: Math.max(0, Math.min(H, (event.clientY - rect.top) * H / Math.max(1, rect.height)))
+        };
+    };
+
+    canvas.addEventListener("pointerdown", event => {
+        if (!running || paused || pvpStarted) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        event.preventDefault();
+        slashGesture = { pointerId: event.pointerId, points: [getSlashPoint(event)] };
+        try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+        if (gameCursor) gameCursor.style.display = "block";
+    }, { passive: false });
+
+    canvas.addEventListener("pointermove", event => {
+        if (!slashGesture || event.pointerId !== slashGesture.pointerId) return;
+        event.preventDefault();
+        const point = getSlashPoint(event);
+        const previous = slashGesture.points[slashGesture.points.length - 1];
+        if (Math.hypot(point.x - previous.x, point.y - previous.y) >= 5) {
+            slashGesture.points.push(point);
+            if (slashGesture.points.length > 36) slashGesture.points.shift();
+        }
+    }, { passive: false });
+
+    const finishSlashGesture = event => {
+        if (!slashGesture || (event && event.pointerId !== undefined && event.pointerId !== slashGesture.pointerId)) return;
+        const gesture = slashGesture;
+        slashGesture = null;
+        if (gesture.points.length < 2 || !running || paused) return;
+        performSwipeSlash(gesture.points);
+    };
+    canvas.addEventListener("pointerup", finishSlashGesture);
+    canvas.addEventListener("pointercancel", finishSlashGesture);
+    canvas.addEventListener("lostpointercapture", finishSlashGesture);
+}
+
+function pointToSegmentDistance(point, start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 0.001) return Math.hypot(point.x - start.x, point.y - start.y);
+    const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
+    return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+}
+
+function distanceToSlashPath(point, points) {
+    let distance = Infinity;
+    for (let i = 1; i < points.length; i++) {
+        distance = Math.min(distance, pointToSegmentDistance(point, points[i - 1], points[i]));
+    }
+    return distance;
+}
+
+function performSwipeSlash(points) {
+    const now = performance.now();
+    if (now < slashCooldownUntil || points.length < 2) return;
+    const totalLength = points.reduce((sum, point, index) => {
+        if (index === 0) return sum;
+        return sum + Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y);
+    }, 0);
+    if (totalLength < 48) return;
+
+    slashCooldownUntil = now + 620;
+    const hitWidth = Math.max(28, Math.min(58, 30 + totalLength * 0.025));
+    const targets = enemies.filter(enemy =>
+        distanceToSlashPath({ x: enemy.x, y: enemy.y }, points) <= hitWidth + enemy.size * 0.42
+    );
+    const hitCount = damageSkillTargets(targets, 2);
+
+    if (boss && distanceToSlashPath({ x: boss.x, y: boss.y }, points) <= hitWidth + boss.size * 0.48) {
+        damageBossWithSkill(8);
+    }
+
+    slashEffects.push({ points: points.map(point => ({ ...point })), until: now + 360 });
+    if (slashEffects.length > 8) slashEffects.shift();
+
+    // 斬撃の手応えを表示。敵に当たらなくても軌跡は短時間表示する。
+    showSkillNotice(hitCount > 0 ? `居合斬り！ ${hitCount}体に命中` : "居合斬り！");
+}
 applyCursorSize();
 
 // 操作レイアウトをゲーム開始前に編集する「Minecraft風カスタム操作」画面。
@@ -1468,6 +1557,10 @@ let enemyBullets = [];
 
 let particles = [];
 let skillVisuals = [];
+// マウスドラッグ／タッチスワイプによる居合斬り
+let slashGesture = null;
+let slashEffects = [];
+let slashCooldownUntil = 0;
 
 let stars = [];
 
@@ -5191,6 +5284,32 @@ function draw() {
         ctx.restore();
     }
 
+    const slashNow = performance.now();
+    slashEffects = slashEffects.filter(effect => effect.until > slashNow);
+    const activeSlash = slashGesture ? { points: slashGesture.points, until: slashNow + 80 } : null;
+    for (const effect of [...slashEffects, ...(activeSlash ? [activeSlash] : [])]) {
+        const alpha = Math.max(0, Math.min(1, (effect.until - slashNow) / 360));
+        if (effect.points.length < 2) continue;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = alpha;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.shadowColor = "#62f5ff";
+        ctx.shadowBlur = 24;
+        ctx.strokeStyle = "#eaffff";
+        ctx.lineWidth = 13;
+        ctx.beginPath();
+        ctx.moveTo(effect.points[0].x, effect.points[0].y);
+        for (let i = 1; i < effect.points.length; i++) ctx.lineTo(effect.points[i].x, effect.points[i].y);
+        ctx.stroke();
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = "#39bfff";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+    }
+
     ctx.restore();
 
 }
@@ -5198,7 +5317,7 @@ function draw() {
 
 /* ==================================================
    LOOP
-================================================== */
+==================================================
 
 function gameLoop(time) {
 
