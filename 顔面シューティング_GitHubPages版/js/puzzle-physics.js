@@ -14,6 +14,7 @@ export class TsumPhysicsBoard {
     this.balls = [];
     this.images = new Map();
     this.chain = [];
+    this.bombs = [];
     this.width = 360;
     this.height = 520;
     this.radius = 25;
@@ -110,9 +111,28 @@ export class TsumPhysicsBoard {
     for (const ball of this.balls) Composite.remove(this.engine.world, ball.body);
     this.balls.length = 0;
     this.chain = [];
+    this.clearBombs();
   }
 
   setChain(chain) { this.chain = chain.slice(); }
+
+  createBomb(type, x, y) {
+    if (this.bombs.length >= 3) this.bombs.shift();
+    const bomb = { id: globalThis.crypto?.randomUUID?.() || String(Date.now() + Math.random()), type, x, y, radius: this.radius * 0.92, bornAt: performance.now() };
+    this.bombs.push(bomb);
+    return bomb;
+  }
+
+  hitTestBomb(point) {
+    for (let i = this.bombs.length - 1; i >= 0; i--) {
+      const bomb = this.bombs[i];
+      if (Math.hypot(point.x - bomb.x, point.y - bomb.y) <= bomb.radius * 1.7) return bomb;
+    }
+    return null;
+  }
+
+  removeBomb(bomb) { this.bombs = this.bombs.filter(item => item !== bomb); }
+  clearBombs() { this.bombs.length = 0; }
 
   hitTest(point, extra = 1.8) {
     let best = null, bestD = Infinity;
@@ -265,6 +285,21 @@ export class TsumPhysicsBoard {
       ctx.shadowColor = "#ffd76a";
       ctx.shadowBlur = 14;
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // Chain bombs stay visible on the board and can be tapped to detonate.
+    for (const bomb of this.bombs) {
+      const pulse = 1 + Math.sin(performance.now() / 180) * 0.07;
+      const r = bomb.radius * pulse;
+      ctx.save(); ctx.translate(bomb.x, bomb.y);
+      ctx.shadowColor = bomb.type === "time" ? "#5eeaff" : bomb.type === "star" ? "#ffe36e" : "#ff8a52";
+      ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fillStyle = bomb.type === "time" ? "#176b9b" : bomb.type === "star" ? "#a77b13" : "#a83e36"; ctx.fill();
+      ctx.shadowBlur = 0; ctx.strokeStyle = "#fff4d0"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "900 " + (r * 1.05) + "px system-ui,sans-serif";
+      ctx.fillText(bomb.type === "time" ? "⏱" : bomb.type === "star" ? "★" : "B", 0, 1);
       ctx.restore();
     }
 
