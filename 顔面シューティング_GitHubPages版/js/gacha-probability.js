@@ -145,6 +145,7 @@ async function applyGachaSettings() {
 
 
         for (const face of faces) {
+            if (face.excludeFromGacha) continue;
 
             const number =
                 Number(
@@ -153,8 +154,7 @@ async function applyGachaSettings() {
                 );
 
 
-            const rarity =
-                getFaceRarity(number);
+            const rarity = RARITIES[face.rarity] ? face.rarity : getFaceRarity(number);
 
 
             if (

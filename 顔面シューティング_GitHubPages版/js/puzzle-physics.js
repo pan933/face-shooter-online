@@ -151,10 +151,10 @@ export class TsumPhysicsBoard {
       Composite.remove(this.engine.world, ball.body);
       this.balls = this.balls.filter(item => item !== ball);
     }
-    // 消した数より少し多めに補充して、上から顔がどんどん降る感覚にする。
-    // 盤面が極端に膨らみすぎないよう上限を設ける。
-    const extra = Math.max(2, Math.ceil(balls.length * 0.55));
-    const refillCount = Math.min(balls.length + extra, Math.max(0, 88 - this.balls.length));
+    // 消した数と同じ数だけ補充する。盤面の顔の総数は増やさない。
+    // 初期配置と同じく、スマホ42個・PC70個を上限にする。
+    const maxBalls = this.width < 480 ? 42 : 70;
+    const refillCount = Math.min(balls.length, Math.max(0, maxBalls - this.balls.length));
     for (let i = 0; i < refillCount; i++) {
       // 顔を補充するたび、少なくとも1個は必ずマイツムを落とす。
       const face = i === 0 && this.guaranteedFace ? this.guaranteedFace : this.randomFace();
