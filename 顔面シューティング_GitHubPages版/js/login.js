@@ -40,7 +40,8 @@ function getLoginRedirectUrl() {
   const allowedPages = [
     "game.html",
     "gacha.html",
-    "admin.html"
+    "admin.html",
+    "puzzle.html"
   ];
 
   if (returnTo && allowedPages.includes(returnTo)) {
