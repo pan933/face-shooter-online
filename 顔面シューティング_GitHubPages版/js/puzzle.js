@@ -153,7 +153,7 @@ function clearBalls(balls, source = "chain") {
   lastClearAt = now;
   const n = balls.length;
   const myTsumCount = balls.filter(ball => String(ball.face?.id) === String(activeFace?.id)).length;
-  if (myTsumCount > 0) skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
+  if (source !== "skill" && myTsumCount > 0) skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
   const gained = Math.round(n * n * 12 * Math.min(combo, 6));
   score += gained;
   fever = Math.min(100, fever + n * 6);
@@ -194,6 +194,7 @@ async function startRound() {
   physics.seed(gameFaces, 70);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
+  $("faceSelect").disabled = true;
   updateFaceModeUI();
   updateSkillUI();
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
@@ -212,13 +213,17 @@ function showResult() {
   roundEnded = true; running = false; paused = false;
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
+  $("faceSelect").disabled = false;
+  faceTypeCount = 5; // 4種類モードは1試合ごとの購入なので、終了後は標準に戻す。
   updateFaceModeUI();
   $("pause").disabled = true; $("shuffle").disabled = true; $("fever").disabled = true;
   const earned = Math.floor(score / 1000);
   $("resultText").textContent = "スコア：" + score.toLocaleString() + "点 / " + combo + "コンボ。ポイント " + earned + " を獲得しました。";
   $("result").classList.remove("hidden");
   if (earned > 0) void addMatchPoints(uid, earned).then(result => {
-    if (!result?.success) say("ポイントの保存に失敗しました。");
+    if (!result?.success) { say("ポイントの保存に失敗しました。"); return; }
+    points = Math.max(0, Number(result.points) || points);
+    updateFaceModeUI();
   }).catch(error => { console.error(error); say("ポイントの保存に失敗しました。"); });
 }
 function useFever() {
