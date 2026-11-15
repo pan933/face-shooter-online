@@ -18,6 +18,7 @@ button,select{font:inherit}button{cursor:pointer}.shell{width:min(100%,760px);ma
 .progress{height:9px;background:#0b1020;border-radius:99px;overflow:hidden;margin-top:10px;border:1px solid #34435b}.progress>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#55d7e8,#ffe071);transition:width .15s}
 .boardWrap{position:relative;margin:12px auto 0;max-width:560px;padding:8px;border-radius:22px;background:linear-gradient(145deg,#0a1220,#263750);border:1px solid #43536c;box-shadow:inset 0 0 30px #0008,0 10px 28px #0005;touch-action:none;overflow:hidden}
 #boardCanvas{display:block;width:100%;height:auto;border-radius:15px;touch-action:none;user-select:none}
+.modeBar{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin-top:12px;padding:10px;background:#101827;border:1px solid #34435b;border-radius:12px;font-size:13px}.modeBar strong{color:var(--gold)}.modeBar button{min-height:38px;padding:8px 11px;font-size:12px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:13px}.primary,.secondary{border-radius:13px;padding:12px 15px;min-height:48px;font-weight:850}
 .primary{background:linear-gradient(135deg,#ffe48a,#ffad4b);color:#241a0a;border:0}.secondary{background:#293950;color:white;border:1px solid #526782}
 button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-size:13px;line-height:1.65;text-align:center;margin:10px 4px 0}.message{min-height:23px;text-align:center;color:var(--cyan);font-weight:750;margin-top:10px}
@@ -33,6 +34,7 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><label><select id="faceSelect" aria-label="使用する顔" disabled></select></label></div></div>
  <div class="stats"><div class="stat"><span>スコア</span><strong id="score">0</strong></div><div class="stat"><span>のこり時間</span><strong id="time">60</strong></div><div class="stat"><span>コンボ</span><strong id="combo">0</strong></div></div>
  <div class="progress" aria-label="フィーバーゲージ"><i id="feverFill"></i></div>
+ <div class="modeBar"><span>使用する顔：<strong id="faceMode">5種類</strong></span><span>所持ポイント：<strong id="pointsBalance">0</strong></span><button id="unlockFour" class="secondary" type="button" disabled>4種類モードを解放（5,000pt）</button></div>
  <p class="help">同じ顔を指でなぞって3個以上つなげよう！消えた場所には上から新しい顔が落ちてくるよ。<br>顔はぶつかり合いながら積み重なるよ。シャッフルで配置をかき混ぜよう！</p>
 </section>
 <section class="panel">
