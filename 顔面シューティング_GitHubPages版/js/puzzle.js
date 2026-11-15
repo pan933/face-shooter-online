@@ -3,13 +3,14 @@ import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth
 import { doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 import { loadFaceData, loadGachaFaces, CLOUDINARY_FACE_URLS, saveFaceData, addMatchPoints } from "./face-system.js";
 import { TsumPhysicsBoard } from "./puzzle-physics.js";
+import { loadSkill, getRequiredKills } from "./skill-system.js";
 
 const $ = id => document.getElementById(id);
 const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
-let points = 0, fourTypesUnlocked = false, faceTypeCount = 5;
+let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
-let running = false, paused = false, roundEnded = false, timer = null;
+let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false;
 
 function say(text) { $("message").textContent = text; }
@@ -17,7 +18,8 @@ function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] 
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
 function randomFace() { return gameFaces[Math.floor(Math.random() * gameFaces.length)] || gameFaces[0] || ownedFaces[0]; }
 function chooseGameFaces() {
-  const pool = [...ownedFaces];
+  const pool = ownedFaces.filter(face => face.id !== activeFace?.id);
+  pool.unshift(activeFace || ownedFaces[0]);
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -28,56 +30,80 @@ function chooseGameFaces() {
 function updateFaceModeUI() {
   $("pointsBalance").textContent = points.toLocaleString();
   $("faceMode").textContent = faceTypeCount + "種類";
-  const button = $("unlockFour");
-  if (fourTypesUnlocked) {
-    button.textContent = "✓ 4種類モード解放済み";
-    button.disabled = true;
-  } else {
-    button.textContent = "4種類モードを解放（5,000pt）";
-    button.disabled = running || points < 5000;
-  }
+  $("buyFour").textContent = faceTypeCount === 4 ? "5種類に戻す" : "4種類で1試合（5,000pt）";
+  $("buyFour").disabled = running;
 }
-async function unlockFourTypes() {
-  if (fourTypesUnlocked || !uid || running) return;
-  const button = $("unlockFour");
-  button.disabled = true;
-  try {
-    const ref = doc(db, "users", uid);
-    const result = await runTransaction(db, async transaction => {
-      const snap = await transaction.get(ref);
-      const data = snap.exists() ? snap.data() : {};
-      if (data.puzzleFourTypesUnlocked === true) {
-        return { success: true, points: Math.max(0, Number(data.points) || 0), already: true };
-      }
-      const current = Math.max(0, Number(data.points) || 0);
-      if (current < 5000) return { success: false, points: current };
-      const next = current - 5000;
-      transaction.set(ref, {
-        points: next,
-        puzzleFourTypesUnlocked: true,
-        puzzleFaceTypeCount: 4,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      return { success: true, points: next, already: false };
-    });
-    if (!result.success) {
-      points = result.points;
-      updateFaceModeUI();
-      say("ポイントが足りません。5,000ポイント必要です。");
-      return;
-    }
-    points = result.points;
-    fourTypesUnlocked = true;
-    faceTypeCount = 4;
-    chooseGameFaces();
-    if (physics) physics.seed(gameFaces, 70);
+async function buyFourMode() {
+  if (running) return;
+  if (faceTypeCount === 4) {
+    faceTypeCount = 5;
     updateFaceModeUI();
-    say(result.already ? "4種類モードは解放済みです！" : "4種類モードを解放！5,000ポイントを消費しました。");
-  } catch (error) {
-    console.error("[Puzzle] 4種類モード解放失敗", error);
-    say("解放に失敗しました。通信状態を確認してね。");
-    updateFaceModeUI();
+    say("5種類モードに戻しました。");
+    return;
   }
+  if (points < 5000) {
+    say("4種類モードには5,000ポイント必要です。");
+    return;
+  }
+  faceTypeCount = 4;
+  updateFaceModeUI();
+  say("4種類モードを選択中。ゲーム開始時に5,000ポイントを消費します。");
+}
+async function loadMyTsumSkill() {
+  skillModule = await loadSkill(activeFace.id, activeFace.skillId || "");
+  const level = Math.max(1, Number(activeFace.skill?.level) || 1);
+  skillRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
+  skillCharge = 0;
+  $("skillButton").textContent = "✨ " + (skillModule?.name || "マイツムスキル");
+  $("skillDescription").textContent = (skillModule?.description || "マイツムを消してゲージをためよう") + "（必要：" + skillRequired + "個）";
+  updateSkillUI();
+}
+function updateSkillUI() {
+  const percent = Math.min(100, skillCharge / Math.max(1, skillRequired) * 100);
+  $("skillFill").style.width = percent + "%";
+  $("skillChargeText").textContent = Math.min(skillCharge, skillRequired) + " / " + skillRequired;
+  $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired;
+}
+async function activateMyTsumSkill() {
+  if (!running || paused || skillBusy || skillCharge < skillRequired || !skillModule) return;
+  skillBusy = true;
+  skillCharge = 0;
+  updateSkillUI();
+  const level = Math.max(1, Number(activeFace?.skill?.level) || 1);
+  let result;
+  try {
+    result = skillModule.activate({
+      skillLevel: level,
+      player: { x: physics.width / 2, y: physics.height * 0.58 },
+      canvas: { width: physics.width, height: physics.height },
+      viewportWidth: physics.width,
+      viewportHeight: physics.height,
+      enemies: physics.balls
+    }) || {};
+  } catch (error) {
+    console.error("[Puzzle] スキル実行エラー", error);
+    result = {};
+  }
+  const balls = [...physics.balls];
+  let targets = [];
+  const type = result.type || "explosion";
+  if (["screen_clear", "explosion", "black_hole", "time_stop", "bullet_counter", "laser", "slash"].includes(type)) {
+    const amount = type === "screen_clear" ? balls.length
+      : Math.min(balls.length, Math.max(5, Math.round((Number(result.damage) || 70) / 5)));
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, amount);
+  } else if (["line_clear"].includes(type)) {
+    const centerY = physics.height * 0.55;
+    targets = balls.filter(ball => Math.abs(ball.body.position.y - centerY) < Math.max(70, Number(result.height) || 130))
+      .slice(0, Math.max(5, Number(result.maxTargets) || 12));
+  } else if (type === "defense" || type === "teleport" || type === "orbit_guard") {
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.max(3, Number(result.heal) || 5));
+  } else {
+    targets = balls.sort(() => Math.random() - 0.5).slice(0, 8);
+  }
+  if (targets.length) clearBalls(targets, "skill");
+  else say((skillModule.name || "スキル") + " 発動！");
+  skillBusy = false;
+  updateSkillUI();
 }
 function updateHud() {
   $("score").textContent = score.toLocaleString();
@@ -85,6 +111,7 @@ function updateHud() {
   $("combo").textContent = String(combo);
   $("feverFill").style.width = fever + "%";
   $("fever").disabled = !running || paused || fever < 100;
+  updateSkillUI();
   $("shuffle").disabled = !running || paused || performance.now() < shuffleReadyAt;
   $("shuffleCooldown").textContent = performance.now() < shuffleReadyAt
     ? Math.ceil((shuffleReadyAt - performance.now()) / 1000) + "秒"
@@ -125,24 +152,57 @@ function clearBalls(balls, source = "chain") {
   combo = now - lastClearAt < 2400 ? combo + 1 : 1;
   lastClearAt = now;
   const n = balls.length;
+  const myTsumCount = balls.filter(ball => String(ball.face?.id) === String(activeFace?.id)).length;
+  if (source !== "skill" && myTsumCount > 0) skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
   const gained = Math.round(n * n * 12 * Math.min(combo, 6));
   score += gained;
   fever = Math.min(100, fever + n * 6);
   physics.removeAndDrop(balls);
   updateHud();
-  say(source === "fever"
+  updateSkillUI();
+  say(source === "skill" ? "🌟 " + (skillModule?.name || "マイツムスキル") + " 発動！" : source === "fever"
     ? "顔面フィーバー！ " + n + "個を一気に消した！"
     : n + "個つなげた！ +" + gained.toLocaleString() + "点" + (combo > 1 ? " / " + combo + "コンボ" : ""));
 }
-function startRound() {
+async function startRound() {
+  if (running || roundStarting) return;
+  roundStarting = true;
+  $("start").disabled = true;
+  if (faceTypeCount === 4) {
+    const ref = doc(db, "users", uid);
+    try {
+      const purchase = await runTransaction(db, async transaction => {
+        const snap = await transaction.get(ref);
+        const current = Math.max(0, Number(snap.exists() ? snap.data().points : 0) || 0);
+        if (current < 5000) return { ok: false, points: current };
+        const next = current - 5000;
+        transaction.set(ref, { points: next, updatedAt: serverTimestamp() }, { merge: true });
+        return { ok: true, points: next };
+      });
+      points = purchase.points;
+      updateFaceModeUI();
+      if (!purchase.ok) { faceTypeCount = 5; roundStarting = false; $("start").disabled = false; updateFaceModeUI(); say("ポイント不足で5種類モードに戻しました。"); return; }
+    } catch (error) {
+      console.error("[Puzzle] 4種類モード購入失敗", error);
+      roundStarting = false;
+      $("start").disabled = false;
+      say("購入に失敗しました。通信状態を確認してください。");
+      return;
+    }
+  }
+  roundStarting = false;
   clearInterval(timer);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
   pointerDown = false; setChain([]);
+  skillCharge = 0; skillBusy = false;
   chooseGameFaces();
   physics.seed(gameFaces, 70);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
+  $("faceSelect").disabled = true;
+  updateFaceModeUI();
+  updateSkillUI();
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
   $("shuffle").disabled = false;
   updateHud();
@@ -159,13 +219,17 @@ function showResult() {
   roundEnded = true; running = false; paused = false;
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
+  $("faceSelect").disabled = false;
+  faceTypeCount = 5; // 4種類モードは1試合ごとの購入なので、終了後は標準に戻す。
   updateFaceModeUI();
   $("pause").disabled = true; $("shuffle").disabled = true; $("fever").disabled = true;
   const earned = Math.floor(score / 1000);
   $("resultText").textContent = "スコア：" + score.toLocaleString() + "点 / " + combo + "コンボ。ポイント " + earned + " を獲得しました。";
   $("result").classList.remove("hidden");
   if (earned > 0) void addMatchPoints(uid, earned).then(result => {
-    if (!result?.success) say("ポイントの保存に失敗しました。");
+    if (!result?.success) { say("ポイントの保存に失敗しました。"); return; }
+    points = Math.max(0, Number(result.points) || points);
+    updateFaceModeUI();
   }).catch(error => { console.error(error); say("ポイントの保存に失敗しました。"); });
 }
 function useFever() {
@@ -188,7 +252,8 @@ async function selectFace(id) {
   if (!face) return;
   activeFace = face;
   $("leaderName").textContent = safeName(face);
-  $("leaderSkill").textContent = "スキル Lv." + Math.max(1, Number(face.skill?.level) || 1) + " / 所持顔 " + ownedFaces.length + "体";
+  $("leaderSkill").textContent = "マイツム / スキル Lv." + Math.max(1, Number(face.skill?.level) || 1) + " / 所持顔 " + ownedFaces.length + "体";
+  await loadMyTsumSkill();
   const img = $("leaderFace");
   img.hidden = false; $("leaderFallback").hidden = true;
   img.onerror = () => { img.hidden = true; $("leaderFallback").hidden = false; };
@@ -236,18 +301,18 @@ async function initialize() {
     }
   }
   points = Math.max(0, Number(data.points) || 0);
-  fourTypesUnlocked = data.puzzleFourTypesUnlocked === true;
-  faceTypeCount = fourTypesUnlocked ? 4 : 5;
+  faceTypeCount = 5;
   updateFaceModeUI();
   const selectedId = String(data.selectedFace || ownedFaces[0].id);
   activeFace = ownedFaces.find(face => face.id === selectedId) || ownedFaces[0];
   populateFaces(actual.length ? actual : ownedFaces.slice(0, 1));
   $("faceSelect").value = activeFace.id;
   $("leaderName").textContent = safeName(activeFace);
-  $("leaderSkill").textContent = "ログイン中：" + profileName + " / スキル Lv." + Math.max(1, Number(activeFace.skill?.level) || 1);
+  $("leaderSkill").textContent = "マイツム：" + profileName + " / スキル Lv." + Math.max(1, Number(activeFace.skill?.level) || 1);
   const img = $("leaderFace");
   img.src = imageFor(activeFace);
   img.onerror = () => { img.hidden = true; $("leaderFallback").hidden = false; };
+  await loadMyTsumSkill();
   physics = new TsumPhysicsBoard($("boardCanvas"));
   chooseGameFaces();
   physics.seed(gameFaces, 70);
@@ -274,7 +339,8 @@ $("boardCanvas").addEventListener("pointercancel", finishChain);
 $("start").addEventListener("click", startRound);
 $("fever").addEventListener("click", useFever);
 $("shuffle").addEventListener("click", shuffleBoard);
-$("unlockFour").addEventListener("click", unlockFourTypes);
+$("buyFour").addEventListener("click", buyFourMode);
+$("skillButton").addEventListener("click", activateMyTsumSkill);
 $("pause").addEventListener("click", () => {
   if (!running) return;
   paused = !paused;
