@@ -11,7 +11,7 @@ let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain
 let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
-let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false;
+let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
 
 function say(text) { $("message").textContent = text; }
 function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] || CLOUDINARY_FACE_URLS.face2 || ""; }
@@ -138,6 +138,7 @@ function tryAddBall(ball) {
 function finishChain() {
   if (!pointerDown) return;
   pointerDown = false;
+  previousPointer = null;
   const selected = chain.slice();
   setChain([]);
   if (selected.length < 3) {
@@ -194,10 +195,10 @@ async function startRound() {
   clearInterval(timer);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
-  pointerDown = false; setChain([]);
+  pointerDown = false; previousPointer = null; setChain([]);
   skillCharge = 0; skillBusy = false;
   chooseGameFaces();
-  physics.seed(gameFaces, 70);
+  physics.seed(gameFaces, physics.width < 480 ? 42 : 70);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
   $("faceSelect").disabled = true;
@@ -315,7 +316,7 @@ async function initialize() {
   await loadMyTsumSkill();
   physics = new TsumPhysicsBoard($("boardCanvas"));
   chooseGameFaces();
-  physics.seed(gameFaces, 70);
+  physics.seed(gameFaces, physics.width < 480 ? 42 : 70);
   $("start").disabled = false;
   say("準備完了！ボールが重力で落ちて積み重なるよ。");
 }
@@ -326,13 +327,16 @@ $("boardCanvas").addEventListener("pointerdown", event => {
   $("boardCanvas").setPointerCapture?.(event.pointerId);
   pointerDown = true;
   setChain([]);
-  const ball = physics.hitTest(physics.pointerPoint(event));
+  previousPointer = physics.pointerPoint(event);
+  const ball = physics.hitTest(previousPointer, 1.85);
   tryAddBall(ball);
 });
 $("boardCanvas").addEventListener("pointermove", event => {
   if (!pointerDown || !running || paused) return;
-  const ball = physics.hitTest(physics.pointerPoint(event), 1.45);
-  tryAddBall(ball);
+  const currentPointer = physics.pointerPoint(event);
+  const crossed = physics.hitTestSegment(previousPointer || currentPointer, currentPointer, 1.9);
+  for (const ball of crossed) tryAddBall(ball);
+  previousPointer = currentPointer;
 });
 $("boardCanvas").addEventListener("pointerup", finishChain);
 $("boardCanvas").addEventListener("pointercancel", finishChain);
