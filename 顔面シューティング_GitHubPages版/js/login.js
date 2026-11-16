@@ -7,7 +7,6 @@ import {
 } from "./firebase-config.js";
 
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
   signOut,
@@ -100,6 +99,9 @@ function humanizeError(error) {
 
   const messages = {
     "auth/email-already-in-use":
+      "このIDはすでに使われています。別のIDにしてください。",
+
+    "functions/already-exists":
       "このIDはすでに使われています。別のIDにしてください。",
 
     "auth/invalid-credential":
