@@ -53,14 +53,17 @@ function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] 
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
 function randomFace() { return gameFaces[Math.floor(Math.random() * gameFaces.length)] || gameFaces[0] || ownedFaces[0]; }
 function chooseGameFaces() {
-  const pool = ownedFaces.filter(face => face.id !== activeFace?.id);
-  pool.unshift(activeFace || ownedFaces[0]);
-  for (let i = pool.length - 1; i > 0; i--) {
+  const selectedMyTsum = activeFace || ownedFaces[0];
+  const otherFaces = ownedFaces.filter(face => String(face.id) !== String(selectedMyTsum?.id));
+  for (let i = otherFaces.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+    [otherFaces[i], otherFaces[j]] = [otherFaces[j], otherFaces[i]];
   }
-  gameFaces = pool.slice(0, Math.min(faceTypeCount, pool.length));
-  physics?.setFacePool(gameFaces, activeFace);
+  // 先にマイツムを確定枠へ入れてから、残りの種類を抽選する。
+  // これなら所持顔が多くても、sliceでマイツムが落ちない。
+  const maxTypes = Math.max(1, Math.min(faceTypeCount, ownedFaces.length));
+  gameFaces = [selectedMyTsum, ...otherFaces.slice(0, maxTypes - 1)].filter(Boolean);
+  physics?.setFacePool(gameFaces, selectedMyTsum);
 }
 function updateFaceModeUI() {
   $("pointsBalance").textContent = points.toLocaleString();
