@@ -88,20 +88,42 @@ async function buyFourMode() {
   updateFaceModeUI();
   say("4種類モードを選択中。ゲーム開始時に5,000ポイントを消費します。");
 }
+function puzzleSkillHint(type) {
+  const hints = {
+    screen_clear: "盤面の顔をまとめて一掃する",
+    explosion: "指定範囲の顔をまとめて消す",
+    black_hole: "中央付近の顔を吸い込むように消す",
+    line_clear: "横一列に近い範囲の顔を消す",
+    laser: "横方向のライン上の顔を消す",
+    slash: "横切る斬撃で顔をまとめて消す",
+    time_stop: "盤面を一時停止し、中央の顔を消す",
+    power_up: "顔を追加で消してスコアボーナス",
+    bullet_counter: "お助け効果で中央付近の顔を消す",
+    defense: "少し時間を回復して顔を消す",
+    teleport: "盤面中央を整理して時間を回復",
+    orbit_guard: "周囲を整理して時間を回復",
+    homing_volley: "盤面で最も多い顔をまとめて消す",
+    score_boost: "顔を消して追加スコアを獲得"
+  };
+  return hints[type] || "顔をまとめて消してスコアを獲得";
+}
 async function loadMyTsumSkill() {
-  skillModule = await loadSkill(activeFace.id, activeFace.skillId || "");
+  const skillId = String(activeFace?.skillId || activeFace?.skill?.skillId || "");
+  skillModule = await loadSkill(String(activeFace?.id || ""), skillId);
   const level = Math.max(1, Number(activeFace.skill?.level) || 1);
   skillRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
   skillCharge = 0;
   $("skillButton").textContent = "✨ " + (skillModule?.name || "マイツムスキル");
-  $("skillDescription").textContent = (skillModule?.description || "マイツムを消してゲージをためよう") + "（必要：" + skillRequired + "個）";
+  const skillType = skillModule?.levels?.[Math.min(level - 1, (skillModule.levels?.length || 1) - 1)]?.type || "";
+  const hint = skillType ? puzzleSkillHint(skillType) : "マイツムを消してゲージをためよう";
+  $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
 function updateSkillUI() {
   const percent = Math.min(100, skillCharge / Math.max(1, skillRequired) * 100);
   $("skillFill").style.width = percent + "%";
   $("skillChargeText").textContent = Math.min(skillCharge, skillRequired) + " / " + skillRequired;
-  $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired;
+  $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired || !skillModule;
 }
 async function activateMyTsumSkill() {
   if (!running || paused || skillBusy || skillCharge < skillRequired || !skillModule) return;
@@ -109,7 +131,7 @@ async function activateMyTsumSkill() {
   skillCharge = 0;
   updateSkillUI();
   const level = Math.max(1, Number(activeFace?.skill?.level) || 1);
-  let result;
+  let result = {};
   try {
     result = skillModule.activate({
       skillLevel: level,
@@ -121,31 +143,48 @@ async function activateMyTsumSkill() {
     }) || {};
   } catch (error) {
     console.error("[Puzzle] スキル実行エラー", error);
-    result = {};
   }
+
   const balls = [...physics.balls];
-  let targets = [];
   const type = result.type || "explosion";
   const levelBonus = Math.max(0, level - 1);
+  const centerX = Number.isFinite(Number(result.x)) ? Number(result.x) : physics.width / 2;
+  const centerY = Number.isFinite(Number(result.y)) ? Number(result.y) : physics.height * 0.56;
+  const radius = Math.max(physics.radius * 2.5, Number(result.radius) || physics.width * (0.24 + levelBonus * 0.025));
+  let targets = [];
+  const nearest = (count, x = centerX, y = centerY) => balls
+    .map(ball => ({ ball, d: Math.hypot(ball.body.position.x - x, ball.body.position.y - y) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, Math.min(balls.length, count))
+    .map(item => item.ball);
 
-  // シューティング専用効果も、パズルで意味のある消去効果へ変換する。
+  // 顔面ツム専用の効果へ変換。弾・HP・敵などのシューティング要素には依存しない。
   if (type === "screen_clear") {
     targets = balls;
-  } else if (["explosion", "black_hole", "time_stop", "bullet_counter", "laser", "slash"].includes(type)) {
-    const amount = Math.min(balls.length, Math.max(6, Math.round((Number(result.damage) || 70) / 4) + levelBonus));
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, amount);
-  } else if (type === "line_clear") {
-    const centerY = physics.height * 0.55;
-    targets = balls
-      .filter(ball => Math.abs(ball.body.position.y - centerY) < Math.max(75, Number(result.height) || 145))
-      .sort((a, b) => a.body.position.x - b.body.position.x)
-      .slice(0, Math.max(8, Number(result.maxTargets) || 12));
+  } else if (type === "explosion" || type === "black_hole") {
+    targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
+    if (targets.length < 4) targets = nearest(6 + levelBonus * 2, centerX, centerY);
+  } else if (type === "line_clear" || type === "laser" || type === "slash") {
+    const halfHeight = Math.max(physics.radius * 1.8, (Number(result.height) || physics.height * (0.24 + levelBonus * 0.025)) / 2);
+    const halfWidth = Math.max(physics.width * 0.28, (Number(result.width) || physics.width) / 2);
+    targets = balls.filter(ball =>
+      Math.abs(ball.body.position.y - centerY) <= halfHeight &&
+      Math.abs(ball.body.position.x - centerX) <= halfWidth
+    );
+    const maxTargets = Number(result.maxTargets) || (10 + levelBonus * 2);
+    targets = targets.slice(0, maxTargets);
+    if (targets.length < 3) targets = nearest(6 + levelBonus * 2);
+  } else if (type === "time_stop") {
+    // 盤面の動きを短時間止めて、中央を整理する。
+    physics.engine.timing.timeScale = 0;
+    window.setTimeout(() => {
+      if (physics?.engine) physics.engine.timing.timeScale = 1;
+    }, Math.max(500, Math.min(4000, (Number(result.duration || result.stopDuration) || 1.5) * 1000)));
+    targets = nearest(6 + levelBonus * 2);
   } else if (type === "power_up") {
-    // 攻撃力・連射強化は「連鎖ボーナス」に置き換え、追加で顔を消す。
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus * 2));
-    score += Math.max(200, Math.round((Number(result.damageMultiplier) || 1) * 300));
+    targets = nearest(8 + levelBonus * 2);
+    score += Math.round(250 * (Number(result.damageMultiplier) || 1));
   } else if (type === "homing_volley") {
-    // 追尾攻撃は盤面で最も多い顔をまとめて消す効果に変換。
     const counts = new Map();
     for (const ball of balls) {
       const id = String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "");
@@ -153,26 +192,22 @@ async function activateMyTsumSkill() {
     }
     const targetId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     targets = balls.filter(ball => String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "") === targetId)
-      .slice(0, Math.max(8, Number(result.maxTargets) || 10) + levelBonus * 2);
+      .slice(0, Math.max(6, Number(result.maxTargets) || 10) + levelBonus * 2);
   } else if (type === "score_boost") {
-    // スコア系は小規模消去＋スコア加算にする。
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 6 + levelBonus));
+    targets = nearest(5 + levelBonus);
     score += Math.max(300, Number(result.score) || 500);
-  } else if (type === "defense" || type === "teleport" || type === "orbit_guard") {
-    // 回復・回避・防御系は、盤面中央を巻き込む「お助けボム」に変換。
-    const cx = physics.width / 2, cy = physics.height * 0.58;
-    targets = balls
-      .map(ball => ({ ball, distance: Math.hypot(ball.body.position.x - cx, ball.body.position.y - cy) }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, Math.min(balls.length, 7 + levelBonus * 2))
-      .map(item => item.ball);
+  } else if (type === "defense" || type === "teleport" || type === "orbit_guard" || type === "bullet_counter") {
+    // シューティング側の防御・弾消しを、ツムでは盤面整理＋時間回復に置き換える。
+    targets = nearest(7 + levelBonus * 2);
+    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + Math.max(1, Math.round(Number(result.heal) || 2)));
   } else {
-    targets = balls.sort(() => Math.random() - 0.5).slice(0, Math.min(balls.length, 8 + levelBonus));
+    targets = nearest(7 + levelBonus * 2);
   }
 
   playSfx("skill");
   if (targets.length) clearBalls(targets, "skill");
-  else say((skillModule.name || "スキル") + " 発動！");
+  else say((skillModule.name || "スキル") + " 発動！対象の顔が少なかったためスコアボーナスを付与！");
+  score += Math.max(0, Number(result.scoreBonus) || 0);
   updateHud();
   skillBusy = false;
   updateSkillUI();
@@ -349,6 +384,26 @@ function showResult() {
     updateFaceModeUI();
   }).catch(error => { console.error(error); say("ポイントの保存に失敗しました。"); });
 }
+function returnToReady() {
+  clearInterval(timer); timer = null;
+  running = false; paused = false; roundEnded = false; roundStarting = false;
+  pointerDown = false; previousPointer = null; setChain([]);
+  skillBusy = false; skillCharge = 0;
+  physics?.clearBombs();
+  score = 0; timeLeft = ROUND_SECONDS; combo = 0;
+  $("chainCount").textContent = "0";
+  $("chainPopup").classList.remove("show");
+  $("result").classList.add("hidden");
+  $("faceSelect").disabled = false;
+  $("start").disabled = false; $("start").textContent = "▶ ゲーム開始";
+  $("pause").disabled = true; $("pause").textContent = "⏸ 一時停止";
+  $("shuffle").disabled = true;
+  if (physics) physics.seed(gameFaces, physics.width < 480 ? 42 : 70, activeFace);
+  updateFaceModeUI();
+  updateHud();
+  updateSkillUI();
+  say("ゲーム開始前の準備画面に戻りました。");
+}
 function shuffleBoard() {
   if (!running || paused || performance.now() < shuffleReadyAt) return;
   physics.shuffle();
@@ -467,6 +522,7 @@ $("pause").addEventListener("click", () => {
 });
 $("faceSelect").addEventListener("change", event => void selectFace(event.target.value));
 $("again").addEventListener("click", () => { $("result").classList.add("hidden"); startRound(); });
+$("readyBack").addEventListener("click", returnToReady);
 $("back").addEventListener("click", () => { window.location.href = "./game.html"; });
 $("logout").addEventListener("click", async () => {
   if (auth) await signOut(auth);
