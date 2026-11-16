@@ -1,7 +1,7 @@
 import { firebaseReady, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import { loadFaceData, loadGachaFaces, CLOUDINARY_FACE_URLS, saveFaceData, addMatchPoints } from "./face-system.js";
+import { loadFaceData, loadGachaFaces, saveFaceData, addMatchPoints } from "./face-system.js";
 import { TsumPhysicsBoard } from "./puzzle-physics.js";
 import { loadSkill, getRequiredKills } from "./skill-system.js";
 
@@ -48,7 +48,7 @@ function playSfx(kind) {
 }
 
 function say(text) { $("message").textContent = text; }
-function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] || CLOUDINARY_FACE_URLS.face2 || ""; }
+function imageFor(face) { return String(face?.imageUrl || ""); }
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
 function randomFace() { return gameFaces[Math.floor(Math.random() * gameFaces.length)] || gameFaces[0] || ownedFaces[0]; }
 function chooseGameFaces() {
