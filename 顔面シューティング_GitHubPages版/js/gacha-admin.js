@@ -18,7 +18,7 @@ import {
 // ==================================================
 
 const RARITIES = ["N", "R", "SR", "SSR", "UR"];
-const RARITY_WEIGHTS = { N: 60, R: 25, SR: 10, SSR: 4, UR: 1 };
+const RARITY_WEIGHTS = { N: 50, R: 20, SR: 15, SSR: 12, UR: 3 };
 
 const DEFAULT_FACES = [
     {
@@ -178,9 +178,13 @@ function createPanel() {
 
 
         <p class="muted">
-            顔を追加したりレア度を変更すると、レア度ごとの基本配分から排出確率を自動計算します。
-            排出停止にチェックした顔はガチャ候補から外れ、残りの顔へ確率を再配分します。
+            レア度ごとのおすすめ配分を使い、登録数に応じて各顔の排出率を自動計算します。
+            SSRを少し出やすくしつつ、URは希少枠として維持します。排出停止・交換専用の顔は計算から除外します。
         </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;">
+            <button id="gachaSmartBalanceBtn" class="secondary" type="button">✨ おすすめ確率に自動調整</button>
+            <span class="muted" style="align-self:center;font-size:12px;">目安：N 50% / R 20% / SR 15% / SSR 12% / UR 3%</span>
+        </div>
 
 
         <div
@@ -298,6 +302,8 @@ function createPanel() {
             "click",
             resetFaces
         );
+
+    document.getElementById("gachaSmartBalanceBtn")?.addEventListener("click", runSmartProbabilityBalance);
 
     document.getElementById("gachaFacesList")?.addEventListener("change", event => {
         if (!event.target.matches(".gacha-face-skill")) return;
@@ -1192,6 +1198,13 @@ function updatePreview(
 // ==================================================
 // 確率合計表示
 // ==================================================
+
+function runSmartProbabilityBalance() {
+    recalculateFaceProbabilities();
+    refreshProbabilityInputs();
+    showToast("おすすめ配分に調整しました。内容を確認して「設定を保存」してください。");
+}
+
 
 function recalculateFaceProbabilities() {
     const exchangeOnly = new Set(gachaSettings.mudDangoRewardFaceIds || []);
