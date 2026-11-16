@@ -21,11 +21,51 @@ const RARITIES = ["N", "R", "SR", "SSR", "UR"];
 const RARITY_WEIGHTS = { N: 60, R: 25, SR: 10, SSR: 4, UR: 1 };
 
 const DEFAULT_FACES = [
-    { id: "face2", name: "初期顔", description: "", imageUrl: "", rarity: "N", probability: 93 },
-    { id: "face_1", name: "顔1", description: "", imageUrl: "", rarity: "UR", probability: 1 },
-    { id: "face_2", name: "顔2", description: "", imageUrl: "", rarity: "UR", probability: 1 },
-    { id: "face_3", name: "顔3", description: "", imageUrl: "", rarity: "UR", probability: 1 },
-    { id: "face_4", name: "顔4", description: "", imageUrl: "", rarity: "SSR", probability: 4 }
+    {
+        id: "face2",
+        name: "初期顔",
+        description: "",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
+        rarity: "N",
+        probability: 93
+    },
+    {
+        id: "face_1",
+        name: "顔1",
+        description: "",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_2",
+        name: "顔2",
+        description: "",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_3",
+        name: "顔3",
+        description: "",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
+        rarity: "UR",
+        probability: 1
+    },
+    {
+        id: "face_4",
+        name: "顔4",
+        description: "",
+        imageUrl:
+            "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg",
+        rarity: "SSR",
+        probability: 4
+    }
 ];
 
 const DEFAULT_GACHA_SETTINGS = {

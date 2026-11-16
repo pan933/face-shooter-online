@@ -1,7 +1,7 @@
 import { firebaseReady, auth, db } from "./firebase-config.js";
 import { signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { doc, getDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import { loadFaceData, loadGachaFaces, saveFaceData, addMatchPoints } from "./face-system.js";
+import { loadFaceData, loadGachaFaces, CLOUDINARY_FACE_URLS, saveFaceData, addMatchPoints } from "./face-system.js";
 import { TsumPhysicsBoard } from "./puzzle-physics.js";
 import { loadSkill, getRequiredKills } from "./skill-system.js";
 
@@ -48,7 +48,7 @@ function playSfx(kind) {
 }
 
 function say(text) { $("message").textContent = text; }
-function imageFor(face) { return String(face?.imageUrl || ""); }
+function imageFor(face) { return face.imageUrl || CLOUDINARY_FACE_URLS[face.id] || CLOUDINARY_FACE_URLS.face2 || ""; }
 function safeName(face) { return String(face.name || face.id || "顔").slice(0, 32); }
 function randomFace() { return gameFaces[Math.floor(Math.random() * gameFaces.length)] || gameFaces[0] || ownedFaces[0]; }
 function chooseGameFaces() {
@@ -477,23 +477,12 @@ async function initialize() {
   const data = await loadFaceData(uid);
   const catalog = await loadGachaFaces();
   const catalogMap = new Map((catalog || []).map(face => [String(face.id), face]));
-  const actual = (data.faces || []).map(face => {
-    const configured = catalogMap.get(String(face.id)) || {};
-    return {
-      ...configured,
-      ...face,
-      id: String(face.id),
-      imageUrl: String(face.imageUrl || configured.imageUrl || ""),
-      skill: face.skill || { level: 1 }
-    };
-  });
-  const configuredInitialFace = catalogMap.get("face2") || {};
+  const actual = (data.faces || []).map(face => ({
+    ...catalogMap.get(String(face.id)), ...face, id: String(face.id),
+    skill: face.skill || { level: 1 }
+  }));
   ownedFaces = actual.length ? actual : [{
-    ...configuredInitialFace,
-    id: "face2",
-    name: configuredInitialFace.name || "初期顔",
-    imageUrl: String(configuredInitialFace.imageUrl || ""),
-    skill: { level: 1 }
+    id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
   }];
   if (ownedFaces.length < 5) {
     for (const face of catalog || []) {
