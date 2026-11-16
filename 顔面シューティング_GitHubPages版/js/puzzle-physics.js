@@ -26,6 +26,7 @@ export class TsumPhysicsBoard {
     this.resizeObserver.observe(canvas);
     this.handleWindowResize = () => this.resize();
     window.addEventListener("resize", this.handleWindowResize);
+    window.visualViewport?.addEventListener("resize", this.handleWindowResize);
     this.resize();
     this.frame = this.frame.bind(this);
     this.raf = requestAnimationFrame(this.frame);
@@ -345,6 +346,7 @@ export class TsumPhysicsBoard {
     cancelAnimationFrame(this.raf);
     this.resizeObserver?.disconnect();
     window.removeEventListener("resize", this.handleWindowResize);
+    window.visualViewport?.removeEventListener("resize", this.handleWindowResize);
     this.clear();
     Engine.clear(this.engine);
   }
