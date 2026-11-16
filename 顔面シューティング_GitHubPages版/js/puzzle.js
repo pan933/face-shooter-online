@@ -114,8 +114,20 @@ async function loadMyTsumSkill() {
   skillRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
   skillCharge = 0;
   $("skillButton").textContent = "✨ " + (skillModule?.name || "マイツムスキル");
-  const skillType = skillModule?.levels?.[Math.min(level - 1, (skillModule.levels?.length || 1) - 1)]?.type || "";
-  const hint = skillType ? puzzleSkillHint(skillType) : "マイツムを消してゲージをためよう";
+  let preview = {};
+  try {
+    preview = skillModule?.activate({
+      skillLevel: level,
+      player: { x: 180, y: 280 },
+      canvas: { width: 360, height: 520 },
+      viewportWidth: 360,
+      viewportHeight: 520,
+      enemies: []
+    }) || {};
+  } catch (error) {
+    console.warn("[Puzzle] スキル説明の取得に失敗", error);
+  }
+  const hint = preview.type ? puzzleSkillHint(preview.type) : "マイツムを消してゲージをためよう";
   $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
