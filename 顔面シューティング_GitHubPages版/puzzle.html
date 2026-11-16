@@ -110,25 +110,98 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
  .skillButton{min-height:36px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+
+/* HUD再配置：盤面の寸法・boardWrapのスタイルは変更しない */
+.faceModeBar{display:block;text-align:left;margin-top:0;padding:9px 11px}
+.modeHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.modeHeading>span{color:var(--muted);font-weight:750}
+.modeHeading>strong{font-size:18px;color:var(--gold)}
+.modeDetails{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;font-size:11px;color:var(--muted)}
+.modeDetails button{min-height:34px;padding:6px 10px;font-size:11px}
+.profile{margin-top:9px}
+.bottomDock{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:10px;align-items:stretch;margin-top:10px}
+.skillDock{display:flex;align-items:center;gap:9px;min-width:0;padding:9px;background:linear-gradient(145deg,#18283c,#101a2a);border:1px solid #596a86;border-radius:15px}
+.skillOrbWrap{position:relative;flex:none;width:88px;text-align:center}
+.skillOrb{width:82px;height:82px;padding:3px;border:0;border-radius:50%;background:conic-gradient(#68e8ff var(--skill-progress,0%),#34445d 0);box-shadow:0 0 14px #5adfff33}
+.skillOrb:disabled{opacity:.58}
+.skillOrbRing{display:grid;width:100%;height:100%;place-items:center;border-radius:50%;background:#101827;padding:5px}
+.skillOrbInner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden;border-radius:50%;background:radial-gradient(circle at 50% 25%,#35496a,#111a2a 72%);border:1px solid #8ca2c5}
+.skillOrbInner img{width:43px;height:43px;object-fit:cover;border-radius:50%;border:2px solid #ffe28a;background:#0c1422}
+.skillOrbInner b{font-size:9px;letter-spacing:.12em;color:#ffe28a;line-height:1.2}
+.skillChargeBadge{display:inline-block;margin-top:3px;padding:2px 6px;border-radius:99px;background:#080e19;border:1px solid #42536d;color:#dcecff;font-size:10px;font-weight:800;white-space:nowrap}
+.skillInfo{min-width:0;text-align:left}
+.skillInfo strong{font-size:13px;color:#ffe28a}
+.skillInfo p{margin:5px 0 0;color:#c2cee0;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.actionDock{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-content:center}
+.actionDock button{min-width:0;min-height:42px;padding:8px 6px;font-size:12px}
+.actionDock #start{grid-column:1/-1;min-height:48px}
+.shuffleHelp{margin-top:5px;font-size:10px}
+@media(max-width:600px){
+ .faceModeBar{padding:7px 8px;margin-top:0}
+ .modeHeading{font-size:11px}
+ .modeHeading>strong{font-size:16px}
+ .modeDetails{margin-top:5px;gap:5px;font-size:10px}
+ .modeDetails button{font-size:10px;min-height:32px;padding:5px 7px}
+ .profile{margin-top:6px}
+ .bottomDock{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:6px;margin-top:7px}
+ .skillDock{gap:6px;padding:6px;border-radius:11px}
+ .skillOrbWrap{width:70px}
+ .skillOrb{width:66px;height:66px}
+ .skillOrbInner img{width:34px;height:34px}
+ .skillOrbInner b{font-size:8px}
+ .skillChargeBadge{font-size:9px;padding:2px 4px}
+ .skillInfo strong{font-size:11px}
+ .skillInfo p{font-size:9px;line-height:1.35;margin-top:3px}
+ .actionDock{gap:5px}
+ .actionDock button{min-height:36px;padding:6px 3px;font-size:10px}
+ .actionDock #start{min-height:40px}
+ .shuffleHelp{font-size:9px;margin-top:4px}
+}
+@media(max-width:360px){
+ .bottomDock{grid-template-columns:1fr}
+ .skillDock{min-height:78px}
+ .skillOrbWrap{width:66px}
+ .skillOrb{width:62px;height:62px}
+ .actionDock{grid-template-columns:1fr 1fr}
+ .actionDock #start{grid-column:1/-1}
+}
+
 </style>
 </head>
 <body>
 <main class="shell">
 <header class="top"><div><div class="brand">🎭 顔つなぎパズル</div><p class="sub">ころころ落ちる顔をつなげて消そう！</p></div><div><a href="./game.html">シューティングへ</a> <button id="logout" type="button">ログアウト</button></div></header>
 <section class="panel">
- <div class="stats" aria-label="ゲーム情報">
-  <div class="hudMain"><div class="stat scoreStat"><span>スコア</span><strong id="score">0</strong></div><div class="stat timeStat"><span>TIME</span><strong><span id="time">60</span><small>秒</small></strong></div></div>
-  <div class="hudSub"><div class="stat"><span>COMBO</span><strong id="combo">0</strong></div><div class="stat"><span>CHAIN</span><strong id="chainCount">0</strong></div></div>
+ <div class="modeBar faceModeBar">
+  <div class="modeHeading"><span>今回出現する顔</span><strong id="faceMode">5種類</strong></div>
+  <div class="modeDetails"><span>所持ポイント <strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" aria-pressed="false" disabled>4種類モード OFF（5,000pt/試合）</button></div>
  </div>
  <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><label><select id="faceSelect" aria-label="使用する顔" disabled></select></label></div></div>
- <div class="modeBar"><span>使用する顔：<strong id="faceMode">5種類</strong></span><span>所持ポイント：<strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" aria-pressed="false" disabled>4種類モード ON</button></div>
- <div class="skillPanel"><div class="skillTitle"><strong>⭐ マイツムスキル</strong><span id="skillChargeText">0 / 20</span></div><div class="skillProgress"><i id="skillFill"></i></div><p id="skillDescription" class="skillDescription">マイツムを消してゲージをためよう！</p><button id="skillButton" class="skillButton" type="button" disabled>✨ スキル</button></div>
+ <div class="stats" aria-label="ゲーム情報">
+  <div class="hudMain"><div class="stat scoreStat"><span>スコア</span><strong id="score">0</strong></div><div class="stat timeStat"><span>残り時間</span><strong><span id="time">60</span><small>秒</small></strong></div></div>
+  <div class="hudSub"><div class="stat"><span>COMBO</span><strong id="combo">0</strong></div><div class="stat"><span>CHAIN</span><strong id="chainCount">0</strong></div></div>
+ </div>
  <p class="help">同じ顔を指でなぞって3個以上チェーン！7個以上でボム、10個以上でタイムボム、13個以上でスターボムが出現。<br>ボムをタップすると周りの顔を消せるよ。タイムボムは残り時間が3秒増える！</p>
 </section>
 <section class="panel">
  <div class="boardWrap"><div id="chainPopup" class="chainPopup" aria-live="polite"></div><canvas id="boardCanvas" aria-label="物理演算パズル盤面"></canvas></div>
- <div class="actions"><button id="start" class="primary" type="button" disabled>▶ ゲーム開始</button><button id="shuffle" class="secondary" type="button" disabled>🔀 シャッフル</button> <button id="pause" class="secondary" type="button" disabled>⏸ 一時停止</button></div>
- <div class="help">シャッフル再使用：<strong id="shuffleCooldown">いつでもOK</strong></div>
+ <div class="bottomDock">
+  <div class="skillDock">
+   <div class="skillOrbWrap">
+    <button id="skillButton" class="skillOrb" type="button" disabled aria-label="マイツムスキル">
+     <span class="skillOrbRing"><span class="skillOrbInner"><img id="skillFace" alt="マイツム"><b>SKILL</b></span></span>
+    </button>
+    <span class="skillChargeBadge" id="skillChargeText">0 / 20</span>
+   </div>
+   <div class="skillInfo"><strong id="skillTitle">マイツムスキル</strong><p id="skillDescription">マイツムを消してゲージをためよう！</p></div>
+  </div>
+  <div class="actionDock">
+   <button id="shuffle" class="secondary shuffleButton" type="button" disabled>🔀 シャッフル</button>
+   <button id="start" class="primary" type="button" disabled>▶ ゲーム開始</button>
+   <button id="pause" class="secondary" type="button" disabled>⏸ 一時停止</button>
+  </div>
+ </div>
+ <div class="help shuffleHelp">シャッフル再使用：<strong id="shuffleCooldown">いつでもOK</strong></div>
  <div id="message" class="message" role="status" aria-live="polite">アカウントを確認しています…</div>
 </section>
 <p class="help">アカウント・所持顔・ポイントはシューティング版と共通です。</p>
