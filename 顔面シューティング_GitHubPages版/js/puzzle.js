@@ -9,7 +9,7 @@ const $ = id => document.getElementById(id);
 const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
 let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
-let score = 0, timeLeft = ROUND_SECONDS, combo = 0, fever = 0;
+let score = 0, timeLeft = ROUND_SECONDS, combo = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
 
@@ -29,7 +29,6 @@ function playSfx(kind) {
     star: [[440, 0, .08], [660, .08, .08], [880, .16, .1], [1180, .26, .18]],
     explode: [[180, 0, .16], [110, .06, .2]],
     skill: [[660, 0, .07], [880, .08, .07], [1120, .16, .14]],
-    fever: [[440, 0, .08], [550, .08, .08], [660, .16, .08], [880, .24, .18]],
     shuffle: [[360, 0, .06], [520, .08, .06], [420, .16, .12]],
     start: [[440, 0, .08], [660, .1, .16]],
     end: [[660, 0, .12], [440, .13, .2]]
@@ -68,7 +67,9 @@ function chooseGameFaces() {
 function updateFaceModeUI() {
   $("pointsBalance").textContent = points.toLocaleString();
   $("faceMode").textContent = faceTypeCount + "種類";
-  $("buyFour").textContent = faceTypeCount === 4 ? "5種類に戻す" : "4種類で1試合（5,000pt）";
+  $("buyFour").textContent = faceTypeCount === 4 ? "4種類モード ON（キャンセル）" : "4種類モード OFF（5,000pt/試合）";
+  $("buyFour").setAttribute("aria-pressed", faceTypeCount === 4 ? "true" : "false");
+  $("buyFour").classList.toggle("is-selected", faceTypeCount === 4);
   $("buyFour").disabled = running;
 }
 async function buyFourMode() {
@@ -180,8 +181,6 @@ function updateHud() {
   $("score").textContent = score.toLocaleString();
   $("time").textContent = String(timeLeft);
   $("combo").textContent = String(combo);
-  $("feverFill").style.width = fever + "%";
-  $("fever").disabled = !running || paused || fever < 100;
   updateSkillUI();
   $("shuffle").disabled = !running || paused || performance.now() < shuffleReadyAt;
   $("shuffleCooldown").textContent = performance.now() < shuffleReadyAt
@@ -271,12 +270,10 @@ function clearBalls(balls, source = "chain") {
   const chainBonus = source === "chain" && n >= 3 ? Math.max(0, n - 3) * 35 : 0;
   const gained = Math.round(n * n * 12 * Math.min(combo, 6)) + chainBonus;
   score += gained;
-  fever = Math.min(100, fever + n * 6);
   physics.removeAndDrop(balls);
   updateHud();
   updateSkillUI();
-  say(source === "skill" ? "🌟 " + (skillModule?.name || "マイツムスキル") + " 発動！" : source === "fever"
-    ? "顔面フィーバー！ " + n + "個を一気に消した！"
+  say(source === "skill" ? "🌟 " + (skillModule?.name || "マイツムスキル") + " 発動！"
     : n + "個つなげた！ +" + gained.toLocaleString() + "点" + (combo > 1 ? " / " + combo + "コンボ" : ""));
 }
 async function startRound() {
@@ -296,7 +293,7 @@ async function startRound() {
       });
       points = purchase.points;
       updateFaceModeUI();
-      if (!purchase.ok) { faceTypeCount = 5; roundStarting = false; $("start").disabled = false; updateFaceModeUI(); say("ポイント不足で5種類モードに戻しました。"); return; }
+      if (!purchase.ok) { roundStarting = false; $("start").disabled = false; updateFaceModeUI(); say("ポイント不足です。4種類モードはONのままです。5,000ポイント以上にして再挑戦してね。"); return; }
     } catch (error) {
       console.error("[Puzzle] 4種類モード購入失敗", error);
       roundStarting = false;
@@ -307,7 +304,7 @@ async function startRound() {
   }
   roundStarting = false;
   clearInterval(timer);
-  score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
+  score = 0; timeLeft = ROUND_SECONDS; combo = 0;
   $("chainCount").textContent = "0";
   $("chainPopup").classList.remove("show");
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
@@ -341,9 +338,8 @@ function showResult() {
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
   $("faceSelect").disabled = false;
-  faceTypeCount = 5; // 4種類モードは1試合ごとの購入なので、終了後は標準に戻す。
   updateFaceModeUI();
-  $("pause").disabled = true; $("shuffle").disabled = true; $("fever").disabled = true;
+  $("pause").disabled = true; $("shuffle").disabled = true;
   const earned = Math.floor(score / 1000);
   $("resultText").textContent = "スコア：" + score.toLocaleString() + "点 / " + combo + "コンボ。ポイント " + earned + " を獲得しました。";
   $("result").classList.remove("hidden");
@@ -352,14 +348,6 @@ function showResult() {
     points = Math.max(0, Number(result.points) || points);
     updateFaceModeUI();
   }).catch(error => { console.error(error); say("ポイントの保存に失敗しました。"); });
-}
-function useFever() {
-  if (!running || paused || fever < 100) return;
-  fever = 0;
-  playSfx("fever");
-  const balls = [...physics.balls].sort(() => Math.random() - 0.5)
-    .slice(0, Math.min(physics.balls.length, 7 + Math.max(0, (Number(activeFace?.skill?.level) || 1) - 1) * 2));
-  clearBalls(balls, "fever");
 }
 function shuffleBoard() {
   if (!running || paused || performance.now() < shuffleReadyAt) return;
@@ -466,7 +454,6 @@ $("boardCanvas").addEventListener("pointermove", event => {
 $("boardCanvas").addEventListener("pointerup", finishChain);
 $("boardCanvas").addEventListener("pointercancel", finishChain);
 $("start").addEventListener("click", startRound);
-$("fever").addEventListener("click", useFever);
 $("shuffle").addEventListener("click", shuffleBoard);
 $("buyFour").addEventListener("click", buyFourMode);
 $("skillButton").addEventListener("click", activateMyTsumSkill);

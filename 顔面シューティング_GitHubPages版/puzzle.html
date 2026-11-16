@@ -14,14 +14,14 @@ button,select{font:inherit}button{cursor:pointer}.shell{width:min(100%,760px);ma
 .panel{background:linear-gradient(145deg,#202c40,#171f2e);border:1px solid var(--line);border-radius:18px;padding:13px;margin-top:13px;box-shadow:0 8px 24px #0003}
 .profile{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.portrait{width:62px;height:62px;border-radius:50%;overflow:hidden;background:#0c1422;border:2px solid var(--gold);display:grid;place-items:center;flex:none}.portrait img{width:100%;height:100%;object-fit:cover}
 .profileInfo{flex:1;min-width:145px}.profileInfo strong{font-size:18px}.profileInfo small{display:block;color:var(--muted);margin-top:3px}.profile select{max-width:100%;margin-top:7px;background:#111a29;color:white;border:1px solid var(--line);border-radius:9px;padding:8px}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:13px}.stat{background:#101827;border:1px solid #34435b;border-radius:12px;text-align:center;padding:8px 4px}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:clamp(20px,4vw,26px);font-weight:1000}
+.stats{display:grid;grid-template-columns:1fr;gap:7px;margin:0 0 12px}.hudMain{display:grid;grid-template-columns:1.5fr 1fr;gap:8px}.hudSub{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#101827;border:1px solid #34435b;border-radius:12px;text-align:center;padding:7px 5px}.stat span{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em}.stat strong{font-size:clamp(20px,4vw,26px);font-weight:1000}.scoreStat strong{font-size:clamp(25px,6vw,34px);color:#ffe28a}.timeStat{background:linear-gradient(135deg,#344b69,#1a2a40);border-color:#6d89ad}.timeStat strong{font-size:clamp(27px,6vw,36px);color:#fff}.timeStat strong small{display:inline;font-size:12px;margin-left:3px;color:#c7d8ee}.hudSub .stat{padding:4px 5px}.hudSub .stat strong{font-size:18px}.resultBack{width:100%;margin-top:8px;background:#344b69}
 .progress{height:9px;background:#0b1020;border-radius:99px;overflow:hidden;margin-top:10px;border:1px solid #34435b}.progress>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#55d7e8,#ffe071);transition:width .15s}
 .boardWrap{position:relative;margin:12px auto 0;max-width:560px;padding:8px;border-radius:22px;background:linear-gradient(145deg,#0a1220,#263750);border:1px solid #43536c;box-shadow:inset 0 0 30px #0008,0 10px 28px #0005;touch-action:none;overflow:hidden}
 #boardCanvas{display:block;width:100%;height:auto;border-radius:15px;touch-action:none;user-select:none}
 .modeBar{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin-top:12px;padding:10px;background:#101827;border:1px solid #34435b;border-radius:12px;font-size:13px}.modeBar strong{color:var(--gold)}.modeBar button{min-height:38px;padding:8px 11px;font-size:12px}
 .skillPanel{margin-top:10px;padding:11px;background:#111b2b;border:1px solid #53647e;border-radius:13px;text-align:center}.skillTitle{display:flex;justify-content:space-between;gap:8px;font-size:13px}.skillTitle strong{color:#ffe28a}.skillProgress{height:12px;margin-top:8px;border-radius:99px;background:#080e19;border:1px solid #43536c;overflow:hidden}.skillProgress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#6de8ff,#ffe16e);transition:width .18s}.skillDescription{font-size:12px;color:var(--muted);margin:7px 0}.skillButton{width:100%;min-height:46px;border:1px solid #ffe28a;border-radius:12px;background:linear-gradient(135deg,#6552a7,#253b67);color:#fff;font-weight:900}.skillButton:disabled{opacity:.45}
 .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:13px}.primary,.secondary{border-radius:13px;padding:12px 15px;min-height:48px;font-weight:850}
-.primary{background:linear-gradient(135deg,#ffe48a,#ffad4b);color:#241a0a;border:0}.secondary{background:#293950;color:white;border:1px solid #526782}
+.primary{background:linear-gradient(135deg,#ffe48a,#ffad4b);color:#241a0a;border:0}.secondary{background:#293950;color:white;border:1px solid #526782}.modeBar button.is-selected{background:linear-gradient(135deg,#ffe28a,#ffb84d);color:#241a0a;border-color:#fff0b0;box-shadow:0 0 0 2px #ffda7544}
 button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-size:13px;line-height:1.65;text-align:center;margin:10px 4px 0}.message{min-height:23px;text-align:center;color:var(--cyan);font-weight:750;margin-top:10px}
 .overlay{position:fixed;inset:0;background:#050812dc;display:grid;place-items:center;padding:16px;z-index:10}.dialog{width:min(100%,420px);background:#1b2435;border:1px solid #596780;border-radius:20px;padding:22px;text-align:center}.dialog h2{margin:0 0 8px;font-size:26px}.dialog p{color:var(--muted);line-height:1.6}.hidden{display:none!important}
 /* スマホではHUDを詰めて、横幅からはみ出さず一画面内で見渡しやすくする */
@@ -38,14 +38,18 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  .profileInfo strong{font-size:15px}
  .profileInfo small{font-size:10px;line-height:1.25}
  .profile select{width:100%;max-width:100%;font-size:13px;padding:6px;margin-top:4px}
- .stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
- .stat{min-width:0;padding:5px 2px;border-radius:9px}
- .stat span{font-size:10px}
- .stat strong{font-size:clamp(15px,4.5vw,21px);overflow-wrap:anywhere}
+ .stats{gap:5px;margin:0 0 7px}
+ .hudMain,.hudSub{gap:5px}
+ .stat{min-width:0;padding:6px 3px;border-radius:9px}
+ .stat span{font-size:9px}
+ .scoreStat strong{font-size:clamp(23px,6vw,30px)}
+ .timeStat strong{font-size:clamp(25px,6vw,32px)}
+ .hudSub .stat{padding:3px}
+ .hudSub .stat strong{font-size:16px}
  .progress{height:7px;margin-top:7px}
  .modeBar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px;padding:7px;font-size:11px}
  .modeBar>span{min-width:0;text-align:center;overflow-wrap:anywhere}
- .modeBar button{grid-column:1/-1;width:100%;min-height:36px;padding:6px;font-size:11px}
+ .modeBar button{grid-column:1/-1;width:100%;min-height:36px;padding:6px;font-size:11px}.modeBar button.is-selected{background:linear-gradient(135deg,#ffe28a,#ffb84d);color:#241a0a;border-color:#fff0b0;box-shadow:0 0 0 2px #ffda7544}
  .skillPanel{margin-top:7px;padding:8px;border-radius:10px}
  .skillTitle{font-size:12px}
  .skillProgress{height:9px;margin-top:6px}
@@ -62,7 +66,7 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  .shell{padding-left:5px;padding-right:5px}
  .panel{padding:6px}
  .top a,.top button{font-size:11px;padding:6px}
- .stat strong{font-size:17px}
+ .stat strong{font-size:17px}.hudSub .stat strong{font-size:15px}
  .modeBar{font-size:10px}
  .actions button{font-size:11px}
 }
@@ -101,7 +105,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
  .top a,.top button{font-size:10px;padding:5px}
  .profileInfo strong{font-size:13px}
  .profileInfo small{font-size:9px}
- .stat strong{font-size:14px}
+ .stat strong{font-size:14px}.hudSub .stat strong{font-size:14px}
  .modeBar button{font-size:10px}
  .skillButton{min-height:36px}
 }
@@ -112,21 +116,23 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 <main class="shell">
 <header class="top"><div><div class="brand">🎭 顔つなぎパズル</div><p class="sub">ころころ落ちる顔をつなげて消そう！</p></div><div><a href="./game.html">シューティングへ</a> <button id="logout" type="button">ログアウト</button></div></header>
 <section class="panel">
+ <div class="stats" aria-label="ゲーム情報">
+  <div class="hudMain"><div class="stat scoreStat"><span>スコア</span><strong id="score">0</strong></div><div class="stat timeStat"><span>TIME</span><strong><span id="time">60</span><small>秒</small></strong></div></div>
+  <div class="hudSub"><div class="stat"><span>COMBO</span><strong id="combo">0</strong></div><div class="stat"><span>CHAIN</span><strong id="chainCount">0</strong></div></div>
+ </div>
  <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><label><select id="faceSelect" aria-label="使用する顔" disabled></select></label></div></div>
- <div class="stats"><div class="stat"><span>スコア</span><strong id="score">0</strong></div><div class="stat"><span>のこり時間</span><strong id="time">60</strong></div><div class="stat"><span>コンボ</span><strong id="combo">0</strong></div><div class="stat"><span>チェーン数</span><strong id="chainCount">0</strong></div></div>
- <div class="progress" aria-label="フィーバーゲージ"><i id="feverFill"></i></div>
- <div class="modeBar"><span>使用する顔：<strong id="faceMode">5種類</strong></span><span>所持ポイント：<strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" disabled>4種類で1試合（5,000pt）</button></div>
+ <div class="modeBar"><span>使用する顔：<strong id="faceMode">5種類</strong></span><span>所持ポイント：<strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" aria-pressed="false" disabled>4種類モード ON</button></div>
  <div class="skillPanel"><div class="skillTitle"><strong>⭐ マイツムスキル</strong><span id="skillChargeText">0 / 20</span></div><div class="skillProgress"><i id="skillFill"></i></div><p id="skillDescription" class="skillDescription">マイツムを消してゲージをためよう！</p><button id="skillButton" class="skillButton" type="button" disabled>✨ スキル</button></div>
  <p class="help">同じ顔を指でなぞって3個以上チェーン！7個以上でボム、10個以上でタイムボム、13個以上でスターボムが出現。<br>ボムをタップすると周りの顔を消せるよ。タイムボムは残り時間が3秒増える！</p>
 </section>
 <section class="panel">
  <div class="boardWrap"><div id="chainPopup" class="chainPopup" aria-live="polite"></div><canvas id="boardCanvas" aria-label="物理演算パズル盤面"></canvas></div>
- <div class="actions"><button id="start" class="primary" type="button" disabled>▶ ゲーム開始</button><button id="shuffle" class="secondary" type="button" disabled>🔀 シャッフル</button><button id="fever" class="secondary" type="button" disabled>✨ 顔面フィーバー</button><button id="pause" class="secondary" type="button" disabled>⏸ 一時停止</button></div>
+ <div class="actions"><button id="start" class="primary" type="button" disabled>▶ ゲーム開始</button><button id="shuffle" class="secondary" type="button" disabled>🔀 シャッフル</button> <button id="pause" class="secondary" type="button" disabled>⏸ 一時停止</button></div>
  <div class="help">シャッフル再使用：<strong id="shuffleCooldown">いつでもOK</strong></div>
  <div id="message" class="message" role="status" aria-live="polite">アカウントを確認しています…</div>
 </section>
 <p class="help">アカウント・所持顔・ポイントはシューティング版と共通です。</p>
 </main>
-<div id="result" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="dialog"><h2 id="resultTitle">🎉 結果発表</h2><p id="resultText"></p><button id="again" class="primary" type="button">もう一度遊ぶ</button><button id="back" class="secondary" type="button">シューティングへ戻る</button></section></div>
+<div id="result" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="dialog"><h2 id="resultTitle">🎉 結果発表</h2><p id="resultText"></p><button id="again" class="primary" type="button">もう一度遊ぶ</button><button id="back" class="secondary resultBack" type="button">↩ 戻る（シューティングへ）</button></section></div>
 <script type="module" src="./js/puzzle.js"></script>
 </body></html>
