@@ -1,6 +1,7 @@
 import {
   firebaseReady,
   firebaseConfigError,
+  app,
   auth,
   db
 } from "./firebase-config.js";
@@ -21,9 +22,13 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-functions.js";
+
 const $ = id => document.getElementById(id);
 
-const REGISTRATION_CODE = "komakikouka";
+const functions = app ? getFunctions(app, "asia-northeast1") : null;
+const registerAccountCall = functions ? httpsCallable(functions, "registerAccount") : null;
+const verifyXRegistrationCodeCall = functions ? httpsCallable(functions, "verifyXRegistrationCode") : null;
 const msgEl = $("globalMessage");
 
 let pendingXUser = null;
@@ -309,8 +314,8 @@ $("registerForm").addEventListener("submit", async event => {
     return;
   }
 
-  if (registrationCode !== REGISTRATION_CODE) {
-    setMessage("新規登録用パスワードが違います。", true);
+  if (!registerAccountCall) {
+    setMessage("登録サーバーに接続できません。管理者に連絡してください。", true);
     return;
   }
 
@@ -318,16 +323,13 @@ $("registerForm").addEventListener("submit", async event => {
   setMessage("共有アカウントを作成しています…");
 
   try {
-    const credential = await createUserWithEmailAndPassword(
+    await registerAccountCall({ username, password, registrationCode });
+    const credential = await signInWithEmailAndPassword(
       auth,
       usernameToAuthEmail(username),
       password
     );
-
-    await updateProfile(credential.user, {
-      displayName: username
-    });
-
+    await updateProfile(credential.user, { displayName: username });
     await finishLogin(credential.user, username);
 
   } catch (error) {
@@ -437,8 +439,8 @@ if (xCompleteForm) {
       return;
     }
 
-    if ($("xRegistrationCode").value !== REGISTRATION_CODE) {
-      setMessage("新規登録コードが違います。", true);
+    if (!verifyXRegistrationCodeCall) {
+      setMessage("登録サーバーに接続できません。管理者に連絡してください。", true);
       return;
     }
 
@@ -446,6 +448,9 @@ if (xCompleteForm) {
     setMessage("Xアカウントを登録しています…");
 
     try {
+      await verifyXRegistrationCodeCall({
+        registrationCode: $("xRegistrationCode").value
+      });
       await finishLogin(pendingXUser);
 
     } catch (error) {
