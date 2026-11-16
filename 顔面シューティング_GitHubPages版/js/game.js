@@ -6,7 +6,8 @@ import {
     addMatchPoints,
     claimDailyLoginBonus,
     loadFaceData,
-    loadGachaFaces
+    loadGachaFaces,
+    CLOUDINARY_FACE_URLS
 } from "./face-system.js";
 import { loadSkill, getRequiredKills as getSkillRequiredKills, isSkillReady, consumeSkill, normalizeSkillData } from "./skill-system.js";
 
@@ -706,7 +707,16 @@ applyControlMode();
 ================================================== */
 
 const FACE_GUEST = "face.png";
-pvpLocalFaceImageUrl = FACE_GUEST;
+const FACE_REGISTERED = CLOUDINARY_FACE_URLS.face2;
+pvpLocalFaceImageUrl = FACE_REGISTERED;
+
+function getGachaFaceImage(faceId) {
+    if (!faceId) {
+        return FACE_REGISTERED;
+    }
+
+    return CLOUDINARY_FACE_URLS[faceId] || FACE_REGISTERED;
+}
 
 
 const canvas =
@@ -1167,7 +1177,7 @@ async function setFaceForMode(isGuest) {
         // 管理画面の現在の設定を優先する。所持データのskillIdは取得時点の古い値の場合がある。
         activeFaceSkill = await loadSkill(selectedFace, configuredFace?.skillId || ownedFace?.skillId) || await loadSkill("face2");
         updateSkillButton();
-        const imagePath = ownedFace?.imageUrl || configuredFace?.imageUrl || FACE_GUEST;
+        const imagePath = ownedFace?.imageUrl || getGachaFaceImage(selectedFace);
         updateStartSkillPreview(ownedFace?.name || configuredFace?.name || selectedFace, imagePath);
         pvpLocalFaceImageUrl = imagePath;
 
@@ -1185,8 +1195,8 @@ async function setFaceForMode(isGuest) {
             );
 
             faceImage.onerror = null;
-            faceImage.src = FACE_GUEST;
-            pvpLocalFaceImageUrl = FACE_GUEST;
+            faceImage.src = FACE_REGISTERED;
+            pvpLocalFaceImageUrl = FACE_REGISTERED;
         };
 
         faceImage.src = imagePath;
@@ -1612,7 +1622,6 @@ let paused = false;
 let adminMode = false;
 let adminStartWave = 1;
 let adminForceBoss = false;
-void initializeAdminDebugAccess();
 
 
 /* ==================================================
@@ -5565,35 +5574,29 @@ document.getElementById(
 ================================================== */
 const adminBtn = document.getElementById("adminBtn");
 const adminPanel = document.getElementById("adminPanel");
+const adminLogin = document.getElementById("adminLogin");
 const adminControls = document.getElementById("adminControls");
+const adminPassword = document.getElementById("adminPassword");
 
-if (adminBtn) adminBtn.hidden = true;
-if (adminPanel) adminPanel.style.display = "none";
+adminBtn.onclick = () => {
+    adminPanel.style.display = adminPanel.style.display === "block" ? "none" : "block";
+    if (adminPanel.style.display === "block" && !adminMode) adminPassword.focus();
+};
 
-if (adminBtn) {
-    adminBtn.onclick = () => {
-        if (!adminMode) return;
-        adminPanel.style.display = adminPanel.style.display === "block" ? "none" : "block";
-    };
-}
-
-async function initializeAdminDebugAccess() {
-    if (!auth || !db || !adminBtn || !adminControls) return;
-    try {
-        await auth.authStateReady();
-        const user = auth.currentUser;
-        if (!user) return;
-        const adminSnapshot = await getDoc(doc(db, "admins", user.uid));
-        const role = adminSnapshot.exists() ? adminSnapshot.data()?.role : "";
-        if (role !== "owner" && role !== "admin") return;
+document.getElementById("adminLoginBtn").onclick = () => {
+    if (adminPassword.value === "admin") {
         adminMode = true;
-        adminBtn.hidden = false;
+        adminLogin.style.display = "none";
         adminControls.style.display = "block";
-    } catch (error) {
-        adminMode = false;
-        console.warn("[ADMIN DEBUG] 管理者権限を確認できませんでした。", error);
+    } else {
+        adminPassword.value = "";
+        adminPassword.placeholder = "パスワードが違います";
     }
-}
+};
+
+adminPassword.addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("adminLoginBtn").click();
+});
 
 document.querySelectorAll("[data-wave]").forEach(btn => {
     btn.onclick = () => {

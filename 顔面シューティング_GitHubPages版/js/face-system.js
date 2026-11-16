@@ -9,6 +9,13 @@ import { db } from "./firebase-config.js";
 import { applyLimitedFaceSkill, createLimitedFaceSkill, isWindowsElectronClient } from "./limited-face-system.js";
 
 export const INITIAL_FACE = "face2";
+export const CLOUDINARY_FACE_URLS = {
+    face2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png",
+    face_1: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_1.jpg",
+    face_2: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_2.jpg",
+    face_3: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_3.jpg",
+    face_4: "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063261/face_4.jpg"
+};
 export const RARITIES = {
     N: { name: "N", weight: 93 }, R: { name: "R", weight: 0 },
     SR: { name: "SR", weight: 4 }, SSR: { name: "SSR", weight: 2 }, UR: { name: "UR", weight: 1 }
@@ -29,7 +36,7 @@ export function buildFace(number) {
     return {
         id: number,
         name: number === "face2" ? "初期顔" : `顔 ${number.replace("face_", "")}`,
-        imageUrl: "",
+        imageUrl: CLOUDINARY_FACE_URLS[number] || CLOUDINARY_FACE_URLS.face2,
         rarity: getFaceRarity(number),
         probability: 0,
         skill: createDefaultSkillData()
@@ -59,16 +66,9 @@ export async function loadFaceData(uid) {
         const ref = doc(db, "users", uid);
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
-        const configuredFaces = await loadGachaFaces();
         let faces = Array.isArray(data.faces) ? data.faces : [];
         if (!faces.length) {
-            const configuredInitialFace = configuredFaces
-                .find(face => String(face.id) === INITIAL_FACE);
-            faces = [{
-                ...buildFace(INITIAL_FACE),
-                imageUrl: String(configuredInitialFace?.imageUrl || ""),
-                obtainedAt: Date.now()
-            }];
+            faces = [{ ...buildFace(INITIAL_FACE), obtainedAt: Date.now() }];
             await setDoc(ref, {
                 faces,
                 selectedFace: data.selectedFace || INITIAL_FACE,
@@ -79,7 +79,7 @@ export async function loadFaceData(uid) {
 
         // Automatic entitlement is intentionally limited to authenticated users in the Windows Electron build.
         if (isWindowsElectronClient()) {
-            const configuredLimitedFaces = configuredFaces.filter(face => face?.limited === true);
+            const configuredLimitedFaces = (await loadGachaFaces()).filter(face => face?.limited === true);
             let changed = false;
             for (const configured of configuredLimitedFaces) {
                 const existing = faces.find(face => face.id === configured.id);
@@ -101,19 +101,10 @@ export async function loadFaceData(uid) {
             if (changed) await setDoc(ref, { faces, updatedAt: serverTimestamp() }, { merge: true });
         }
 
-        const configuredFaceMap = new Map(configuredFaces.map(face => [String(face.id), face]));
-        const normalizedFaces = faces.map(face => {
-            const configured = configuredFaceMap.get(String(face.id)) || {};
-            const merged = {
-                ...configured,
-                ...face,
-                imageUrl: String(face.imageUrl || configured.imageUrl || "")
-            };
-            return {
-                ...merged,
-                skill: face?.limited === true ? applyLimitedFaceSkill(merged) : normalizeSkillData(face?.skill)
-            };
-        });
+        const normalizedFaces = faces.map(face => ({
+            ...face,
+            skill: face?.limited === true ? applyLimitedFaceSkill(face) : normalizeSkillData(face?.skill)
+        }));
         return { ...data, faces: normalizedFaces, selectedFace: data.selectedFace || INITIAL_FACE, skillTickets: Number(data.skillTickets) || 0 };
     } catch (error) {
         console.error("[FaceSystem] 顔データ読み込み失敗:", error);

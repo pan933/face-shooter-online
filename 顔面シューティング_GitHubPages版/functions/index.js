@@ -5,8 +5,6 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
-const { defineSecret } = require("firebase-functions/params");
-const crypto = require("node:crypto");
 
 initializeApp();
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
@@ -14,50 +12,6 @@ setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
 const auth = getAuth();
 const db = getFirestore();
 const CONFIG_REF = db.doc("adminSettings/gameplay");
-const registrationCodeSecret = defineSecret("REGISTRATION_CODE");
-
-function isValidRegistrationCode(input) {
-  const expected = registrationCodeSecret.value();
-  if (typeof input !== "string" || !expected || input.length > 256) return false;
-  const suppliedBuffer = Buffer.from(input, "utf8");
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  return suppliedBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(suppliedBuffer, expectedBuffer);
-}
-
-function registrationCodeError() {
-  return new HttpsError("permission-denied", "新規登録コードが正しくありません。");
-}
-
-exports.registerAccount = onCall({ secrets: [registrationCodeSecret] }, async request => {
-  const username = typeof request.data?.username === "string" ? request.data.username.trim() : "";
-  const password = typeof request.data?.password === "string" ? request.data.password : "";
-  if (!/^[A-Za-z0-9_-]{2,24}$/.test(username)) {
-    throw new HttpsError("invalid-argument", "IDは英数字・_・-の2〜24文字で入力してください。");
-  }
-  if (password.length < 8 || password.length > 100) {
-    throw new HttpsError("invalid-argument", "パスワードは8〜100文字にしてください。");
-  }
-  if (!isValidRegistrationCode(request.data?.registrationCode)) throw registrationCodeError();
-
-  const email = username.toLowerCase() + "@face-shooter.invalid";
-  try {
-    await auth.createUser({ email, password, displayName: username });
-  } catch (error) {
-    if (error.code === "auth/email-already-exists") {
-      throw new HttpsError("already-exists", "このIDはすでに使われています。別のIDにしてください。");
-    }
-    throw error;
-  }
-  // Password is passed directly to Firebase Authentication and is never stored or logged here.
-  return { ok: true, email };
-});
-
-exports.verifyXRegistrationCode = onCall({ secrets: [registrationCodeSecret] }, async request => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Xでログインしてください。");
-  if (!isValidRegistrationCode(request.data?.registrationCode)) throw registrationCodeError();
-  return { ok: true };
-});
 
 const GIMMICK_IDS = [
   "weak", "moving", "shield", "clock", "ring", "decoy", "rain", "cross",
