@@ -188,6 +188,15 @@ function updateHud() {
 function setChain(next) {
   chain = next;
   physics?.setChain(chain);
+  if (next.length) $("chainCount").textContent = String(next.length);
+}
+function showChainPopup(count) {
+  const popup = $("chainPopup");
+  if (!popup || count < 3) return;
+  popup.textContent = count + "チェーン！";
+  popup.classList.remove("show");
+  void popup.offsetWidth;
+  popup.classList.add("show");
 }
 function tryAddBall(ball) {
   if (!pointerDown || !ball || chain.includes(ball)) return;
@@ -246,6 +255,7 @@ function clearBalls(balls, source = "chain") {
   combo = now - lastClearAt < 2400 ? combo + 1 : 1;
   lastClearAt = now;
   const n = balls.length;
+  if (source === "chain") showChainPopup(n);
   // 物理演算で顔データの参照が入れ替わっても、保存されたfaceIdでマイツムを判定する。
   const activeId = String(activeFace?.id ?? "");
   const myTsumCount = balls.filter(ball =>
@@ -295,6 +305,8 @@ async function startRound() {
   roundStarting = false;
   clearInterval(timer);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0; fever = 0;
+  $("chainCount").textContent = "0";
+  $("chainPopup").classList.remove("show");
   lastClearAt = 0; roundEnded = false; running = true; paused = false;
   pointerDown = false; previousPointer = null; setChain([]);
   physics?.clearBombs();

@@ -24,6 +24,9 @@ export class TsumPhysicsBoard {
     this.fixedStep = 1000 / 60;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
+    this.handleWindowResize = () => this.resize();
+    window.addEventListener("resize", this.handleWindowResize);
+    window.visualViewport?.addEventListener("resize", this.handleWindowResize);
     this.resize();
     this.frame = this.frame.bind(this);
     this.raf = requestAnimationFrame(this.frame);
@@ -32,8 +35,12 @@ export class TsumPhysicsBoard {
   resize() {
     const rect = this.canvas.getBoundingClientRect();
     const oldW = this.width, oldH = this.height;
-    this.width = Math.max(280, rect.width || 360);
-    this.height = Math.max(380, Math.min(620, this.width * 1.32));
+    this.width = Math.max(260, rect.width || 360);
+    const isPhone = window.matchMedia("(max-width: 600px)").matches;
+    const phoneHeight = Math.floor((window.visualViewport?.height || window.innerHeight) * 0.42);
+    this.height = isPhone
+      ? Math.max(250, Math.min(440, this.width * 1.32, phoneHeight))
+      : Math.max(380, Math.min(620, this.width * 1.32));
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.round(this.width * dpr);
     this.canvas.height = Math.round(this.height * dpr);
@@ -338,6 +345,8 @@ export class TsumPhysicsBoard {
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.resizeObserver?.disconnect();
+    window.removeEventListener("resize", this.handleWindowResize);
+    window.visualViewport?.removeEventListener("resize", this.handleWindowResize);
     this.clear();
     Engine.clear(this.engine);
   }
