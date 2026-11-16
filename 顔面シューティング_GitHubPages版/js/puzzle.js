@@ -477,12 +477,23 @@ async function initialize() {
   const data = await loadFaceData(uid);
   const catalog = await loadGachaFaces();
   const catalogMap = new Map((catalog || []).map(face => [String(face.id), face]));
-  const actual = (data.faces || []).map(face => ({
-    ...catalogMap.get(String(face.id)), ...face, id: String(face.id),
-    skill: face.skill || { level: 1 }
-  }));
+  const actual = (data.faces || []).map(face => {
+    const configured = catalogMap.get(String(face.id)) || {};
+    return {
+      ...configured,
+      ...face,
+      id: String(face.id),
+      imageUrl: String(face.imageUrl || configured.imageUrl || ""),
+      skill: face.skill || { level: 1 }
+    };
+  });
+  const configuredInitialFace = catalogMap.get("face2") || {};
   ownedFaces = actual.length ? actual : [{
-    id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
+    ...configuredInitialFace,
+    id: "face2",
+    name: configuredInitialFace.name || "初期顔",
+    imageUrl: String(configuredInitialFace.imageUrl || ""),
+    skill: { level: 1 }
   }];
   if (ownedFaces.length < 5) {
     for (const face of catalog || []) {
