@@ -59,9 +59,10 @@ export async function loadFaceData(uid) {
         const ref = doc(db, "users", uid);
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
+        const configuredFaces = await loadGachaFaces();
         let faces = Array.isArray(data.faces) ? data.faces : [];
         if (!faces.length) {
-            const configuredInitialFace = (await loadGachaFaces())
+            const configuredInitialFace = configuredFaces
                 .find(face => String(face.id) === INITIAL_FACE);
             faces = [{
                 ...buildFace(INITIAL_FACE),
@@ -78,7 +79,7 @@ export async function loadFaceData(uid) {
 
         // Automatic entitlement is intentionally limited to authenticated users in the Windows Electron build.
         if (isWindowsElectronClient()) {
-            const configuredLimitedFaces = (await loadGachaFaces()).filter(face => face?.limited === true);
+            const configuredLimitedFaces = configuredFaces.filter(face => face?.limited === true);
             let changed = false;
             for (const configured of configuredLimitedFaces) {
                 const existing = faces.find(face => face.id === configured.id);
@@ -100,10 +101,19 @@ export async function loadFaceData(uid) {
             if (changed) await setDoc(ref, { faces, updatedAt: serverTimestamp() }, { merge: true });
         }
 
-        const normalizedFaces = faces.map(face => ({
-            ...face,
-            skill: face?.limited === true ? applyLimitedFaceSkill(face) : normalizeSkillData(face?.skill)
-        }));
+        const configuredFaceMap = new Map(configuredFaces.map(face => [String(face.id), face]));
+        const normalizedFaces = faces.map(face => {
+            const configured = configuredFaceMap.get(String(face.id)) || {};
+            const merged = {
+                ...configured,
+                ...face,
+                imageUrl: String(face.imageUrl || configured.imageUrl || "")
+            };
+            return {
+                ...merged,
+                skill: face?.limited === true ? applyLimitedFaceSkill(merged) : normalizeSkillData(face?.skill)
+            };
+        });
         return { ...data, faces: normalizedFaces, selectedFace: data.selectedFace || INITIAL_FACE, skillTickets: Number(data.skillTickets) || 0 };
     } catch (error) {
         console.error("[FaceSystem] 顔データ読み込み失敗:", error);
