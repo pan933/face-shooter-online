@@ -75,9 +75,9 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 @media(max-width:600px){
  body{min-height:100svh}
  .shell{padding:5px 6px calc(10px + env(safe-area-inset-bottom))}
- .top{flex-wrap:nowrap;min-width:0}
- .top>div:first-child{min-width:0;flex:1}
- .top>div:last-child{display:flex;gap:4px;flex:none}
+ .top{flex-wrap:wrap;min-width:0}
+ .top>div:first-child{min-width:0;flex:1 1 130px}
+ .top>div:last-child{display:flex;gap:4px;flex:0 1 auto;margin-left:auto}
  .top a,.top button{white-space:nowrap}
  .brand{font-size:clamp(17px,5vw,23px)}
  .panel{margin-top:6px;padding:7px}
