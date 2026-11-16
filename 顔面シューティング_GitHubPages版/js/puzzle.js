@@ -243,7 +243,15 @@ function setChain(next) {
 function showChainPopup(count) {
   const popup = $("chainPopup");
   if (!popup || count < 3) return;
-  popup.textContent = count + "チェーン！";
+  const reactions = count >= 13
+    ? ["神チェーンwww", "うますぎwww", "バカ強いwww"]
+    : count >= 10
+      ? ["やばwww", "天才か？", "バカwww"]
+      : count >= 7
+        ? ["いいねwww", "うまっ！", "www"]
+        : ["ナイス！", "www", "いい感じ！"];
+  const reaction = reactions[Math.floor(Math.random() * reactions.length)];
+  popup.innerHTML = '<span class="chainPopupText">' + reaction + '</span><small>' + count + 'チェーン！</small>';
   popup.classList.remove("show");
   void popup.offsetWidth;
   popup.classList.add("show");
