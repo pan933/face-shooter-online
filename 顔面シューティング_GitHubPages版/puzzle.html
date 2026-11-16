@@ -38,10 +38,10 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  .profileInfo strong{font-size:15px}
  .profileInfo small{font-size:10px;line-height:1.25}
  .profile select{width:100%;max-width:100%;font-size:13px;padding:6px;margin-top:4px}
- .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}
+ .stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
  .stat{min-width:0;padding:5px 2px;border-radius:9px}
  .stat span{font-size:10px}
- .stat strong{font-size:clamp(17px,5vw,22px);overflow-wrap:anywhere}
+ .stat strong{font-size:clamp(15px,4.5vw,21px);overflow-wrap:anywhere}
  .progress{height:7px;margin-top:7px}
  .modeBar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px;padding:7px;font-size:11px}
  .modeBar>span{min-width:0;text-align:center;overflow-wrap:anywhere}
@@ -52,8 +52,8 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  .skillDescription{font-size:10px;line-height:1.35;margin:5px 0}
  .skillButton{min-height:40px;font-size:13px}
  .help{font-size:10px;line-height:1.4;margin:6px 2px 0}
- .boardWrap{margin-top:7px;padding:5px;border-radius:14px}
- .boardWrap,#boardCanvas{max-width:100%}
+ .boardWrap{width:100%;margin-top:7px;padding:4px;border-radius:12px}
+ .boardWrap,#boardCanvas{width:100%;max-width:100%;min-width:0}
  .actions{gap:5px;margin-top:8px}
  .actions button{flex:1 1 calc(50% - 5px);min-width:0;min-height:40px;padding:7px 5px;font-size:12px}
  .message{font-size:11px;min-height:18px;margin-top:6px}
@@ -66,6 +66,45 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
  .modeBar{font-size:10px}
  .actions button{font-size:11px}
 }
+/* 画面幅が狭い端末でも横にはみ出さず、盤面の高さは端末の表示領域に合わせる */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+.shell,.panel,.boardWrap{min-width:0;max-width:100%}
+.chainPopup{position:absolute;z-index:2;left:50%;top:48%;transform:translate(-50%,-50%) scale(.5);opacity:0;pointer-events:none;white-space:nowrap;padding:10px 18px;border-radius:999px;background:linear-gradient(135deg,#fff2a6,#ffad42);color:#452600;font-size:clamp(22px,7vw,36px);font-weight:1000;text-shadow:0 1px #fff8;box-shadow:0 5px 25px #0008;border:2px solid #fff4}
+.chainPopup.show{animation:chainPop .85s cubic-bezier(.18,.8,.25,1) both}
+@keyframes chainPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.45) rotate(-8deg)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.15) rotate(3deg)}35%{transform:translate(-50%,-50%) scale(1) rotate(0)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-75%) scale(.92)}}
+@media(max-width:600px){
+ body{min-height:100svh}
+ .shell{padding:5px 6px calc(10px + env(safe-area-inset-bottom))}
+ .top{flex-wrap:nowrap;min-width:0}
+ .top>div:first-child{min-width:0;flex:1}
+ .top>div:last-child{display:flex;gap:4px;flex:none}
+ .top a,.top button{white-space:nowrap}
+ .brand{font-size:clamp(17px,5vw,23px)}
+ .panel{margin-top:6px;padding:7px}
+ .profile{gap:6px}
+ .portrait{width:40px;height:40px}
+ .profileInfo select{max-width:100%}
+ .stat{padding:4px 1px}
+ .stat span{font-size:9px}
+ .modeBar{gap:4px;padding:6px}
+ .modeBar>span{font-size:10px}
+ .skillPanel{padding:7px;margin-top:6px}
+ .skillDescription{max-height:2.8em;overflow:hidden}
+ .help{font-size:9px;line-height:1.3}
+ .boardWrap{margin-top:5px;padding:3px}
+ .actions{margin-top:6px}
+ .actions button{min-height:36px;font-size:11px}
+ .message{margin-top:4px}
+}
+@media(max-width:360px){
+ .shell{padding-left:4px;padding-right:4px}
+ .top a,.top button{font-size:10px;padding:5px}
+ .profileInfo strong{font-size:13px}
+ .profileInfo small{font-size:9px}
+ .stat strong{font-size:14px}
+ .modeBar button{font-size:10px}
+ .skillButton{min-height:36px}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
 </head>
@@ -74,14 +113,14 @@ button:disabled{opacity:.42;cursor:not-allowed}.help{color:var(--muted);font-siz
 <header class="top"><div><div class="brand">🎭 顔つなぎパズル</div><p class="sub">ころころ落ちる顔をつなげて消そう！</p></div><div><a href="./game.html">シューティングへ</a> <button id="logout" type="button">ログアウト</button></div></header>
 <section class="panel">
  <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><label><select id="faceSelect" aria-label="使用する顔" disabled></select></label></div></div>
- <div class="stats"><div class="stat"><span>スコア</span><strong id="score">0</strong></div><div class="stat"><span>のこり時間</span><strong id="time">60</strong></div><div class="stat"><span>コンボ</span><strong id="combo">0</strong></div></div>
+ <div class="stats"><div class="stat"><span>スコア</span><strong id="score">0</strong></div><div class="stat"><span>のこり時間</span><strong id="time">60</strong></div><div class="stat"><span>コンボ</span><strong id="combo">0</strong></div><div class="stat"><span>チェーン数</span><strong id="chainCount">0</strong></div></div>
  <div class="progress" aria-label="フィーバーゲージ"><i id="feverFill"></i></div>
  <div class="modeBar"><span>使用する顔：<strong id="faceMode">5種類</strong></span><span>所持ポイント：<strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" disabled>4種類で1試合（5,000pt）</button></div>
  <div class="skillPanel"><div class="skillTitle"><strong>⭐ マイツムスキル</strong><span id="skillChargeText">0 / 20</span></div><div class="skillProgress"><i id="skillFill"></i></div><p id="skillDescription" class="skillDescription">マイツムを消してゲージをためよう！</p><button id="skillButton" class="skillButton" type="button" disabled>✨ スキル</button></div>
  <p class="help">同じ顔を指でなぞって3個以上チェーン！7個以上でボム、10個以上でタイムボム、13個以上でスターボムが出現。<br>ボムをタップすると周りの顔を消せるよ。タイムボムは残り時間が3秒増える！</p>
 </section>
 <section class="panel">
- <div class="boardWrap"><canvas id="boardCanvas" aria-label="物理演算パズル盤面"></canvas></div>
+ <div class="boardWrap"><div id="chainPopup" class="chainPopup" aria-live="polite"></div><canvas id="boardCanvas" aria-label="物理演算パズル盤面"></canvas></div>
  <div class="actions"><button id="start" class="primary" type="button" disabled>▶ ゲーム開始</button><button id="shuffle" class="secondary" type="button" disabled>🔀 シャッフル</button><button id="fever" class="secondary" type="button" disabled>✨ 顔面フィーバー</button><button id="pause" class="secondary" type="button" disabled>⏸ 一時停止</button></div>
  <div class="help">シャッフル再使用：<strong id="shuffleCooldown">いつでもOK</strong></div>
  <div id="message" class="message" role="status" aria-live="polite">アカウントを確認しています…</div>
