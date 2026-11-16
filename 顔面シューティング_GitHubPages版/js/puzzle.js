@@ -351,6 +351,7 @@ async function startRound() {
   }
   roundStarting = false;
   clearInterval(timer);
+  if (physics?.engine) physics.engine.timing.timeScale = 1;
   score = 0; timeLeft = ROUND_SECONDS; combo = 0;
   $("chainCount").textContent = "0";
   $("chainPopup").classList.remove("show");
@@ -381,6 +382,7 @@ async function startRound() {
 function showResult() {
   if (roundEnded) return;
   roundEnded = true; running = false; paused = false;
+  if (physics?.engine) physics.engine.timing.timeScale = 1;
   playSfx("end");
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
@@ -398,6 +400,7 @@ function showResult() {
 }
 function returnToReady() {
   clearInterval(timer); timer = null;
+  if (physics?.engine) physics.engine.timing.timeScale = 1;
   running = false; paused = false; roundEnded = false; roundStarting = false;
   pointerDown = false; previousPointer = null; setChain([]);
   skillBusy = false; skillCharge = 0;
