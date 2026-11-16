@@ -113,7 +113,8 @@ async function loadMyTsumSkill() {
   const level = Math.max(1, Number(activeFace.skill?.level) || 1);
   skillRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
   skillCharge = 0;
-  $("skillButton").textContent = "✨ " + (skillModule?.name || "マイツムスキル");
+  $("skillTitle").textContent = skillModule?.name || "マイツムスキル";
+  $("skillButton").setAttribute("aria-label", skillModule?.name || "マイツムスキル");
   let preview = {};
   try {
     preview = skillModule?.activate({
@@ -133,7 +134,7 @@ async function loadMyTsumSkill() {
 }
 function updateSkillUI() {
   const percent = Math.min(100, skillCharge / Math.max(1, skillRequired) * 100);
-  $("skillFill").style.width = percent + "%";
+  $("skillButton").style.setProperty("--skill-progress", percent + "%");
   $("skillChargeText").textContent = Math.min(skillCharge, skillRequired) + " / " + skillRequired;
   $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired || !skillModule;
 }
@@ -435,6 +436,8 @@ async function selectFace(id) {
   $("leaderName").textContent = safeName(face);
   $("leaderSkill").textContent = "マイツム / スキル Lv." + Math.max(1, Number(face.skill?.level) || 1) + " / 所持顔 " + ownedFaces.length + "体";
   await loadMyTsumSkill();
+  $("skillFace").src = imageFor(face);
+  $("skillFace").onerror = () => { $("skillFace").src = ""; };
   const img = $("leaderFace");
   img.hidden = false; $("leaderFallback").hidden = true;
   img.onerror = () => { img.hidden = true; $("leaderFallback").hidden = false; };
@@ -494,6 +497,7 @@ async function initialize() {
   img.src = imageFor(activeFace);
   img.onerror = () => { img.hidden = true; $("leaderFallback").hidden = false; };
   await loadMyTsumSkill();
+  $("skillFace").src = imageFor(activeFace);
   physics = new TsumPhysicsBoard($("boardCanvas"));
   chooseGameFaces();
   physics.seed(gameFaces, physics.width < 480 ? 42 : 70);
