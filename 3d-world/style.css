@@ -10,3 +10,5 @@
 .hotbar{max-width:96vw;overflow-x:auto;scrollbar-width:thin;}
 .slot{flex:0 0 42px;}
 #dayClock{backdrop-filter:blur(5px);}
+
+.inventory-panel{position:fixed;z-index:11;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:65vh;overflow:auto;padding:16px;border:2px solid #ffffff88;border-radius:12px;background:#18251fee;box-shadow:0 12px 50px #000b;color:#fff}.inventory-panel[hidden]{display:none}.inventory-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.inventory-grid span{padding:5px 8px;border:1px solid #ffffff44;border-radius:5px;background:#ffffff12;font-size:11px}.inventory-grid.large span{min-width:105px;padding:10px;font-size:13px}.craft-menu small{display:block;color:#d6e2d1;margin:4px 0 8px}
