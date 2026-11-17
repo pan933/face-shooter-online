@@ -68,6 +68,8 @@ function generateChunk(cx,cz){
    }
   }
  }
+ // Deterministic cave mouths: a short descending passage makes underground caves reachable from the surface.
+ if(hash(cx+55,cz-33)>.58){const ex=startX+4+Math.floor(hash(cx,cz)*7),ez=startZ+5+Math.floor(hash(cx-17,cz+29)*6);for(let step=0;step<9;step++){const xx=ex+step,yy=Math.max(2,heightAt(xx,ez)-2-Math.floor(step*.8));for(let dx=-1;dx<=1;dx++)for(let dy=0;dy<=2;dy++)c.blocks.delete(key(xx,yy+dy,ez+dx));}}
  for(const [k,v] of blockEdits){const [x,y,z]=parse(k);if(chunkOf(x)===cx&&chunkOf(z)===cz){if(v==="__air")c.blocks.delete(k);else c.blocks.set(k,v);}}
  chunks.set(id,c);rebuildChunk(c);return c;
 }
