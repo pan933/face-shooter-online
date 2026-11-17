@@ -9,7 +9,8 @@ const BLOCKS=[
  {id:"grass",name:"草",color:0x68a94b},{id:"dirt",name:"土",color:0x8b5a35},
  {id:"stone",name:"石",color:0x858b8d},{id:"wood",name:"木",color:0x9b6a3c},
  {id:"leaves",name:"葉",color:0x397b3c},{id:"sand",name:"砂",color:0xd8c27a},
- {id:"brick",name:"レンガ",color:0xa64f43},{id:"glass",name:"ガラス",color:0x9bdce8,transparent:true}
+ {id:"brick",name:"レンガ",color:0xa64f43},{id:"glass",name:"ガラス",color:0x9bdce8,transparent:true},
+ {id:"coal",name:"石炭鉱石",color:0x33383a},{id:"iron",name:"鉄鉱石",color:0xc18b65},{id:"gold",name:"金鉱石",color:0xe5c44b},{id:"diamond",name:"ダイヤ鉱石",color:0x53d7d1},{id:"chest",name:"宝箱",color:0x98602c}
 ];
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x8dc9ed);
@@ -26,7 +27,9 @@ const materials=new Map(BLOCKS.map(b=>[b.id,new THREE.MeshLambertMaterial({color
 const chunks=new Map(),blockEdits=new Map(),keys=new Set(),touchMove=new Set(),enemies=[];
 const raycaster=new THREE.Raycaster(),center=new THREE.Vector2(0,0);
 let selected=0,mode="survival",thirdPerson=false,yaw=0,pitch=0,velocityY=0,grounded=false,pointerLocked=false,lastTime=performance.now(),lastChunk="";
-let health=5,hunger=5,score=0,attackCooldown=0,worldSeed=73921;
+let health=5,hunger=5,score=0,attackCooldown=0,worldSeed=73921,toolLevel=0;
+const inventory={grass:0,dirt:0,stone:0,wood:0,leaves:0,sand:0,brick:0,glass:0,coal:0,iron:0,gold:0,diamond:0,plank:0,stick:0,iron_ingot:0,gold_ingot:0,diamond_sword:0};
+const animals=[];
 const player={x:.5,y:8,z:.5};
 const faceUrl="https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png";
 let faceTexture=null;
@@ -45,7 +48,14 @@ function generateChunk(cx,cz){
  const startX=cx*CHUNK,startZ=cz*CHUNK;
  for(let x=startX;x<startX+CHUNK;x++)for(let z=startZ;z<startZ+CHUNK;z++){
   const h=heightAt(x,z),beach=h<=6;
-  for(let y=0;y<=h;y++)c.blocks.set(key(x,y,z),y===h?(beach?"sand":"grass"):y>=h-3?"dirt":"stone");
+  for(let y=0;y<=h;y++){
+   const caveNoise=Math.sin(x*.19+y*.31)*Math.cos(z*.17-y*.23)+Math.sin((x-z+y)*.11);
+   if(y>2&&y<h-2&&caveNoise>1.18)continue;
+   let type=y===h?(beach?"sand":"grass"):y>=h-3?"dirt":"stone";
+   if(type==="stone"&&y<h-2){const r=hash(x*31+y*7,z*29-y*11);if(y<6&&r>.992)type="diamond";else if(y<10&&r>.982)type="gold";else if(r>.955)type="iron";else if(r>.91)type="coal";}
+   c.blocks.set(key(x,y,z),type);
+  }
+  if(hash(x+513,z-218)>.997&&h>6)c.blocks.set(key(x,h+1,z),"chest");
   if(x-startX>=2&&x-startX<CHUNK-2&&z-startZ>=2&&z-startZ<CHUNK-2&&hash(x,z)>.965&&hash(x+91,z-37)>.45){
    const trunk=3+Math.floor(hash(x-4,z+8)*3);
    for(let y=1;y<=trunk;y++)c.blocks.set(key(x,h+y,z),"wood");
@@ -78,7 +88,7 @@ function updateChunks(force=false){
  for(const [id,c] of chunks){if(!wanted.has(id)){for(const m of c.meshes)scene.remove(m);chunks.delete(id);}}
  document.querySelector("#worldInfo").textContent=`読み込み中 ${chunks.size}チャンク`;
 }
-function saveWorld(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({mode,edits:[...blockEdits],x:player.x,y:player.y,z:player.z,score,health,hunger}));toast("ワールドを保存したよ");}catch{toast("保存容量が足りないみたい");}}
+function saveWorld(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({mode,edits:[...blockEdits],x:player.x,y:player.y,z:player.z,score,health,hunger,inventory,toolLevel}));toast("ワールドを保存したよ");}catch{toast("保存容量が足りないみたい");}}
 function loadWorld(){try{const d=JSON.parse(localStorage.getItem(SAVE_KEY)||"null");if(!d)return;mode=d.mode==="creative"?"creative":"survival";for(const e of d.edits||[])blockEdits.set(e[0],e[1]);if(Number.isFinite(d.x)){player.x=d.x;player.y=d.y;player.z=d.z;}score=d.score||0;health=d.health||5;hunger=d.hunger??5;}catch{}}
 function toast(s){toastEl.textContent=s;toastEl.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>toastEl.classList.remove("show"),1500);}
 function renderHotbar(){const el=document.querySelector("#hotbar");el.innerHTML="";BLOCKS.forEach((b,i)=>{const n=document.createElement("button");n.className="slot"+(i===selected?" selected":"");n.title=b.name;n.innerHTML=`<i style="background:#${b.color.toString(16).padStart(6,"0")}"></i><small>${i+1}</small>`;n.onclick=()=>{selected=i;renderHotbar();};el.appendChild(n);});}
@@ -93,6 +103,8 @@ function makeAvatar(){
 const avatar=makeAvatar();
 function spawnEnemy(x,z){const y=heightAt(x,z)+1;const g=new THREE.Group();const head=new THREE.Mesh(new THREE.BoxGeometry(.9,.9,.9),new THREE.MeshLambertMaterial({color:0xffc3a0}));head.position.y=1.55;g.add(head);applyFace(head);const body=new THREE.Mesh(new THREE.BoxGeometry(.72,.85,.42),new THREE.MeshLambertMaterial({color:hash(x,z)>.5?0x9e3030:0x593d9b}));body.position.y=.65;g.add(body);g.position.set(x+.5,y,z+.5);scene.add(g);const e={group:g,head,hp:2,phase:hash(x+9,z+7)*6,hit:0};enemies.push(e);}
 function seedEnemies(){for(let i=0;i<12;i++){const a=i*Math.PI*2/12,r=13+hash(i,77)*18;spawnEnemy(Math.floor(player.x+Math.cos(a)*r),Math.floor(player.z+Math.sin(a)*r));}}
+function seedAnimals(){for(let i=0;i<8;i++){const a=i*Math.PI/4,r=7+hash(i+70,99)*16,x=Math.floor(player.x+Math.cos(a)*r),z=Math.floor(player.z+Math.sin(a)*r);const g=new THREE.Group(),fur=new THREE.MeshLambertMaterial({color:[0xf1eee2,0x9b7652,0x555555][i%3]});const body=new THREE.Mesh(new THREE.BoxGeometry(.9,.65,.48),fur);body.position.y=.65;g.add(body);const head=new THREE.Mesh(new THREE.BoxGeometry(.42,.42,.42),fur);head.position.set(0,1.12,.28);g.add(head);g.position.set(x+.5,heightAt(x,z)+1,z+.5);scene.add(g);animals.push({group:g,phase:hash(x,z)*8,homeX:x,homeZ:z});}}
+function updateAnimals(dt){for(const a of animals){a.phase+=dt;const drift=Math.sin(a.phase*.25)*.7;a.group.position.x=a.homeX+.5+drift;a.group.position.z=a.homeZ+.5+Math.cos(a.phase*.2)*.7;a.group.position.y=heightAt(a.group.position.x,a.group.position.z)+1;}}
 function solidAt(x,y,z){return !!getBlock(Math.floor(x),Math.floor(y),Math.floor(z));}
 function collides(x,y,z){const r=.28,h=1.72;return solidAt(x-r,y,z-r)||solidAt(x+r,y,z-r)||solidAt(x-r,y,z+r)||solidAt(x+r,y,z+r)||solidAt(x-r,y+h,z-r)||solidAt(x+r,y+h,z-r)||solidAt(x-r,y+h,z+r)||solidAt(x+r,y+h,z+r);}
 function movePlayer(dt){
@@ -103,17 +115,23 @@ function movePlayer(dt){
  else{velocityY-=21*dt;const ny=player.y+velocityY*dt;if(!collides(player.x,ny,player.z)){player.y=ny;grounded=false;}else{if(velocityY<0)grounded=true;velocityY=0;}if((keys.has("Space")||touchMove.has("jump"))&&grounded){velocityY=8;grounded=false;}if(player.y< -8){player.y=heightAt(player.x,player.z)+3;health=Math.max(1,health-1);updateHud();}}
 }
 function updateCamera(){avatar.position.set(player.x,player.y,player.z);avatar.rotation.y=yaw+Math.PI;avatar.visible=thirdPerson;const target=new THREE.Vector3(player.x,player.y+1.55,player.z);if(!thirdPerson){camera.position.copy(target);camera.rotation.order="YXZ";camera.rotation.y=yaw;camera.rotation.x=pitch;}else{camera.position.copy(target).add(new THREE.Vector3(Math.sin(yaw)*5,2+Math.sin(pitch)*1.5,Math.cos(yaw)*5));camera.lookAt(target);}}
-function targetBlock(){raycaster.setFromCamera(center,camera);raycaster.far=6;const all=[];for(const c of chunks.values())all.push(...c.meshes);const hit=raycaster.intersectObjects(all,false)[0];if(!hit)return null;const list=hit.object.userData.positions,p=list?.[hit.instanceId];if(!p)return null;const n=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);return {p,n};}
+function targetBlock(){raycaster.setFromCamera(center,camera);raycaster.far=6;const all=[];for(const c of chunks.values())all.push(...c.meshes);const hit=raycaster.intersectObjects(all,false)[0];if(!hit)return null;const list=hit.object.userData.positions,p=list?.[hit.instanceId];if(!p)return null;const n=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);return {p,n,type:getBlock(p[0],p[1],p[2])};}
 function targetEnemy(){raycaster.setFromCamera(center,camera);raycaster.far=28;const objs=enemies.map(e=>e.group);const hit=raycaster.intersectObjects(objs,true)[0];if(!hit)return null;return enemies.find(e=>e.group===hit.object.parent||e.group===hit.object.parent?.parent)||null;}
 function attack(){if(attackCooldown>0)return;attackCooldown=.32;const enemy=targetEnemy();if(enemy){enemy.hp--;enemy.hit=.16;score+=enemy.hp<=0?1:0;if(enemy.hp<=0){scene.remove(enemy.group);enemies.splice(enemies.indexOf(enemy),1);if(mode==="survival")health=Math.min(5,health+1);toast("顔面撃破！ +1");}else toast("ヒット！");updateHud();return;}
- const t=targetBlock();if(t){const [x,y,z]=t.p;if(y>0){setBlock(x,y,z,null);toast("ブロック破壊");}}
+ const t=targetBlock();if(t){const [x,y,z]=t.p;if(t.type==="chest"){setBlock(x,y,z,null);const loot=["iron","coal","gold","diamond","wood"];const item=loot[Math.floor(Math.random()*loot.length)];inventory[item]=(inventory[item]||0)+(item==="diamond"?1:3);updateInventory();toast("宝箱発見！ "+item+" を入手");return;}if(y>0){if(mode==="survival")inventory[t.type]=(inventory[t.type]||0)+1;setBlock(x,y,z,null);updateInventory();toast("ブロック採掘");}}
 }
-function place(){const t=targetBlock();if(!t)return;const x=t.p[0]+Math.round(t.n.x),y=t.p[1]+Math.round(t.n.y),z=t.p[2]+Math.round(t.n.z);if(getBlock(x,y,z))return;if(Math.abs(x-player.x)<.5&&Math.abs(z-player.z)<.5&&y>=player.y&&y<=player.y+1.8)return;setBlock(x,y,z,BLOCKS[selected].id);}
+function place(){const t=targetBlock();if(!t)return;const x=t.p[0]+Math.round(t.n.x),y=t.p[1]+Math.round(t.n.y),z=t.p[2]+Math.round(t.n.z);if(getBlock(x,y,z))return;if(mode==="survival"&&(inventory[BLOCKS[selected].id]||0)<=0){toast("そのブロックを持っていないよ");return;}if(Math.abs(x-player.x)<.5&&Math.abs(z-player.z)<.5&&y>=player.y&&y<=player.y+1.8)return;setBlock(x,y,z,BLOCKS[selected].id);if(mode==="survival")inventory[BLOCKS[selected].id]--;updateInventory();}
 function updateEnemies(dt){for(const e of enemies){e.phase+=dt;const dx=player.x-e.group.position.x,dz=player.z-e.group.position.z,dist=Math.hypot(dx,dz);if(mode==="survival"&&dist<17&&dist>1.4){e.group.position.x+=dx/dist*dt*.8;e.group.position.z+=dz/dist*dt*.8;}e.group.position.y=heightAt(e.group.position.x,e.group.position.z)+1+Math.sin(e.phase*2)*.08;e.group.rotation.y=Math.atan2(dx,dz);if(e.hit>0){e.hit-=dt;e.group.scale.setScalar(1.12);}else e.group.scale.setScalar(1);if(mode==="survival"&&dist<1.35&&Math.random()<dt*.22){health=Math.max(0,health-1);updateHud();toast("顔面モンスターに接近された！");if(health===0){health=5;player.x=0;player.z=0;player.y=heightAt(0,0)+3;toast("リスポーン！");}}}}
+function updateInventory(){const el=document.querySelector("#inventory");if(el)el.textContent="所持: "+Object.entries(inventory).filter(([k,v])=>v>0).map(([k,v])=>k+"×"+v).join(" / ");}
+function craft(){const recipes=[
+ {name:"木材→板材",need:{wood:1},give:{plank:4}},{name:"板材→棒",need:{plank:2},give:{stick:4}},
+ {name:"石のツルハシ",need:{stone:3,stick:2},give:{tool:1}},{name:"鉄インゴット",need:{iron:3},give:{iron_ingot:1}},
+ {name:"金インゴット",need:{gold:3},give:{gold_ingot:1}},{name:"ダイヤ剣",need:{diamond:2,stick:1},give:{diamond_sword:1}}
+ ];const menu=document.querySelector("#craftMenu");menu.innerHTML="";recipes.forEach(r=>{const b=document.createElement("button");b.textContent=r.name+" ("+Object.entries(r.need).map(([k,v])=>k+"×"+v).join(", ")+")";b.onclick=()=>{if(!Object.entries(r.need).every(([k,v])=>(inventory[k]||0)>=v)){toast("素材が足りないよ");return;}for(const [k,v] of Object.entries(r.need))inventory[k]-=v;for(const [k,v] of Object.entries(r.give)){if(k==="tool")toolLevel=Math.min(1,toolLevel+1);else inventory[k]=(inventory[k]||0)+v;}updateInventory();toast("クラフト成功: "+r.name);};menu.appendChild(b);});menu.hidden=!menu.hidden;}
 function toggleMode(){mode=mode==="survival"?"creative":"survival";updateHud();toast(mode==="creative"?"自由に飛べるよ":"サバイバル開始");}
 function toggleCamera(){thirdPerson=!thirdPerson;document.querySelector("#cameraButton").textContent=thirdPerson?"一人称":"三人称";}
 function start(){document.querySelector("#help").hidden=true;if(!isTouch)renderer.domElement.requestPointerLock?.();}
-document.querySelector("#startButton").onclick=start;document.querySelector("#modeButton").onclick=toggleMode;document.querySelector("#cameraButton").onclick=toggleCamera;document.querySelector("#saveButton").onclick=saveWorld;
+document.querySelector("#startButton").onclick=start;document.querySelector("#craftButton").onclick=craft;document.querySelector("#modeButton").onclick=toggleMode;document.querySelector("#cameraButton").onclick=toggleCamera;document.querySelector("#saveButton").onclick=saveWorld;
 document.addEventListener("pointerlockchange",()=>pointerLocked=document.pointerLockElement===renderer.domElement);
 document.addEventListener("mousemove",e=>{if(pointerLocked){yaw-=e.movementX*.0022;pitch=THREE.MathUtils.clamp(pitch-e.movementY*.0022,-1.4,1.4);}});
 renderer.domElement.addEventListener("contextmenu",e=>e.preventDefault());renderer.domElement.addEventListener("mousedown",e=>{if(e.button===0&&pointerLocked)attack();if(e.button===2&&pointerLocked)place();});
@@ -123,6 +141,6 @@ document.querySelectorAll("[data-move]").forEach(b=>{const a=b.dataset.move;b.ad
 document.querySelector("#mobileAttack").onclick=attack;document.querySelector("#mobilePlace").onclick=place;document.querySelector("#mobileJump").onpointerdown=()=>touchMove.add("jump");document.querySelector("#mobileJump").onpointerup=()=>touchMove.delete("jump");
 let lookId=null,lx=0,ly=0;renderer.domElement.addEventListener("pointerdown",e=>{if(isTouch&&e.clientX>innerWidth*.4){lookId=e.pointerId;lx=e.clientX;ly=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);}});renderer.domElement.addEventListener("pointermove",e=>{if(e.pointerId===lookId){yaw-=(e.clientX-lx)*.006;pitch=THREE.MathUtils.clamp(pitch-(e.clientY-ly)*.006,-1.4,1.4);lx=e.clientX;ly=e.clientY;}});renderer.domElement.addEventListener("pointerup",()=>lookId=null);renderer.domElement.addEventListener("pointercancel",()=>lookId=null);
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-loadWorld();player.y=Math.max(player.y,heightAt(player.x,player.z)+1.1);updateChunks(true);seedEnemies();renderHotbar();updateHud();
-function animate(now){requestAnimationFrame(animate);const dt=Math.min(.04,(now-lastTime)/1000||0);lastTime=now;attackCooldown=Math.max(0,attackCooldown-dt);movePlayer(dt);updateChunks();updateEnemies(dt);updateCamera();renderer.render(scene,camera);}
+loadWorld();player.y=Math.max(player.y,heightAt(player.x,player.z)+1.1);updateChunks(true);seedEnemies();seedAnimals();renderHotbar();updateHud();updateInventory();
+function animate(now){requestAnimationFrame(animate);const dt=Math.min(.04,(now-lastTime)/1000||0);lastTime=now;attackCooldown=Math.max(0,attackCooldown-dt);movePlayer(dt);updateChunks();updateEnemies(dt);updateAnimals(dt);updateCamera();renderer.render(scene,camera);}
 requestAnimationFrame(animate);addEventListener("beforeunload",()=>{try{localStorage.setItem(SAVE_KEY,JSON.stringify({mode,edits:[...blockEdits],x:player.x,y:player.y,z:player.z,score,health,hunger}));}catch{}});
