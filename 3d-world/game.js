@@ -141,6 +141,33 @@ generateWorld();
 if(!loadWorld()) showToast("新しいワールドを生成したよ");
 rebuildMeshes();renderHotbar();updateModeUI();
 
+// 顔面シューティングの初期顔画像をキャラクターの頭に使用
+const avatar = new THREE.Group();
+const shirtMat = new THREE.MeshLambertMaterial({color:0x315b9a});
+const legMat = new THREE.MeshLambertMaterial({color:0x303b4b});
+const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(.62,.78,.34),shirtMat);
+bodyMesh.position.y=.95; avatar.add(bodyMesh);
+const headMesh = new THREE.Mesh(new THREE.BoxGeometry(.62,.62,.62),new THREE.MeshLambertMaterial({color:0xe5c6a4}));
+headMesh.position.y=1.68; avatar.add(headMesh);
+const faceUrl = "https://res.cloudinary.com/i0ptpjzc/image/upload/v1793063262/face2.png";
+new THREE.TextureLoader().load(faceUrl, texture=>{
+  texture.colorSpace=THREE.SRGBColorSpace;
+  headMesh.material = [
+    new THREE.MeshLambertMaterial({color:0xe5c6a4}),
+    new THREE.MeshLambertMaterial({color:0xe5c6a4}),
+    new THREE.MeshLambertMaterial({color:0xe5c6a4}),
+    new THREE.MeshLambertMaterial({color:0xe5c6a4}),
+    new THREE.MeshLambertMaterial({map:texture}),
+    new THREE.MeshLambertMaterial({color:0xe5c6a4})
+  ];
+},undefined,()=>{});
+for(const side of [-1,1]){
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(.24,.72,.28),shirtMat);
+  arm.position.set(side*.44,.98,0);avatar.add(arm);
+  const leg=new THREE.Mesh(new THREE.BoxGeometry(.27,.72,.3),legMat);
+  leg.position.set(side*.17,.36,0);avatar.add(leg);
+}
+scene.add(avatar);
 const player={x:.5,y:terrainHeight(0,0)+1.01,z:.5};
 camera.position.set(player.x,player.y+0.62,player.z);
 function solidAt(x,y,z){return !!getBlock(Math.floor(x),Math.floor(y),Math.floor(z));}
@@ -174,6 +201,7 @@ function movePlayer(dt){
   }
 }
 function updateCamera(){
+  avatar.position.set(player.x,player.y,player.z);avatar.rotation.y=yaw+Math.PI;avatar.visible=thirdPerson;
   const target=new THREE.Vector3(player.x,player.y+1.55,player.z);
   if(!thirdPerson){
     camera.position.copy(target);
