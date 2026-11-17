@@ -8,3 +8,120 @@
   color: #cffafe;
   line-height: 1.55;
 }
+
+
+/* PCごとの画面幅・拡大率の違いに対応 */
+.page,
+.panel,
+.panel * {
+  min-width: 0;
+}
+.page {
+  width: min(100% - 32px, 1320px);
+}
+.panel {
+  overflow: hidden;
+}
+.config-grid,
+.check-grid,
+.gacha-bonus-settings > div {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+.gacha-faces-list {
+  display: grid;
+  gap: 14px;
+}
+.gacha-face-card {
+  grid-template-columns: minmax(110px, 140px) minmax(0, 1fr) auto !important;
+  gap: clamp(10px, 1.4vw, 18px) !important;
+}
+.gacha-face-card > div:first-child {
+  min-width: 0;
+}
+.gacha-face-preview {
+  width: clamp(96px, 11vw, 140px) !important;
+  height: clamp(96px, 11vw, 140px) !important;
+}
+.gacha-face-card input:not([type="checkbox"]),
+.gacha-face-card select,
+.gacha-face-card textarea,
+.gacha-bonus-settings input,
+.gacha-bonus-settings select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.gacha-face-card label,
+.gacha-bonus-settings label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gacha-face-card input[type="checkbox"] {
+  flex: 0 0 auto;
+}
+.gacha-probability-summary {
+  overflow-wrap: anywhere;
+}
+.topbar {
+  padding-left: max(14px, calc((100vw - 1320px)/2));
+  padding-right: max(14px, calc((100vw - 1320px)/2));
+}
+
+@media (max-width: 1050px) {
+  .page {
+    width: calc(100% - 24px);
+    margin-top: 22px;
+  }
+  .panel {
+    padding: 18px;
+  }
+  .gacha-face-card {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+  .gacha-face-card > div:first-child {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+  .gacha-face-preview {
+    width: clamp(76px, 10vw, 112px) !important;
+    height: clamp(76px, 10vw, 112px) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    width: calc(100% - 16px);
+    margin-top: 14px;
+  }
+  .panel {
+    padding: 14px;
+  }
+  .gacha-face-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+    padding: 12px !important;
+  }
+  .gacha-face-card > div:first-child {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .gacha-face-preview {
+    width: 76px !important;
+    height: 76px !important;
+  }
+  .gacha-face-card > button {
+    justify-self: end;
+  }
+  .gacha-face-card label {
+    font-size: 14px;
+  }
+  .gacha-bonus-settings {
+    padding: 12px !important;
+  }
+  .hero-actions,
+  .panel-heading,
+  .form-actions {
+    flex-wrap: wrap;
+  }
+}
