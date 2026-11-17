@@ -1,49 +1,7 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#18251b">
-  <title>FACECRAFT - 3Dブロックワールド</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
-<body>
-  <div id="game"></div>
-  <div id="crosshair" aria-hidden="true"></div>
-  <header class="topbar">
-    <a class="brand" href="../顔面シューティング_GitHubPages版/index.html">FACECRAFT</a>
-    <div class="top-actions">
-      <span id="modeLabel">サバイバル</span>
-      <button id="modeButton" type="button">モード変更</button>
-      <button id="cameraButton" type="button">三人称</button>
-      <button id="saveButton" type="button">保存</button>
-    </div>
-  </header>
-  <section class="help" id="help">
-    <strong>操作方法</strong>
-    <span>WASD：移動 / マウス：視点 / Space：ジャンプ</span>
-    <span>左クリック：ブロック破壊 / 右クリック：ブロック設置</span>
-    <span>1〜6：ブロック選択 / V：視点切替 / M：モード切替</span>
-    <button id="startButton" type="button">ワールドに入る</button>
-  </section>
-  <div class="hud">
-    <div class="status"><span id="health">❤ ❤ ❤ ❤ ❤</span><span id="hunger">● ● ● ● ●</span></div>
-    <div id="hotbar" class="hotbar"></div>
-    <div class="hint" id="hint">クリックして操作開始</div>
-  </div>
-  <div id="mobileControls" class="mobile-controls">
-    <div class="move-pad">
-      <button data-move="forward">▲</button>
-      <div><button data-move="left">◀</button><button data-move="back">▼</button><button data-move="right">▶</button></div>
-    </div>
-    <div class="look-note">右側をスワイプ：視点移動</div>
-    <div class="action-pad">
-      <button id="mobileJump">ジャンプ</button>
-      <button id="mobileBreak">壊す</button>
-      <button id="mobilePlace">置く</button>
-    </div>
-  </div>
-  <div id="toast" role="status"></div>
-  <script type="module" src="./game.js"></script>
-</body>
-</html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#18251b"><title>FACECRAFT - 顔面ワールド</title><link rel="stylesheet" href="./style.css"></head>
+<body><div id="game"></div><div id="crosshair"></div>
+<header class="topbar"><a class="brand" href="../顔面シューティング_GitHubPages版/index.html">FACECRAFT</a><div class="top-actions"><span id="modeLabel">サバイバル</span><button id="modeButton">クリエイティブへ</button><button id="cameraButton">三人称</button><button id="saveButton">保存</button></div></header>
+<section class="help" id="help"><strong>FACECRAFT</strong><span>顔面モンスターが出現する無限ワールド！</span><span>WASD移動 / マウス視点 / Spaceジャンプ</span><span>左クリック・F：攻撃 / 右クリック・E：ブロック設置</span><span>1〜8：ブロック選択 / V：視点 / M：モード</span><button id="startButton">ワールドに入る</button></section>
+<div class="hud"><div class="status"><span id="health">❤ ❤ ❤ ❤ ❤</span><span id="hunger">● ● ● ● ●</span><span id="score">顔面撃破 0</span></div><div id="hotbar" class="hotbar"></div><div class="hint"><span id="worldInfo">チャンク読み込み中</span> ・ 周囲だけを読み込む軽量ワールド</div></div>
+<div id="mobileControls" class="mobile-controls"><div class="move-pad"><button data-move="forward">▲</button><div><button data-move="left">◀</button><button data-move="back">▼</button><button data-move="right">▶</button></div></div><div class="look-note">右側スワイプで視点移動</div><div class="action-pad"><button id="mobileJump">ジャンプ</button><button id="mobileAttack">攻撃</button><button id="mobilePlace">設置</button></div></div><div id="toast"></div><script type="module" src="./game.js"></script></body></html>
