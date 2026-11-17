@@ -46,7 +46,7 @@ function generateChunk(cx,cz){
  for(let x=startX;x<startX+CHUNK;x++)for(let z=startZ;z<startZ+CHUNK;z++){
   const h=heightAt(x,z),beach=h<=6;
   for(let y=0;y<=h;y++)c.blocks.set(key(x,y,z),y===h?(beach?"sand":"grass"):y>=h-3?"dirt":"stone");
-  if(hash(x,z)>.965&&hash(x+91,z-37)>.45){
+  if(x-startX>=2&&x-startX<CHUNK-2&&z-startZ>=2&&z-startZ<CHUNK-2&&hash(x,z)>.965&&hash(x+91,z-37)>.45){
    const trunk=3+Math.floor(hash(x-4,z+8)*3);
    for(let y=1;y<=trunk;y++)c.blocks.set(key(x,h+y,z),"wood");
    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=trunk-1;dy<=trunk+2;dy++){
