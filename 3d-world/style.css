@@ -5,3 +5,8 @@
 .craft-menu button{text-align:left;font-size:12px;background:#314b34}
 #craftButton{background:#536f38}
 @media(max-width:700px){.inventory{font-size:8px;max-height:30px}.craft-menu{top:54px;right:6px;width:min(280px,calc(100vw - 12px));max-height:42vh}.top-actions button{font-size:8px}}
+
+/* More building blocks: keep the hotbar usable on narrow screens */
+.hotbar{max-width:96vw;overflow-x:auto;scrollbar-width:thin;}
+.slot{flex:0 0 42px;}
+#dayClock{backdrop-filter:blur(5px);}
