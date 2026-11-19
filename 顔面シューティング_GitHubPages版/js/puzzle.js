@@ -12,6 +12,7 @@ let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillReq
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
+let skillMode = null, skillHitBalls = [], skillFreezeUntil = 0, skillFreezeTimer = null;
 
 let soundContext = null;
 function unlockSound() {
@@ -90,20 +91,20 @@ async function buyFourMode() {
 }
 function puzzleSkillHint(type) {
   const hints = {
-    screen_clear: "盤面の顔をまとめて一掃する",
-    explosion: "指定範囲の顔をまとめて消す",
-    black_hole: "中央付近の顔を吸い込むように消す",
-    line_clear: "横一列に近い範囲の顔を消す",
-    laser: "横方向のライン上の顔を消す",
-    slash: "横切る斬撃で顔をまとめて消す",
-    time_stop: "盤面を一時停止し、中央の顔を消す",
-    power_up: "顔を追加で消してスコアボーナス",
-    bullet_counter: "お助け効果で中央付近の顔を消す",
-    defense: "少し時間を回復して顔を消す",
-    teleport: "盤面中央を整理して時間を回復",
-    orbit_guard: "周囲を整理して時間を回復",
-    homing_volley: "盤面で最も多い顔をまとめて消す",
-    score_boost: "顔を消して追加スコアを獲得"
+    screen_clear: "画面全体に光が広がり、最大数のツムを一掃",
+    explosion: "炎や星の爆発で周囲のツムを消す",
+    black_hole: "渦がツムを吸い込み、まとまった数を消す",
+    line_clear: "横一列を貫くビーム",
+    laser: "盤面を縦に照らす光の柱",
+    slash: "なぞったルート上のツムを光で集めて消す",
+    time_stop: "盤面を止める。停止中は残り時間も減らない",
+    power_up: "一定時間、違う顔のツムもつなげられる",
+    bullet_counter: "雷の反撃でツムをまとめて消す",
+    defense: "シールド展開＋時間回復",
+    teleport: "ワープで盤面をシャッフルし、時間も回復",
+    orbit_guard: "周囲を回る光輪でツムを消す",
+    homing_volley: "光弾がツムを追尾して消す",
+    score_boost: "得点ボーナス付きの星を降らせる"
   };
   return hints[type] || "顔をまとめて消してスコアを獲得";
 }
@@ -111,7 +112,9 @@ async function loadMyTsumSkill() {
   const skillId = String(activeFace?.skillId || activeFace?.skill?.skillId || "");
   skillModule = await loadSkill(String(activeFace?.id || ""), skillId);
   const level = Math.max(1, Number(activeFace.skill?.level) || 1);
-  skillRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
+  // どのツムでもスキル回転率が極端に変わらないよう必要数を統一帯へ補正。
+  const rawRequired = skillModule ? getRequiredKills(skillModule, level) : 20;
+  skillRequired = Math.max(16, Math.min(22, Math.round(rawRequired * 0.82)));
   skillCharge = 0;
   $("skillTitle").textContent = skillModule?.name || "マイツムスキル";
   $("skillButton").setAttribute("aria-label", skillModule?.name || "マイツムスキル");
@@ -143,6 +146,7 @@ async function activateMyTsumSkill() {
   skillBusy = true;
   skillCharge = 0;
   updateSkillUI();
+
   const level = Math.max(1, Number(activeFace?.skill?.level) || 1);
   let result = {};
   try {
@@ -160,43 +164,69 @@ async function activateMyTsumSkill() {
 
   const balls = [...physics.balls];
   const type = result.type || "explosion";
-  const levelBonus = Math.max(0, level - 1);
+  const levelStep = Math.max(0, Math.min(5, level - 1));
   const centerX = Number.isFinite(Number(result.x)) ? Number(result.x) : physics.width / 2;
   const centerY = Number.isFinite(Number(result.y)) ? Number(result.y) : physics.height * 0.56;
-  const radius = Math.max(physics.radius * 2.5, Number(result.radius) || physics.width * (0.24 + levelBonus * 0.025));
-  let targets = [];
   const nearest = (count, x = centerX, y = centerY) => balls
     .map(ball => ({ ball, d: Math.hypot(ball.body.position.x - x, ball.body.position.y - y) }))
     .sort((a, b) => a.d - b.d)
     .slice(0, Math.min(balls.length, count))
     .map(item => item.ball);
+  const baseline = 7 + Math.floor(levelStep * 1.2);
+  let targets = [];
+  let effect = { type, x: centerX, y: centerY, width: physics.width, height: physics.height, duration: 950 };
 
-  // 顔面ツム専用の効果へ変換。弾・HP・敵などのシューティング要素には依存しない。
-  if (type === "screen_clear") {
-    targets = balls;
-  } else if (type === "explosion" || type === "black_hole") {
-    targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
-    if (targets.length < 4) targets = nearest(6 + levelBonus * 2, centerX, centerY);
-  } else if (type === "line_clear" || type === "laser" || type === "slash") {
-    const halfHeight = Math.max(physics.radius * 1.8, (Number(result.height) || physics.height * (0.24 + levelBonus * 0.025)) / 2);
-    const halfWidth = Math.max(physics.width * 0.28, (Number(result.width) || physics.width) / 2);
-    targets = balls.filter(ball =>
-      Math.abs(ball.body.position.y - centerY) <= halfHeight &&
-      Math.abs(ball.body.position.x - centerX) <= halfWidth
-    );
-    const maxTargets = Number(result.maxTargets) || (10 + levelBonus * 2);
-    targets = targets.slice(0, maxTargets);
-    if (targets.length < 3) targets = nearest(6 + levelBonus * 2);
-  } else if (type === "time_stop") {
-    // 盤面の動きを短時間止めて、中央を整理する。
-    physics.engine.timing.timeScale = 0;
-    window.setTimeout(() => {
-      if (physics?.engine) physics.engine.timing.timeScale = 1;
-    }, Math.max(500, Math.min(4000, (Number(result.duration || result.stopDuration) || 1.5) * 1000)));
-    targets = nearest(6 + levelBonus * 2);
+  // スキルの種類ごとに違う動き・見た目・効果へ変換する。
+  if (type === "slash") {
+    // 居合斬り：発動後、指でなぞった軌跡をレーザー斬撃にする。
+    skillMode = { type: "trace_link", expiresAt: Date.now() + Math.max(3500, Math.min(6500, Number(result.duration) * 1000 || 5000)) };
+    skillHitBalls = [];
+    physics.setSkillTrail([]);
+    effect = { type: "light_trail", x: centerX, y: centerY, duration: 650 };
+    physics.showSkillEffect(effect);
+    say("✨ 光のルートモード！盤面をなぞると、通ったツムがキラキラ消える！");
   } else if (type === "power_up") {
-    targets = nearest(8 + levelBonus * 2);
-    score += Math.round(250 * (Number(result.damageMultiplier) || 1));
+    // シンデレラ型：一定時間、違う顔同士もつなげられる。
+    skillMode = { type: "rainbow_chain", expiresAt: Date.now() + Math.max(4000, Math.min(8000, (Number(result.duration) || 5) * 1000)) };
+    physics.showSkillEffect({ type: "power_up", x: centerX, y: centerY, duration: 900 });
+    score += 250 + levelStep * 70;
+    say("🌈 レインボータイム！時間内はどの顔のツムでもつなげられる！");
+  } else if (type === "time_stop") {
+    // 物理演算停止中はゲーム内タイマーも停止し、使うほど損する問題を解消。
+    const duration = Math.max(1000, Math.min(4000, (Number(result.duration || result.stopDuration) || 2) * 1000));
+    skillFreezeUntil = Math.max(skillFreezeUntil, Date.now() + duration);
+    physics.engine.timing.timeScale = 0;
+    clearTimeout(skillFreezeTimer);
+    skillFreezeTimer = window.setTimeout(() => {
+      if (physics?.engine && Date.now() >= skillFreezeUntil) physics.engine.timing.timeScale = 1;
+    }, duration + 30);
+    targets = nearest(baseline + 1);
+    effect = { type: "time_stop", x: centerX, y: centerY, duration };
+    say("❄ 時間停止！盤面も残り時間も止まる！");
+  } else if (type === "screen_clear") {
+    targets = nearest(Math.min(20 + levelStep * 2, balls.length));
+    effect = { type: "screen_clear", x: centerX, y: centerY, duration: 1100 };
+  } else if (type === "explosion") {
+    const radius = Math.max(physics.radius * 3.1, Math.min(physics.width * 0.72, Number(result.radius) || physics.width * (0.28 + levelStep * 0.025)));
+    targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
+    if (targets.length < 6) targets = nearest(baseline, centerX, centerY);
+    targets = targets.slice(0, 12 + levelStep * 2);
+    effect = { type: "explosion", x: centerX, y: centerY, radius, duration: 1050 };
+  } else if (type === "black_hole") {
+    const radius = Math.max(physics.radius * 3.8, Math.min(physics.width * 0.78, Number(result.radius) || physics.width * 0.38));
+    targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
+    if (targets.length < 7) targets = nearest(baseline + 2, centerX, centerY);
+    targets = targets.slice(0, 13 + levelStep * 2);
+    effect = { type: "black_hole", x: centerX, y: centerY, radius, duration: 1200 };
+  } else if (type === "laser" || type === "line_clear") {
+    const vertical = type === "laser";
+    const band = Math.max(physics.radius * 2.4, Number(vertical ? result.width : result.height) || physics.radius * 3.4);
+    targets = balls.filter(ball => vertical
+      ? Math.abs(ball.body.position.x - centerX) <= band / 2
+      : Math.abs(ball.body.position.y - centerY) <= band / 2);
+    if (targets.length < 6) targets = nearest(baseline, centerX, centerY);
+    targets = targets.slice(0, 12 + levelStep * 2);
+    effect = { type: vertical ? "light_column" : "line_clear", x: centerX, y: centerY, width: vertical ? band : physics.width, height: vertical ? physics.height : band, duration: 900 };
   } else if (type === "homing_volley") {
     const counts = new Map();
     for (const ball of balls) {
@@ -205,21 +235,43 @@ async function activateMyTsumSkill() {
     }
     const targetId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     targets = balls.filter(ball => String(ball.face?.id ?? ball.body?.plugin?.faceId ?? "") === targetId)
-      .slice(0, Math.max(6, Number(result.maxTargets) || 10) + levelBonus * 2);
+      .slice(0, Math.max(baseline, Math.min(14, Number(result.maxTargets) || baseline + 2)));
+    if (targets.length < 6) targets = nearest(baseline);
+    effect = { type: "homing_volley", x: centerX, y: centerY, duration: 1050 };
   } else if (type === "score_boost") {
-    targets = nearest(5 + levelBonus);
-    score += Math.max(300, Number(result.score) || 500);
-  } else if (type === "defense" || type === "teleport" || type === "orbit_guard" || type === "bullet_counter") {
-    // シューティング側の防御・弾消しを、ツムでは盤面整理＋時間回復に置き換える。
-    targets = nearest(7 + levelBonus * 2);
-    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + Math.max(1, Math.round(Number(result.heal) || 2)));
+    targets = nearest(baseline);
+    score += Math.max(450, Number(result.score) || 550);
+    effect = { type: "score_boost", x: centerX, y: centerY, duration: 1100 };
+  } else if (type === "teleport") {
+    physics.shuffle();
+    targets = nearest(6 + levelStep);
+    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + 2);
+    effect = { type: "teleport", x: centerX, y: centerY, duration: 1000 };
+  } else if (type === "defense") {
+    targets = nearest(baseline);
+    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + Math.min(4, Math.max(2, Math.round(Number(result.heal) || 2))));
+    effect = { type: "defense", x: centerX, y: centerY, duration: 1100 };
+  } else if (type === "orbit_guard" || type === "bullet_counter") {
+    const radius = Math.max(physics.radius * 3.5, Math.min(physics.width * 0.65, Number(result.radius) || physics.width * 0.34));
+    targets = balls.filter(ball => {
+      const d = Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY);
+      return type === "orbit_guard" ? d >= radius * 0.35 && d <= radius : d <= radius;
+    });
+    if (targets.length < 6) targets = nearest(baseline + 1);
+    if (type === "bullet_counter") timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + 1);
+    effect = { type, x: centerX, y: centerY, radius, duration: 1000 };
   } else {
-    targets = nearest(7 + levelBonus * 2);
+    targets = nearest(baseline);
+    effect = { type: "explosion", x: centerX, y: centerY, duration: 900 };
   }
 
+  if (type !== "slash" && type !== "power_up") physics.showSkillEffect(effect);
   playSfx("skill");
   if (targets.length) clearBalls(targets, "skill");
-  else say((skillModule.name || "スキル") + " 発動！対象の顔が少なかったためスコアボーナスを付与！");
+  else if (type !== "slash" && type !== "power_up") {
+    score += 300;
+    say((skillModule.name || "スキル") + " 発動！追加ボーナス +300点！");
+  }
   score += Math.max(0, Number(result.scoreBonus) || 0);
   updateHud();
   skillBusy = false;
@@ -267,13 +319,30 @@ function tryAddBall(ball) {
     setChain(chain.slice(0, -1));
     return;
   }
-  if (ball.face.id !== first.face.id || !physics.neighbors(last, ball)) return;
+  const rainbowActive = skillMode?.type === "rainbow_chain" && Date.now() < skillMode.expiresAt;
+  if ((!rainbowActive && ball.face.id !== first.face.id) || !physics.neighbors(last, ball)) return;
   setChain([...chain, ball]);
 }
 function finishChain() {
   if (!pointerDown) return;
   pointerDown = false;
   previousPointer = null;
+
+  if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
+    const sliced = [...new Set(skillHitBalls)];
+    skillHitBalls = [];
+    physics.setSkillTrail([]);
+    if (sliced.length) {
+      physics.showSkillEffect({ type: "light_trail", x: physics.width / 2, y: physics.height / 2, duration: 520 });
+      clearBalls(sliced, "skill");
+      playSfx("skill");
+      say("✨ 光のルート！ " + sliced.length + "個のツムを消去！");
+    } else {
+      say("⚔ なぞった場所にツムがなかったよ。もう一度なぞって！");
+    }
+    return;
+  }
+
   const selected = chain.slice();
   setChain([]);
   if (selected.length < 3) {
@@ -361,6 +430,8 @@ async function startRound() {
   roundStarting = false;
   clearInterval(timer);
   if (physics?.engine) physics.engine.timing.timeScale = 1;
+  clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0;
   $("chainCount").textContent = "0";
   $("chainPopup").classList.remove("show");
@@ -383,6 +454,15 @@ async function startRound() {
   say("スタート！顔をなぞって3個以上つなげよう！");
   timer = setInterval(() => {
     if (!running || paused) return;
+    // 時間停止スキルの間は残り時間を減らさない。
+    if (Date.now() < skillFreezeUntil) return;
+    if (skillMode && Date.now() >= skillMode.expiresAt) {
+      const endedMode = skillMode.type;
+      skillMode = null;
+      skillHitBalls = [];
+      physics.setSkillTrail([]);
+      say(endedMode === "trace_link" ? "光のルートモード終了！" : "レインボータイム終了！");
+    }
     timeLeft--;
     updateHud();
     if (timeLeft <= 0) showResult();
@@ -392,6 +472,8 @@ function showResult() {
   if (roundEnded) return;
   roundEnded = true; running = false; paused = false;
   if (physics?.engine) physics.engine.timing.timeScale = 1;
+  clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
   playSfx("end");
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
@@ -410,6 +492,8 @@ function showResult() {
 function returnToReady() {
   clearInterval(timer); timer = null;
   if (physics?.engine) physics.engine.timing.timeScale = 1;
+  clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
   running = false; paused = false; roundEnded = false; roundStarting = false;
   pointerDown = false; previousPointer = null; setChain([]);
   skillBusy = false; skillCharge = 0;
@@ -523,14 +607,26 @@ $("boardCanvas").addEventListener("pointerdown", event => {
   if (bomb) { pointerDown = false; activateBomb(bomb); return; }
   pointerDown = true;
   setChain([]);
-  const ball = physics.hitTest(previousPointer, 1.85);
-  tryAddBall(ball);
+  if (skillMode?.type === "slash" && Date.now() < skillMode.expiresAt) {
+    skillHitBalls = [];
+    const firstHit = physics.hitTest(previousPointer, 2.0);
+    if (firstHit) skillHitBalls.push(firstHit);
+    physics.setSkillTrail([previousPointer]);
+  } else {
+    const ball = physics.hitTest(previousPointer, 1.85);
+    tryAddBall(ball);
+  }
 });
 $("boardCanvas").addEventListener("pointermove", event => {
   if (!pointerDown || !running || paused) return;
   const currentPointer = physics.pointerPoint(event);
   const crossed = physics.hitTestSegment(previousPointer || currentPointer, currentPointer, 1.9);
-  for (const ball of crossed) tryAddBall(ball);
+  if (skillMode?.type === "slash" && Date.now() < skillMode.expiresAt) {
+    for (const ball of crossed) if (!skillHitBalls.includes(ball)) skillHitBalls.push(ball);
+    physics.setSkillTrail([...(physics.skillTrail || []), currentPointer].slice(-36));
+  } else {
+    for (const ball of crossed) tryAddBall(ball);
+  }
   previousPointer = currentPointer;
 });
 $("boardCanvas").addEventListener("pointerup", finishChain);
