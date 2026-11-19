@@ -95,8 +95,8 @@ function puzzleSkillHint(type) {
     explosion: "炎や星の爆発で周囲のツムを消す",
     black_hole: "渦がツムを吸い込み、まとまった数を消す",
     line_clear: "横一列を貫くビーム",
-    laser: "縦に伸びる極太レーザー",
-    slash: "発動中になぞった軌跡を斬撃レーザーで切る",
+    laser: "盤面を縦に照らす光の柱",
+    slash: "なぞったルート上のツムを光で集めて消す",
     time_stop: "盤面を止める。停止中は残り時間も減らない",
     power_up: "一定時間、違う顔のツムもつなげられる",
     bullet_counter: "雷の反撃でツムをまとめて消す",
@@ -179,12 +179,12 @@ async function activateMyTsumSkill() {
   // スキルの種類ごとに違う動き・見た目・効果へ変換する。
   if (type === "slash") {
     // 居合斬り：発動後、指でなぞった軌跡をレーザー斬撃にする。
-    skillMode = { type: "slash", expiresAt: Date.now() + Math.max(3500, Math.min(6500, Number(result.duration) * 1000 || 5000)) };
+    skillMode = { type: "trace_link", expiresAt: Date.now() + Math.max(3500, Math.min(6500, Number(result.duration) * 1000 || 5000)) };
     skillHitBalls = [];
     physics.setSkillTrail([]);
-    effect = { type: "slash", x: centerX, y: centerY, duration: 650 };
+    effect = { type: "light_trail", x: centerX, y: centerY, duration: 650 };
     physics.showSkillEffect(effect);
-    say("⚔ 居合モード！盤面をなぞると、その軌跡をレーザー斬撃で切る！");
+    say("✨ 光のルートモード！盤面をなぞると、通ったツムがキラキラ消える！");
   } else if (type === "power_up") {
     // シンデレラ型：一定時間、違う顔同士もつなげられる。
     skillMode = { type: "rainbow_chain", expiresAt: Date.now() + Math.max(4000, Math.min(8000, (Number(result.duration) || 5) * 1000)) };
@@ -226,7 +226,7 @@ async function activateMyTsumSkill() {
       : Math.abs(ball.body.position.y - centerY) <= band / 2);
     if (targets.length < 6) targets = nearest(baseline, centerX, centerY);
     targets = targets.slice(0, 12 + levelStep * 2);
-    effect = { type, x: centerX, y: centerY, width: vertical ? band : physics.width, height: vertical ? physics.height : band, duration: 900 };
+    effect = { type: vertical ? "light_column" : "line_clear", x: centerX, y: centerY, width: vertical ? band : physics.width, height: vertical ? physics.height : band, duration: 900 };
   } else if (type === "homing_volley") {
     const counts = new Map();
     for (const ball of balls) {
@@ -328,15 +328,15 @@ function finishChain() {
   pointerDown = false;
   previousPointer = null;
 
-  if (skillMode?.type === "slash" && Date.now() < skillMode.expiresAt) {
+  if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
     const sliced = [...new Set(skillHitBalls)];
     skillHitBalls = [];
     physics.setSkillTrail([]);
     if (sliced.length) {
-      physics.showSkillEffect({ type: "slash", x: physics.width / 2, y: physics.height / 2, duration: 520 });
+      physics.showSkillEffect({ type: "light_trail", x: physics.width / 2, y: physics.height / 2, duration: 520 });
       clearBalls(sliced, "skill");
       playSfx("skill");
-      say("⚔ レーザー斬撃！ " + sliced.length + "個を切断！");
+      say("✨ 光のルート！ " + sliced.length + "個のツムを消去！");
     } else {
       say("⚔ なぞった場所にツムがなかったよ。もう一度なぞって！");
     }
@@ -461,7 +461,7 @@ async function startRound() {
       skillMode = null;
       skillHitBalls = [];
       physics.setSkillTrail([]);
-      say(endedMode === "slash" ? "居合モード終了！" : "レインボータイム終了！");
+      say(endedMode === "trace_link" ? "光のルートモード終了！" : "レインボータイム終了！");
     }
     timeLeft--;
     updateHud();
