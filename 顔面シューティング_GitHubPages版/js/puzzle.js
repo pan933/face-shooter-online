@@ -133,12 +133,14 @@ async function loadMyTsumSkill() {
     console.warn("[Puzzle] スキル説明の取得に失敗", error);
   }
   const hint = preview.type ? puzzleSkillHint(preview.type) : "マイツムを消してゲージをためよう";
-  // 強力な範囲攻撃・時間停止ほど次のゲージがたまりにくくなる。
+  // スキルが強いツムほど、マイツムを消したときのゲージ増加量を抑える。
+  // 強力な全体攻撃は低め、補助系・小規模スキルは高めにして回転率を調整。
   const strongTypes = ["screen_clear", "time_stop", "black_hole", "explosion", "laser", "bullet_counter"];
   const mediumTypes = ["line_clear", "homing_volley", "slash", "teleport", "power_up"];
-  const baseRate = strongTypes.includes(preview.type) ? 0.78
-    : mediumTypes.includes(preview.type) ? 0.88 : 1;
-  skillChargeMultiplier = Math.max(0.65, baseRate - (level - 1) * 0.025);
+  const baseRate = strongTypes.includes(preview.type) ? 0.68
+    : mediumTypes.includes(preview.type) ? 0.82 : 0.95;
+  const levelPenalty = (level - 1) * (strongTypes.includes(preview.type) ? 0.025 : 0.02);
+  skillChargeMultiplier = Math.max(0.52, baseRate - levelPenalty);
   $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
