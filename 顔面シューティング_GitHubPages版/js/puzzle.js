@@ -145,7 +145,7 @@ async function loadMyTsumSkill() {
 function updateSkillUI() {
   const percent = Math.min(100, skillCharge / Math.max(1, skillRequired) * 100);
   $("skillButton").style.setProperty("--skill-progress", percent + "%");
-  $("skillChargeText").textContent = Math.min(skillCharge, skillRequired) + " / " + skillRequired;
+  $("skillChargeText").textContent = Math.floor(Math.min(skillCharge, skillRequired)) + " / " + skillRequired;
   $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired || !skillModule;
 }
 async function activateMyTsumSkill() {
@@ -307,7 +307,7 @@ function setChain(next) {
 function showChainPopup(count) {
   const popup = $("chainPopup");
   if (!popup || count < 3) return;
-  const reactions = count >= 13
+  const reactions = count >= 12
     ? ["神チェーンwww", "うますぎwww", "バカ強いwww"]
     : count >= 10
       ? ["やばwww", "天才か？", "バカwww"]
