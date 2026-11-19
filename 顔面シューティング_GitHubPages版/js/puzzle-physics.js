@@ -15,6 +15,8 @@ export class TsumPhysicsBoard {
     this.images = new Map();
     this.chain = [];
     this.bombs = [];
+    this.skillEffects = [];
+    this.skillTrail = [];
     this.width = 360;
     this.height = 520;
     this.radius = 25;
@@ -127,6 +129,13 @@ export class TsumPhysicsBoard {
   }
 
   setChain(chain) { this.chain = chain.slice(); }
+
+  showSkillEffect(effect = {}) {
+    this.skillEffects.push({ ...effect, bornAt: performance.now(), duration: Math.max(250, Number(effect.duration) || 900) });
+    if (this.skillEffects.length > 10) this.skillEffects.shift();
+  }
+
+  setSkillTrail(points = []) { this.skillTrail = points.slice(-36); }
 
   createBomb(type, x, y) {
     if (this.bombs.length >= 3) this.bombs.shift();
@@ -282,6 +291,127 @@ export class TsumPhysicsBoard {
     bg.addColorStop(1, "#101827");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, this.width, this.height);
+
+    // スキルごとの専用エフェクト。軽量なCanvas描画でスマホでも動かす。
+    const now = performance.now();
+    this.skillEffects = this.skillEffects.filter(effect => now - effect.bornAt < effect.duration);
+    for (const effect of this.skillEffects) {
+      const progress = Math.max(0, Math.min(1, (now - effect.bornAt) / effect.duration));
+      const fade = 1 - progress;
+      const cx = Number(effect.x) || this.width / 2;
+      const cy = Number(effect.y) || this.height / 2;
+      const radius = Math.max(this.radius * 2, Number(effect.radius) || this.width * 0.28);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      if (effect.type === "laser" || effect.type === "line_clear") {
+        const vertical = effect.type === "laser";
+        ctx.shadowColor = vertical ? "#65f4ff" : "#ffe46f";
+        ctx.shadowBlur = 24;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.max(5, this.radius * (vertical ? 0.62 : 0.5)) * fade;
+        ctx.beginPath();
+        if (vertical) { ctx.moveTo(cx, -10); ctx.lineTo(cx, this.height + 10); }
+        else { ctx.moveTo(-10, cy); ctx.lineTo(this.width + 10, cy); }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = vertical ? "#42dfff" : "#ffb84d";
+        ctx.lineWidth = Math.max(2, this.radius * 0.16);
+        ctx.stroke();
+      } else if (effect.type === "slash") {
+        ctx.translate(cx, cy);
+        ctx.rotate(-0.18 + progress * 0.36);
+        ctx.shadowColor = "#ff4e65"; ctx.shadowBlur = 24;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = Math.max(7, this.radius * 0.42) * fade;
+        ctx.beginPath(); ctx.moveTo(-this.width * 0.62, this.height * 0.22); ctx.lineTo(this.width * 0.62, -this.height * 0.22); ctx.stroke();
+        ctx.strokeStyle = "#ff4769"; ctx.lineWidth = Math.max(3, this.radius * 0.17);
+        ctx.beginPath(); ctx.moveTo(-this.width * 0.62, this.height * 0.22); ctx.lineTo(this.width * 0.62, -this.height * 0.22); ctx.stroke();
+      } else if (effect.type === "explosion" || effect.type === "screen_clear") {
+        const r = radius * (0.25 + progress * 1.15);
+        ctx.shadowColor = "#ff8b38"; ctx.shadowBlur = 24;
+        ctx.strokeStyle = effect.type === "screen_clear" ? "#fff0a8" : "#ff762e";
+        ctx.lineWidth = Math.max(4, this.radius * 0.34) * fade;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = "#fff7d0"; ctx.lineWidth = 2 + fade * 3;
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 9; i++) {
+          const a = i * Math.PI * 2 / 9 + progress * 1.7;
+          const d = r * (0.72 + (i % 3) * 0.1);
+          ctx.fillStyle = i % 2 ? "#ffb347" : "#fff1a8";
+          ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, Math.max(2, this.radius * 0.12) * fade, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (effect.type === "black_hole") {
+        ctx.translate(cx, cy); ctx.rotate(progress * 5);
+        ctx.shadowColor = "#b48cff"; ctx.shadowBlur = 22;
+        for (let i = 0; i < 3; i++) {
+          ctx.strokeStyle = i % 2 ? "#6cecff" : "#d5a4ff";
+          ctx.lineWidth = Math.max(2, this.radius * 0.12);
+          ctx.beginPath(); ctx.ellipse(0, 0, radius * (0.35 + i * 0.2) * (1 - progress * 0.35), radius * (0.14 + i * 0.08), i * 0.9, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.fillStyle = "#15102d"; ctx.beginPath(); ctx.arc(0, 0, radius * 0.18 * (1 - progress * 0.2), 0, Math.PI * 2); ctx.fill();
+      } else if (effect.type === "time_stop") {
+        ctx.fillStyle = "rgba(70,220,255,.12)"; ctx.fillRect(0, 0, this.width, this.height);
+        ctx.strokeStyle = "#8df5ff"; ctx.shadowColor = "#4beaff"; ctx.shadowBlur = 20;
+        ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, radius * (0.6 + progress * 0.45), 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, radius * (0.35 + progress * 0.35), 0, Math.PI * 2); ctx.stroke();
+      } else if (effect.type === "power_up") {
+        ctx.strokeStyle = "#ffe27b"; ctx.shadowColor = "#fff0a0"; ctx.shadowBlur = 24;
+        ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, radius * (0.5 + progress * 0.7), 0, Math.PI * 2); ctx.stroke();
+        ctx.font = "900 " + (this.radius * 0.9) + "px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#fff4b8";
+        ctx.fillText("RAINBOW", cx, cy - radius * (0.45 + progress * 0.3));
+      } else if (effect.type === "defense") {
+        ctx.strokeStyle = "#78f4ff"; ctx.shadowColor = "#78f4ff"; ctx.shadowBlur = 20;
+        ctx.lineWidth = Math.max(4, this.radius * 0.2);
+        ctx.beginPath(); ctx.arc(cx, cy, radius * (0.7 + progress * 0.3), Math.PI * 0.08, Math.PI * 0.92); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, radius * (0.7 + progress * 0.3), Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+      } else if (effect.type === "bullet_counter" || effect.type === "orbit_guard") {
+        ctx.translate(cx, cy); ctx.rotate(progress * 4);
+        ctx.strokeStyle = effect.type === "orbit_guard" ? "#83f7d0" : "#ffe37a";
+        ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 18;
+        ctx.lineWidth = Math.max(3, this.radius * 0.18);
+        ctx.beginPath(); ctx.arc(0, 0, radius * (0.5 + progress * 0.35), 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4;
+          ctx.beginPath(); ctx.moveTo(Math.cos(a) * radius * 0.55, Math.sin(a) * radius * 0.55); ctx.lineTo(Math.cos(a) * radius * 0.85, Math.sin(a) * radius * 0.85); ctx.stroke();
+        }
+      } else if (effect.type === "teleport") {
+        ctx.strokeStyle = "#be9aff"; ctx.shadowColor = "#b28cff"; ctx.shadowBlur = 22;
+        ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(cx, cy, radius * (0.25 + progress), radius * (0.6 + progress * 0.3), 0, 0, Math.PI * 2); ctx.stroke();
+      } else if (effect.type === "homing_volley") {
+        ctx.strokeStyle = "#ffb4f4"; ctx.shadowColor = "#ff8ee8"; ctx.shadowBlur = 16;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 7; i++) {
+          const a = i * Math.PI * 2 / 7 + progress * 3;
+          ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * radius * 0.9, cy + Math.sin(a) * radius * 0.9);
+          ctx.lineTo(cx + Math.cos(a) * radius * 0.15, cy + Math.sin(a) * radius * 0.15); ctx.stroke();
+        }
+      } else if (effect.type === "score_boost") {
+        ctx.fillStyle = "#ffe27b"; ctx.shadowColor = "#fff0a0"; ctx.shadowBlur = 18;
+        ctx.font = "900 " + (this.radius * 0.8) + "px system-ui"; ctx.textAlign = "center";
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI * 2 / 8 + progress * 2;
+          ctx.fillText("★", cx + Math.cos(a) * radius * 0.75, cy + Math.sin(a) * radius * 0.75);
+        }
+      }
+      ctx.restore();
+    }
+
+    if (this.skillTrail.length > 1) {
+      ctx.save();
+      ctx.beginPath();
+      this.skillTrail.forEach((point, index) => {
+        if (!index) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
+      });
+      ctx.strokeStyle = "rgba(255,255,255,.96)";
+      ctx.lineWidth = Math.max(7, this.radius * 0.3);
+      ctx.shadowColor = "#ff3f67"; ctx.shadowBlur = 22;
+      ctx.stroke();
+      ctx.strokeStyle = "#ff4269"; ctx.lineWidth = Math.max(3, this.radius * 0.13); ctx.stroke();
+      ctx.restore();
+    }
 
     if (this.chain.length > 1) {
       ctx.save();
