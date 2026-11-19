@@ -306,9 +306,9 @@ export class TsumPhysicsBoard {
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      if (effect.type === "laser" || effect.type === "line_clear") {
-        const vertical = effect.type === "laser";
-        ctx.shadowColor = vertical ? "#65f4ff" : "#ffe46f";
+      if (effect.type === "light_column" || effect.type === "line_clear") {
+        const vertical = effect.type === "light_column";
+        ctx.shadowColor = vertical ? "#9af5ff" : "#ffe46f";
         ctx.shadowBlur = 24;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = Math.max(5, this.radius * (vertical ? 0.62 : 0.5)) * fade;
@@ -317,17 +317,17 @@ export class TsumPhysicsBoard {
         else { ctx.moveTo(-10, cy); ctx.lineTo(this.width + 10, cy); }
         ctx.stroke();
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = vertical ? "#42dfff" : "#ffb84d";
+        ctx.strokeStyle = vertical ? "#8ceeff" : "#ffb84d";
         ctx.lineWidth = Math.max(2, this.radius * 0.16);
         ctx.stroke();
-      } else if (effect.type === "slash") {
+      } else if (effect.type === "light_trail") {
         ctx.translate(cx, cy);
         ctx.rotate(-0.18 + progress * 0.36);
-        ctx.shadowColor = "#ff4e65"; ctx.shadowBlur = 24;
+        ctx.shadowColor = "#8beeff"; ctx.shadowBlur = 24;
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = Math.max(7, this.radius * 0.42) * fade;
-        ctx.beginPath(); ctx.moveTo(-this.width * 0.62, this.height * 0.22); ctx.lineTo(this.width * 0.62, -this.height * 0.22); ctx.stroke();
-        ctx.strokeStyle = "#ff4769"; ctx.lineWidth = Math.max(3, this.radius * 0.17);
+        ctx.beginPath(); ctx.moveTo(-this.width * 0.58, this.height * 0.18); ctx.quadraticCurveTo(0, -this.height * 0.2, this.width * 0.58, -this.height * 0.12); ctx.stroke();
+        ctx.strokeStyle = "#7eeaff"; ctx.lineWidth = Math.max(3, this.radius * 0.17);
         ctx.beginPath(); ctx.moveTo(-this.width * 0.62, this.height * 0.22); ctx.lineTo(this.width * 0.62, -this.height * 0.22); ctx.stroke();
       } else if (effect.type === "explosion" || effect.type === "screen_clear") {
         const r = radius * (0.25 + progress * 1.15);
@@ -422,9 +422,9 @@ export class TsumPhysicsBoard {
       });
       ctx.strokeStyle = "rgba(255,255,255,.96)";
       ctx.lineWidth = Math.max(7, this.radius * 0.3);
-      ctx.shadowColor = "#ff3f67"; ctx.shadowBlur = 22;
+      ctx.shadowColor = "#69eaff"; ctx.shadowBlur = 22;
       ctx.stroke();
-      ctx.strokeStyle = "#ff4269"; ctx.lineWidth = Math.max(3, this.radius * 0.13); ctx.stroke();
+      ctx.strokeStyle = "#72eaff"; ctx.lineWidth = Math.max(3, this.radius * 0.13); ctx.stroke();
       ctx.restore();
     }
 
