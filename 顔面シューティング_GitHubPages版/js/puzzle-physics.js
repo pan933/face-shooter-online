@@ -22,11 +22,14 @@ export class TsumPhysicsBoard {
     this.lastTime = 0;
     this.accumulator = 0;
     this.fixedStep = 1000 / 60;
+    // 盤面の論理サイズは初回表示時にだけ決定する。
+    // スマホのアドレスバー開閉・ピンチズーム・画面UI変化で
+    // Matter.jsのワールドやツムの半径が変わらないようにする。
+    this.logicalSizeLocked = false;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.handleWindowResize = () => this.resize();
     window.addEventListener("resize", this.handleWindowResize);
-    window.visualViewport?.addEventListener("resize", this.handleWindowResize);
     this.resize();
     this.frame = this.frame.bind(this);
     this.raf = requestAnimationFrame(this.frame);
@@ -34,38 +37,40 @@ export class TsumPhysicsBoard {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    const oldW = this.width, oldH = this.height;
-    this.width = Math.max(260, rect.width || 360);
-    const isPhone = window.matchMedia("(max-width: 600px)").matches;
-    const phoneHeight = Math.floor((window.visualViewport?.height || window.innerHeight) * 0.42);
-    this.height = isPhone
-      ? Math.max(250, Math.min(440, this.width * 1.32, phoneHeight))
-      : Math.max(380, Math.min(620, this.width * 1.32));
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.round(this.width * dpr);
-    this.canvas.height = Math.round(this.height * dpr);
-    this.canvas.style.height = this.height + "px";
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.radius = Math.max(17, Math.min(31, this.width / 12.5));
-    if (this.walls) Composite.remove(this.engine.world, this.walls);
-    const t = 80;
-    this.walls = [
-      Bodies.rectangle(this.width / 2, this.height + t / 2 - 3, this.width + t * 2, t, { isStatic: true }),
-      Bodies.rectangle(-t / 2 + 2, this.height / 2, t, this.height + t * 2, { isStatic: true }),
-      Bodies.rectangle(this.width + t / 2 - 2, this.height / 2, t, this.height + t * 2, { isStatic: true })
-    ];
-    Composite.add(this.engine.world, this.walls);
-    if (this.balls.length && oldW > 0) {
-      const sx = this.width / oldW, sy = this.height / oldH;
-      for (const ball of this.balls) {
-        Body.setPosition(ball.body, {
-          x: Math.max(this.radius, Math.min(this.width - this.radius, ball.body.position.x * sx)),
-          y: Math.min(this.height - this.radius, ball.body.position.y * sy)
-        });
-        Body.scale(ball.body, this.radius / ball.radius, this.radius / ball.radius);
-        ball.radius = this.radius;
-      }
+
+    // 初回だけ画面に収まる論理サイズを決める。
+    if (!this.logicalSizeLocked) {
+      this.width = Math.max(1, rect.width || 360);
+      const isPhone = window.matchMedia("(max-width: 600px)").matches;
+      const phoneHeight = Math.floor((window.innerHeight || 700) * 0.42);
+      this.height = isPhone
+        ? Math.max(250, Math.min(440, this.width * 1.32, phoneHeight))
+        : Math.max(380, Math.min(620, this.width * 1.32));
+      this.radius = Math.max(17, Math.min(31, this.width / 12.5));
+      this.logicalSizeLocked = true;
+
+      // CSS上の幅が変わっても、初回の縦横比を維持する。
+      this.canvas.style.aspectRatio = this.width + " / " + this.height;
+      this.canvas.style.height = "auto";
+
+      const t = 80;
+      this.walls = [
+        Bodies.rectangle(this.width / 2, this.height + t / 2 - 3, this.width + t * 2, t, { isStatic: true }),
+        Bodies.rectangle(-t / 2 + 2, this.height / 2, t, this.height + t * 2, { isStatic: true }),
+        Bodies.rectangle(this.width + t / 2 - 2, this.height / 2, t, this.height + t * 2, { isStatic: true })
+      ];
+      Composite.add(this.engine.world, this.walls);
     }
+
+    // DPRだけ追従。物理ワールド・ツムの大きさ・壁の位置は変更しない。
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const backingWidth = Math.round(this.width * dpr);
+    const backingHeight = Math.round(this.height * dpr);
+    if (this.canvas.width !== backingWidth || this.canvas.height !== backingHeight) {
+      this.canvas.width = backingWidth;
+      this.canvas.height = backingHeight;
+    }
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   loadImage(url) {
@@ -346,7 +351,6 @@ export class TsumPhysicsBoard {
     cancelAnimationFrame(this.raf);
     this.resizeObserver?.disconnect();
     window.removeEventListener("resize", this.handleWindowResize);
-    window.visualViewport?.removeEventListener("resize", this.handleWindowResize);
     this.clear();
     Engine.clear(this.engine);
   }
