@@ -138,7 +138,9 @@ async function loadMyTsumSkill() {
   const mediumTypes = ["line_clear", "homing_volley", "slash", "teleport", "power_up"];
   const baseRate = strongTypes.includes(preview.type) ? 0.78
     : mediumTypes.includes(preview.type) ? 0.88 : 1;
-  skillChargeMultiplier = Math.max(0.65, baseRate - (level - 1) * 0.025);
+  skillChargeMultiplier = preview.type === "power_up"
+    ? Math.max(0.42, 0.58 - (level - 1) * 0.015)
+    : Math.max(0.65, baseRate - (level - 1) * 0.025);
   $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
@@ -713,7 +715,19 @@ $("boardCanvas").addEventListener("pointercancel", finishChain);
 $("start").addEventListener("click", startRound);
 $("shuffle").addEventListener("click", shuffleBoard);
 $("buyFour").addEventListener("click", buyFourMode);
-$("skillButton").addEventListener("click", activateMyTsumSkill);
+$("skillButton").addEventListener("pointerdown", event => {
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  unlockSound();
+  void activateMyTsumSkill();
+});
+$("skillButton").addEventListener("click", event => {
+  // pointerdown対応端末では二重発動を防ぐ。clickはキーボード操作用。
+  if (event.detail !== 0) return;
+  void activateMyTsumSkill();
+});
+$("skillButton").style.touchAction = "manipulation";
 $("pause").addEventListener("click", () => {
   if (!running) return;
   paused = !paused;
