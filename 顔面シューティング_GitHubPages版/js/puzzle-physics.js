@@ -17,6 +17,7 @@ export class TsumPhysicsBoard {
     this.bombs = [];
     this.skillEffects = [];
     this.skillTrail = [];
+    this.skillMarkedBalls = new Set();
     this.width = 360;
     this.height = 520;
     this.radius = 25;
@@ -136,6 +137,7 @@ export class TsumPhysicsBoard {
   }
 
   setSkillTrail(points = []) { this.skillTrail = points.slice(-36); }
+  setSkillMarkedBalls(balls = []) { this.skillMarkedBalls = new Set(balls); }
 
   createBomb(type, x, y) {
     if (this.bombs.length >= 3) this.bombs.shift();
@@ -464,14 +466,15 @@ export class TsumPhysicsBoard {
       const { x, y } = ball.body.position, r = ball.radius;
       const img = this.images.get(ball.face.imageUrl || "");
       const selected = this.chain.includes(ball);
+      const skillMarked = this.skillMarkedBalls.has(ball);
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(ball.body.angle);
-      ctx.shadowColor = selected ? "#ffda75" : "rgba(0,0,0,.42)";
-      ctx.shadowBlur = selected ? 16 : 7;
+      ctx.shadowColor = selected ? "#ffda75" : skillMarked ? "#65edff" : "rgba(0,0,0,.42)";
+      ctx.shadowBlur = selected || skillMarked ? 18 : 7;
       ctx.shadowOffsetY = 4;
       ctx.beginPath(); ctx.arc(0, 0, r * 0.96, 0, Math.PI * 2);
-      ctx.fillStyle = selected ? "#ffda75" : "#34445e"; ctx.fill();
+      ctx.fillStyle = selected ? "#ffda75" : skillMarked ? "#67eaff" : "#34445e"; ctx.fill();
       ctx.shadowColor = "transparent";
       ctx.save();
       ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2); ctx.clip();
@@ -486,7 +489,8 @@ export class TsumPhysicsBoard {
       ctx.beginPath(); ctx.arc(-r * 0.25, -r * 0.34, r * 0.22, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fill();
       ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255,255,255,.65)"; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.strokeStyle = skillMarked ? "#8df5ff" : "rgba(255,255,255,.65)"; ctx.lineWidth = skillMarked ? 3 : 1.6; ctx.stroke();
+      if (skillMarked) { ctx.strokeStyle = "rgba(105,238,255,.9)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r * (1.08 + Math.sin(performance.now()/100)*0.04), 0, Math.PI*2); ctx.stroke(); }
       ctx.restore();
     }
   }
