@@ -13,6 +13,7 @@ let score = 0, timeLeft = ROUND_SECONDS, combo = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
 let skillMode = null, skillHitBalls = [], skillFreezeUntil = 0, skillFreezeTimer = null;
+let skillChargeMultiplier = 1;
 
 let soundContext = null;
 function unlockSound() {
@@ -132,22 +133,31 @@ async function loadMyTsumSkill() {
     console.warn("[Puzzle] スキル説明の取得に失敗", error);
   }
   const hint = preview.type ? puzzleSkillHint(preview.type) : "マイツムを消してゲージをためよう";
+  // スキルが強いツムほど、マイツムを消したときのゲージ増加量を抑える。
+  // 強力な全体攻撃は低め、補助系・小規模スキルは高めにして回転率を調整。
+  const strongTypes = ["screen_clear", "time_stop", "black_hole", "explosion", "laser", "bullet_counter"];
+  const mediumTypes = ["line_clear", "homing_volley", "slash", "teleport", "power_up"];
+  const baseRate = strongTypes.includes(preview.type) ? 0.68
+    : mediumTypes.includes(preview.type) ? 0.82 : 0.95;
+  const levelPenalty = (level - 1) * (strongTypes.includes(preview.type) ? 0.025 : 0.02);
+  skillChargeMultiplier = Math.max(0.52, baseRate - levelPenalty);
   $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
 function updateSkillUI() {
   const percent = Math.min(100, skillCharge / Math.max(1, skillRequired) * 100);
   $("skillButton").style.setProperty("--skill-progress", percent + "%");
-  $("skillChargeText").textContent = Math.min(skillCharge, skillRequired) + " / " + skillRequired;
+  $("skillChargeText").textContent = Math.floor(Math.min(skillCharge, skillRequired)) + " / " + skillRequired;
   $("skillButton").disabled = !running || paused || skillBusy || skillCharge < skillRequired || !skillModule;
 }
 async function activateMyTsumSkill() {
   if (!running || paused || skillBusy || skillCharge < skillRequired || !skillModule) return;
   skillBusy = true;
-  skillCharge = 0;
-  updateSkillUI();
-
   const level = Math.max(1, Number(activeFace?.skill?.level) || 1);
+  // 発動後は次のスキルゲージを55%から再スタートする。
+  // 強さによる差は発動後の持ち越しではなく、通常プレイ中のゲージ増加量で調整。
+  skillCharge = skillRequired * 0.55;
+  updateSkillUI();
   let result = {};
   try {
     result = skillModule.activate({
@@ -179,7 +189,11 @@ async function activateMyTsumSkill() {
   // スキルの種類ごとに違う動き・見た目・効果へ変換する。
   if (type === "slash") {
     // 居合斬り：発動後、指でなぞった軌跡をレーザー斬撃にする。
-    skillMode = { type: "trace_link", expiresAt: Date.now() + Math.max(3500, Math.min(6500, Number(result.duration) * 1000 || 5000)) };
+    // Lv.1は4チェーン、レベルアップごとに2ずつ増え、Lv.6で12チェーン。
+    const maxChain = Math.min(12, 2 + Math.min(6, level) * 2);
+    // 効果時間もレベルに応じて延長（Lv.1: 3秒 → Lv.6: 5.5秒）。
+    const duration = 3000 + (Math.min(6, level) - 1) * 500;
+    skillMode = { type: "trace_link", maxChain, expiresAt: Date.now() + duration };
     skillHitBalls = [];
     physics.setSkillTrail([]);
     effect = { type: "light_trail", x: centerX, y: centerY, duration: 650 };
@@ -187,10 +201,14 @@ async function activateMyTsumSkill() {
     say("✨ 光のルートモード！盤面をなぞると、通ったツムがキラキラ消える！");
   } else if (type === "power_up") {
     // シンデレラ型：一定時間、違う顔同士もつなげられる。
-    skillMode = { type: "rainbow_chain", expiresAt: Date.now() + Math.max(4000, Math.min(8000, (Number(result.duration) || 5) * 1000)) };
+    // Lv.1は4チェーン、レベルアップごとに2ずつ増え、Lv.6で12チェーン。
+    const maxChain = Math.min(12, 2 + Math.min(6, level) * 2);
+    // 効果時間もレベルに応じて延長（Lv.1: 3秒 → Lv.6: 5.5秒）。
+    const duration = 3000 + (Math.min(6, level) - 1) * 500;
+    skillMode = { type: "rainbow_chain", maxChain, expiresAt: Date.now() + duration };
     physics.showSkillEffect({ type: "power_up", x: centerX, y: centerY, duration: 900 });
     score += 250 + levelStep * 70;
-    say("🌈 レインボータイム！時間内はどの顔のツムでもつなげられる！");
+    say("🌈 レインボータイム！Lv." + level + "：最大" + maxChain + "チェーン / " + (duration / 1000).toFixed(1) + "秒");
   } else if (type === "time_stop") {
     // 物理演算停止中はゲーム内タイマーも停止し、使うほど損する問題を解消。
     const duration = Math.max(1000, Math.min(4000, (Number(result.duration || result.stopDuration) || 2) * 1000));
@@ -295,7 +313,7 @@ function setChain(next) {
 function showChainPopup(count) {
   const popup = $("chainPopup");
   if (!popup || count < 3) return;
-  const reactions = count >= 13
+  const reactions = count >= 12
     ? ["神チェーンwww", "うますぎwww", "バカ強いwww"]
     : count >= 10
       ? ["やばwww", "天才か？", "バカwww"]
@@ -320,6 +338,9 @@ function tryAddBall(ball) {
     return;
   }
   const rainbowActive = skillMode?.type === "rainbow_chain" && Date.now() < skillMode.expiresAt;
+  const specialChainActive = (rainbowActive || (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt));
+  const chainLimit = specialChainActive ? Math.min(12, Number(skillMode.maxChain) || 12) : Infinity;
+  if (chain.length >= chainLimit) return;
   if ((!rainbowActive && ball.face.id !== first.face.id) || !physics.neighbors(last, ball)) return;
   setChain([...chain, ball]);
 }
@@ -329,7 +350,7 @@ function finishChain() {
   previousPointer = null;
 
   if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
-    const sliced = [...new Set(skillHitBalls)];
+    const sliced = [...new Set(skillHitBalls)].slice(0, Math.min(12, Number(skillMode.maxChain) || 12));
     skillHitBalls = [];
     physics.setSkillTrail([]);
     if (sliced.length) {
@@ -390,7 +411,7 @@ function clearBalls(balls, source = "chain") {
   ).length;
   // マイツムを消した数だけゲージ加算。スキルで消した分は再充填対象外。
   if (source !== "skill" && activeId && myTsumCount > 0) {
-    skillCharge = Math.min(skillRequired, skillCharge + myTsumCount);
+    skillCharge = Math.min(skillRequired, skillCharge + myTsumCount * skillChargeMultiplier);
   }
   const chainBonus = source === "chain" && n >= 3 ? Math.max(0, n - 3) * 35 : 0;
   const gained = Math.round(n * n * 12 * Math.min(combo, 6)) + chainBonus;
@@ -607,7 +628,7 @@ $("boardCanvas").addEventListener("pointerdown", event => {
   if (bomb) { pointerDown = false; activateBomb(bomb); return; }
   pointerDown = true;
   setChain([]);
-  if (skillMode?.type === "slash" && Date.now() < skillMode.expiresAt) {
+  if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
     skillHitBalls = [];
     const firstHit = physics.hitTest(previousPointer, 2.0);
     if (firstHit) skillHitBalls.push(firstHit);
@@ -621,8 +642,12 @@ $("boardCanvas").addEventListener("pointermove", event => {
   if (!pointerDown || !running || paused) return;
   const currentPointer = physics.pointerPoint(event);
   const crossed = physics.hitTestSegment(previousPointer || currentPointer, currentPointer, 1.9);
-  if (skillMode?.type === "slash" && Date.now() < skillMode.expiresAt) {
-    for (const ball of crossed) if (!skillHitBalls.includes(ball)) skillHitBalls.push(ball);
+  if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
+    const limit = Math.min(12, Number(skillMode.maxChain) || 12);
+    for (const ball of crossed) {
+      if (skillHitBalls.length >= limit) break;
+      if (!skillHitBalls.includes(ball)) skillHitBalls.push(ball);
+    }
     physics.setSkillTrail([...(physics.skillTrail || []), currentPointer].slice(-36));
   } else {
     for (const ball of crossed) tryAddBall(ball);
