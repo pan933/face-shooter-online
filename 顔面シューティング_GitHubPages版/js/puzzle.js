@@ -204,17 +204,24 @@ async function activateMyTsumSkill() {
     score += 250 + levelStep * 70;
     say("🌈 レインボータイム！Lv." + level + "：最大" + maxChain + "チェーン / " + (duration / 1000).toFixed(1) + "秒");
   } else if (type === "time_stop") {
-    // 物理演算停止中はゲーム内タイマーも停止し、使うほど損する問題を解消。
-    const duration = Math.max(1000, Math.min(4000, (Number(result.duration || result.stopDuration) || 2) * 1000));
-    skillFreezeUntil = Math.max(skillFreezeUntil, Date.now() + duration);
+    // 2秒間だけ盤面を止め、複数チェーンを保留して終了時に周囲ごと一括消去。
+    const duration = 2000;
+    skillFreezeUntil = Date.now() + duration;
+    skillMode = {
+      type: "time_stop_chain",
+      expiresAt: skillFreezeUntil,
+      queuedBalls: new Set(),
+      skillLevel: level,
+      centerX,
+      centerY
+    };
     physics.engine.timing.timeScale = 0;
+    physics.accumulator = 0;
+    physics.setSkillMarkedBalls([]);
     clearTimeout(skillFreezeTimer);
-    skillFreezeTimer = window.setTimeout(() => {
-      if (physics?.engine && Date.now() >= skillFreezeUntil) physics.engine.timing.timeScale = 1;
-    }, duration + 30);
-    targets = nearest(baseline + 1);
+    skillFreezeTimer = window.setTimeout(resolveTimeStopChain, duration);
     effect = { type: "time_stop", x: centerX, y: centerY, duration };
-    say("❄ 時間停止！盤面も残り時間も止まる！");
+    say("⏱ 時間停止！2秒間にチェーンを仕込もう！");
   } else if (type === "screen_clear") {
     targets = nearest(Math.min(20 + levelStep * 2, balls.length));
     effect = { type: "screen_clear", x: centerX, y: centerY, duration: 1100 };
@@ -338,10 +345,63 @@ function tryAddBall(ball) {
   if ((!rainbowActive && ball.face.id !== first.face.id) || !physics.neighbors(last, ball)) return;
   setChain([...chain, ball]);
 }
+function resolveTimeStopChain() {
+  if (skillMode?.type !== "time_stop_chain") return;
+  const mode = skillMode;
+  skillMode = null;
+  skillFreezeUntil = 0;
+  skillFreezeTimer = null;
+  if (physics?.engine) physics.engine.timing.timeScale = 1;
+  if (!running || roundEnded) {
+    physics?.setSkillMarkedBalls([]);
+    return;
+  }
+  const selected = [...mode.queuedBalls].filter(ball => physics.balls.includes(ball));
+  const radius = physics.radius * (2.25 + Math.min(6, Math.max(1, mode.skillLevel) - 1) * 0.22);
+  const affected = new Set(selected);
+  for (const center of selected) {
+    for (const ball of physics.balls) {
+      if (Math.hypot(ball.body.position.x - center.body.position.x, ball.body.position.y - center.body.position.y) <= radius) {
+        affected.add(ball);
+      }
+    }
+  }
+  physics.setSkillMarkedBalls([]);
+  physics.showSkillEffect({
+    type: "time_stop_burst",
+    x: mode.centerX,
+    y: mode.centerY,
+    radius: Math.max(radius, physics.radius * 3),
+    duration: 850
+  });
+  setChain([]);
+  if (affected.size) {
+    playSfx("explode");
+    clearBalls([...affected], "skill");
+    say("⏱ 時間解放！保留したチェーンと周囲" + affected.size + "個を一斉消去！");
+  } else {
+    say("時間停止終了！チェーンを3個以上つなぐと消去できるよ。");
+  }
+  updateHud();
+}
+
 function finishChain() {
   if (!pointerDown) return;
   pointerDown = false;
   previousPointer = null;
+
+  if (skillMode?.type === "time_stop_chain" && Date.now() < skillMode.expiresAt) {
+    const selected = [...new Set(chain)];
+    setChain([]);
+    if (selected.length >= 3) {
+      for (const ball of selected) skillMode.queuedBalls.add(ball);
+      physics.setSkillMarkedBalls([...skillMode.queuedBalls]);
+      say("⏱ " + skillMode.queuedBalls.size + "個を保留中！続けて別のチェーンも作れるよ！");
+    } else if (selected.length) {
+      say("3個以上つなげると保留できるよ！");
+    }
+    return;
+  }
 
   if (skillMode?.type === "trace_link" && Date.now() < skillMode.expiresAt) {
     const sliced = [...new Set(skillHitBalls)].slice(0, Math.min(12, Number(skillMode.maxChain) || 12));
@@ -446,7 +506,7 @@ async function startRound() {
   clearInterval(timer);
   if (physics?.engine) physics.engine.timing.timeScale = 1;
   clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
-  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]); physics?.setSkillMarkedBalls([]);
   score = 0; timeLeft = ROUND_SECONDS; combo = 0;
   $("chainCount").textContent = "0";
   $("chainPopup").classList.remove("show");
@@ -471,7 +531,7 @@ async function startRound() {
     if (!running || paused) return;
     // 時間停止スキルの間は残り時間を減らさない。
     if (Date.now() < skillFreezeUntil) return;
-    if (skillMode && Date.now() >= skillMode.expiresAt) {
+    if (skillMode?.type !== "time_stop_chain" && skillMode && Date.now() >= skillMode.expiresAt) {
       const endedMode = skillMode.type;
       skillMode = null;
       skillHitBalls = [];
@@ -488,7 +548,7 @@ function showResult() {
   roundEnded = true; running = false; paused = false;
   if (physics?.engine) physics.engine.timing.timeScale = 1;
   clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
-  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]); physics?.setSkillMarkedBalls([]);
   playSfx("end");
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
@@ -508,7 +568,7 @@ function returnToReady() {
   clearInterval(timer); timer = null;
   if (physics?.engine) physics.engine.timing.timeScale = 1;
   clearTimeout(skillFreezeTimer); skillFreezeTimer = null; skillFreezeUntil = 0;
-  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]);
+  skillMode = null; skillHitBalls = []; physics?.setSkillTrail([]); physics?.setSkillMarkedBalls([]);
   running = false; paused = false; roundEnded = false; roundStarting = false;
   pointerDown = false; previousPointer = null; setChain([]);
   skillBusy = false; skillCharge = 0;
