@@ -1,5 +1,6 @@
-const LEVELS = [1, 1.16, 1.34, 1.55, 1.8, 2.08];
-const REQUIRED_KILLS = [26, 23, 20, 18, 16, 14];
+// レベル差でスキル性能が極端にならないよう、成長幅を緩やかにする。
+const LEVELS = [1, 1.08, 1.16, 1.24, 1.33, 1.42];
+const REQUIRED_KILLS = [22, 21, 20, 19, 18, 17];
 
 // Future faces receive a stable, reusable skill until a dedicated module is added.
 const TEMPLATES = [
