@@ -210,11 +210,13 @@ async function activateMyTsumSkill() {
     const radius = Math.max(physics.radius * 3.1, Math.min(physics.width * 0.72, Number(result.radius) || physics.width * (0.28 + levelStep * 0.025)));
     targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
     if (targets.length < 6) targets = nearest(baseline, centerX, centerY);
+    targets = targets.slice(0, 12 + levelStep * 2);
     effect = { type: "explosion", x: centerX, y: centerY, radius, duration: 1050 };
   } else if (type === "black_hole") {
     const radius = Math.max(physics.radius * 3.8, Math.min(physics.width * 0.78, Number(result.radius) || physics.width * 0.38));
     targets = balls.filter(ball => Math.hypot(ball.body.position.x - centerX, ball.body.position.y - centerY) <= radius);
     if (targets.length < 7) targets = nearest(baseline + 2, centerX, centerY);
+    targets = targets.slice(0, 13 + levelStep * 2);
     effect = { type: "black_hole", x: centerX, y: centerY, radius, duration: 1200 };
   } else if (type === "laser" || type === "line_clear") {
     const vertical = type === "laser";
@@ -223,6 +225,7 @@ async function activateMyTsumSkill() {
       ? Math.abs(ball.body.position.x - centerX) <= band / 2
       : Math.abs(ball.body.position.y - centerY) <= band / 2);
     if (targets.length < 6) targets = nearest(baseline, centerX, centerY);
+    targets = targets.slice(0, 12 + levelStep * 2);
     effect = { type, x: centerX, y: centerY, width: vertical ? band : physics.width, height: vertical ? physics.height : band, duration: 900 };
   } else if (type === "homing_volley") {
     const counts = new Map();
@@ -246,7 +249,7 @@ async function activateMyTsumSkill() {
     effect = { type: "teleport", x: centerX, y: centerY, duration: 1000 };
   } else if (type === "defense") {
     targets = nearest(baseline);
-    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + Math.max(2, Math.round(Number(result.heal) || 2)));
+    timeLeft = Math.min(ROUND_SECONDS + 30, timeLeft + Math.min(4, Math.max(2, Math.round(Number(result.heal) || 2))));
     effect = { type: "defense", x: centerX, y: centerY, duration: 1100 };
   } else if (type === "orbit_guard" || type === "bullet_counter") {
     const radius = Math.max(physics.radius * 3.5, Math.min(physics.width * 0.65, Number(result.radius) || physics.width * 0.34));
