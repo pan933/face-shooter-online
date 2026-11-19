@@ -133,12 +133,14 @@ async function loadMyTsumSkill() {
     console.warn("[Puzzle] スキル説明の取得に失敗", error);
   }
   const hint = preview.type ? puzzleSkillHint(preview.type) : "マイツムを消してゲージをためよう";
-  // 強力な範囲攻撃・時間停止ほど次のゲージがたまりにくくなる。
+  // スキルが強いツムほど、マイツムを消したときのゲージ増加量を抑える。
+  // 強力な全体攻撃は低め、補助系・小規模スキルは高めにして回転率を調整。
   const strongTypes = ["screen_clear", "time_stop", "black_hole", "explosion", "laser", "bullet_counter"];
   const mediumTypes = ["line_clear", "homing_volley", "slash", "teleport", "power_up"];
-  const baseRate = strongTypes.includes(preview.type) ? 0.78
-    : mediumTypes.includes(preview.type) ? 0.88 : 1;
-  skillChargeMultiplier = Math.max(0.65, baseRate - (level - 1) * 0.025);
+  const baseRate = strongTypes.includes(preview.type) ? 0.68
+    : mediumTypes.includes(preview.type) ? 0.82 : 0.95;
+  const levelPenalty = (level - 1) * (strongTypes.includes(preview.type) ? 0.025 : 0.02);
+  skillChargeMultiplier = Math.max(0.52, baseRate - levelPenalty);
   $("skillDescription").textContent = hint + "（必要：マイツム" + skillRequired + "個 / Lv." + level + "）";
   updateSkillUI();
 }
@@ -152,9 +154,9 @@ async function activateMyTsumSkill() {
   if (!running || paused || skillBusy || skillCharge < skillRequired || !skillModule) return;
   skillBusy = true;
   const level = Math.max(1, Number(activeFace?.skill?.level) || 1);
-  // 発動後も約半分を持ち越し。強いスキルほど持ち越しを少し少なくする。
-  const carryoverRate = Math.max(0.50, Math.min(0.60, 0.38 + skillChargeMultiplier * 0.20));
-  skillCharge = skillRequired * carryoverRate;
+  // 発動後は次のスキルゲージを55%から再スタートする。
+  // 強さによる差は発動後の持ち越しではなく、通常プレイ中のゲージ増加量で調整。
+  skillCharge = skillRequired * 0.55;
   updateSkillUI();
   let result = {};
   try {
@@ -187,8 +189,10 @@ async function activateMyTsumSkill() {
   // スキルの種類ごとに違う動き・見た目・効果へ変換する。
   if (type === "slash") {
     // 居合斬り：発動後、指でなぞった軌跡をレーザー斬撃にする。
-    const maxChain = Math.min(12, 6 + Math.round((level - 1) * 1.2));
-    const duration = 3500 + (Math.min(6, level) - 1) * 550;
+    // Lv.1は4チェーン、レベルアップごとに2ずつ増え、Lv.6で12チェーン。
+    const maxChain = Math.min(12, 2 + Math.min(6, level) * 2);
+    // 効果時間もレベルに応じて延長（Lv.1: 3秒 → Lv.6: 5.5秒）。
+    const duration = 3000 + (Math.min(6, level) - 1) * 500;
     skillMode = { type: "trace_link", maxChain, expiresAt: Date.now() + duration };
     skillHitBalls = [];
     physics.setSkillTrail([]);
@@ -197,8 +201,10 @@ async function activateMyTsumSkill() {
     say("✨ 光のルートモード！盤面をなぞると、通ったツムがキラキラ消える！");
   } else if (type === "power_up") {
     // シンデレラ型：一定時間、違う顔同士もつなげられる。
-    const maxChain = Math.min(12, 6 + Math.round((level - 1) * 1.2));
-    const duration = 3500 + (Math.min(6, level) - 1) * 550;
+    // Lv.1は4チェーン、レベルアップごとに2ずつ増え、Lv.6で12チェーン。
+    const maxChain = Math.min(12, 2 + Math.min(6, level) * 2);
+    // 効果時間もレベルに応じて延長（Lv.1: 3秒 → Lv.6: 5.5秒）。
+    const duration = 3000 + (Math.min(6, level) - 1) * 500;
     skillMode = { type: "rainbow_chain", maxChain, expiresAt: Date.now() + duration };
     physics.showSkillEffect({ type: "power_up", x: centerX, y: centerY, duration: 900 });
     score += 250 + levelStep * 70;
