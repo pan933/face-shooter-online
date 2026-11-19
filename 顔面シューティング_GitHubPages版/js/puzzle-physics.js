@@ -343,6 +343,21 @@ export class TsumPhysicsBoard {
           ctx.fillStyle = i % 2 ? "#ffb347" : "#fff1a8";
           ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, Math.max(2, this.radius * 0.12) * fade, 0, Math.PI * 2); ctx.fill();
         }
+        // 炎の舌のような三角形を外側へ伸ばす。
+        if (effect.type === "explosion") {
+          for (let i = 0; i < 12; i++) {
+            const a = i * Math.PI * 2 / 12 + progress * 0.8;
+            const px = cx + Math.cos(a) * r * 0.72;
+            const py = cy + Math.sin(a) * r * 0.72;
+            const tip = r * (0.18 + (i % 3) * 0.035);
+            ctx.fillStyle = i % 2 ? "#ff6a2f" : "#ffd05a";
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + Math.cos(a - 0.22) * tip, py + Math.sin(a - 0.22) * tip);
+            ctx.lineTo(px + Math.cos(a + 0.22) * tip, py + Math.sin(a + 0.22) * tip);
+            ctx.closePath(); ctx.fill();
+          }
+        }
       } else if (effect.type === "black_hole") {
         ctx.translate(cx, cy); ctx.rotate(progress * 5);
         ctx.shadowColor = "#b48cff"; ctx.shadowBlur = 22;
