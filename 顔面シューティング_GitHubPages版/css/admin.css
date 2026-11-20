@@ -160,3 +160,41 @@
     font-size:16px;
   }
 }
+
+/* モバイルで顔カード内のレア度欄と削除ボタン等が重ならないよう配置を固定 */
+@media (max-width:700px) {
+  .gacha-face-card {
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:stretch !important;
+    gap:14px !important;
+  }
+  .gacha-face-card > div:first-child,
+  .gacha-face-card > div:nth-child(2) {
+    width:100% !important;
+    min-width:0 !important;
+  }
+  .gacha-face-card > div:nth-child(2) {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:14px !important;
+  }
+  .gacha-face-card > div:nth-child(2) > div {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:12px !important;
+  }
+  .gacha-face-card > button.gacha-delete-face {
+    align-self:flex-end !important;
+    width:auto !important;
+    position:static !important;
+    margin:0 !important;
+  }
+  .gacha-face-card label,
+  .gacha-face-card label select,
+  .gacha-face-card input,
+  .gacha-face-card textarea {
+    max-width:100% !important;
+    min-width:0 !important;
+  }
+}
