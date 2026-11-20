@@ -50,6 +50,21 @@ const TEMPLATES = [
     { id: "skill_final", name: "ファイナルインパクト", description: "画面全体を揺るがす必殺の大爆発。", type: "screen_clear", damage: 185 }
 ];
 
+// 追加スキル群
+const EXTRA_TEMPLATES = [
+ {id:"skill_arc",name:"アークショット",description:"弧を描く攻撃で複数の敵を狙う。",type:"homing_volley",damage:108,maxTargets:6},
+ {id:"skill_wave",name:"波状衝撃",description:"波状の衝撃で広範囲に攻撃する。",type:"explosion",damage:110,radius:190},
+ {id:"skill_prism",name:"プリズム分裂",description:"光が分裂して複数の敵に攻撃する。",type:"homing_volley",damage:98,maxTargets:8},
+ {id:"skill_vortex",name:"旋風",description:"敵弾を消しながら周囲を攻撃する。",type:"bullet_counter",damagePerBullet:20,radius:220,maxBullets:18},
+ {id:"skill_frost",name:"霜の輪",description:"周囲を攻撃して短時間動きを止める。",type:"time_stop",damage:60,stopDuration:2.3},
+ {id:"skill_blink",name:"瞬間移動",description:"位置を変え、周囲の敵へ反撃する。",type:"teleport",damage:95},
+ {id:"skill_rain",name:"光の雨",description:"画面上の複数の敵へ連続攻撃。",type:"screen_clear",damage:95},
+ {id:"skill_bastion",name:"要塞化",description:"守りを固め、HPを回復する。",type:"defense",heal:3,shieldDuration:4},
+ {id:"skill_comet",name:"彗星突撃",description:"直線上の敵を貫く強力な攻撃。",type:"line_clear",damage:155,width:340,height:240,maxTargets:8},
+ {id:"skill_echo",name:"エコー",description:"追撃を行い、複数の敵を狙う。",type:"homing_volley",damage:120,maxTargets:7}
+];
+TEMPLATES.push(...EXTRA_TEMPLATES);
+
 function getLevelStats(template, index) {
     const scale = LEVELS[index];
     const stats = { requiredKills: REQUIRED_KILLS[index] };
