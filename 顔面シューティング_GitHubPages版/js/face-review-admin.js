@@ -53,7 +53,6 @@ async function load() {
       rarity.className = "r";
       for (const r of rarities) { const opt = document.createElement("option"); opt.value = r; opt.textContent = r; rarity.append(opt); }
       rarity.value = "N";
-      rarityLabel.append(rarity);
       const approveBtn = document.createElement("button"); approveBtn.textContent = "承認して追加"; approveBtn.className = "primary"; approveBtn.type = "button";
       const rejectBtn = document.createElement("button"); rejectBtn.textContent = "却下"; rejectBtn.className = "danger"; rejectBtn.type = "button";
       const uid = document.createElement("small"); uid.textContent = "投稿UID: " + esc(data.uid);
