@@ -17,7 +17,8 @@ const PUZZLE_SKILL_TYPES = {
 
 const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
-let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;\nlet facePickerFaces = [];
+let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
+let facePickerFaces = [];
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
@@ -187,7 +188,8 @@ async function activateMyTsumSkill() {
   }
 
   const balls = [...physics.balls];
-  const type = PUZZLE_SKILL_TYPES[String(activeFace?.puzzleSkillId || "")] || result.type || "explosion";\n  result.type = type;
+  const type = PUZZLE_SKILL_TYPES[String(activeFace?.puzzleSkillId || "")] || result.type || "explosion";
+  result.type = type;
   const levelStep = Math.max(0, Math.min(5, level - 1));
   const centerX = Number.isFinite(Number(result.x)) ? Number(result.x) : physics.width / 2;
   const centerY = Number.isFinite(Number(result.y)) ? Number(result.y) : physics.height * 0.56;
