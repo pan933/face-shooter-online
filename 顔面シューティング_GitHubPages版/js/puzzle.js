@@ -67,7 +67,12 @@ function chooseGameFaces() {
   physics?.setFacePool(gameFaces, selectedMyTsum);
 }
 function updateFaceModeUI() {
-  $("pointsBalance").textContent = points.toLocaleString();
+  // 巨大な所持ポイントでUIが横に押し出され、4種類モードボタンを押せなくなるのを防ぐ。
+  const balance = $("pointsBalance");
+  balance.textContent = points >= 1_000_000_000_000
+    ? new Intl.NumberFormat("ja-JP", { notation: "compact", maximumFractionDigits: 1 }).format(points)
+    : points.toLocaleString();
+  balance.title = points.toLocaleString() + "ポイント";
   $("faceMode").textContent = faceTypeCount + "種類";
   $("buyFour").textContent = faceTypeCount === 4 ? "4種類モード ON（キャンセル）" : "4種類モード OFF（5,000pt/試合）";
   $("buyFour").setAttribute("aria-pressed", faceTypeCount === 4 ? "true" : "false");
