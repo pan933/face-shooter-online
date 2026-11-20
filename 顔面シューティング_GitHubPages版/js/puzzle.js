@@ -596,21 +596,17 @@ async function initialize() {
   const data = await loadFaceData(uid);
   const catalog = await loadGachaFaces();
   const catalogMap = new Map((catalog || []).map(face => [String(face.id), face]));
-  const actual = (data.faces || []).map(face => ({
-    ...catalogMap.get(String(face.id)), ...face, id: String(face.id),
-    skill: face.skill || { level: 1 }
-  }));
+  // 管理画面のカタログから削除された顔は、所持データが残っていてもゲーム候補から除外する。
+  // カタログ未登録の古い顔が盤面へ復活しないよう、IDを照合して絞り込む。
+  const actual = (data.faces || [])
+    .filter(face => catalogMap.has(String(face.id)))
+    .map(face => ({
+      ...catalogMap.get(String(face.id)), ...face, id: String(face.id),
+      skill: face.skill || { level: 1 }
+    }));
   ownedFaces = actual.length ? actual : [{
     id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
   }];
-  if (ownedFaces.length < 5) {
-    for (const face of catalog || []) {
-      if (ownedFaces.length >= 5) break;
-      if (!ownedFaces.some(item => item.id === String(face.id))) {
-        ownedFaces.push({ ...face, id: String(face.id), skill: face.skill || { level: 1 }, catalogOnly: true });
-      }
-    }
-  }
   points = Math.max(0, Number(data.points) || 0);
   faceTypeCount = 5;
   updateFaceModeUI();
