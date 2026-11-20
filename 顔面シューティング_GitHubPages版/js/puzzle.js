@@ -12,7 +12,7 @@ const PUZZLE_SKILL_TYPES = {
   puzzle_skill_horizontal:"line_clear", puzzle_skill_sweep:"screen_clear", puzzle_skill_random:"explosion",
   puzzle_skill_face:"homing_volley", puzzle_skill_score:"score_boost", puzzle_skill_shuffle:"teleport",
   puzzle_skill_guard:"defense", puzzle_skill_orbit:"orbit_guard", puzzle_skill_counter:"bullet_counter",
-  puzzle_skill_trace:"slash", puzzle_skill_meteor:"screen_clear", puzzle_skill_laser:"laser", puzzle_skill_chain:"power_up"
+  puzzle_skill_trace:"slash", puzzle_skill_meteor:"screen_clear", puzzle_skill_laser:"laser", puzzle_skill_chain:"power_up", puzzle_skill_maleficent:"power_up", puzzle_skill_dark_magic:"power_up", puzzle_skill_shadow_chain:"power_up"
 };
 
 const ROUND_SECONDS = 60;
