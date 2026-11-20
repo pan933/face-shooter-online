@@ -125,3 +125,38 @@
     flex-wrap: wrap;
   }
 }
+
+/* スマートフォンでガチャ顔のレア度を選択しやすくする */
+.gacha-face-card .gacha-face-rarity {
+  display:block;
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:10px 12px;
+  font:inherit;
+  color:var(--text);
+  background:#070b14;
+  border:1px solid #3a4964;
+  border-radius:9px;
+  touch-action:manipulation;
+  position:relative;
+  z-index:1;
+}
+.gacha-face-card label {
+  display:block;
+  min-width:0;
+}
+.gacha-face-card label select {
+  width:100%;
+  min-height:44px;
+  max-width:100%;
+  box-sizing:border-box;
+}
+@media(max-width:700px) {
+  .gacha-face-card [style*="minmax(100px"] {
+    grid-template-columns:minmax(0,1fr) !important;
+  }
+  .gacha-face-card .gacha-face-rarity {
+    font-size:16px;
+  }
+}
