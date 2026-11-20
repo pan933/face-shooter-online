@@ -119,7 +119,7 @@ allow create: if signedIn() && request.resource.data.keys().hasAll(['fromUid', '
 allow update: if signedIn() && resource.data.toUid == request.auth.uid && resource.data.status == 'pending' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']) && request.resource.data.status in ['accepted', 'declined'] && request.resource.data.respondedAt == request.time;
 allow delete: if false;
 }
-match /faceGrantAudit/{logId} {\nallow read: if isAdmin();\nallow create: if isAdmin() && request.resource.data.actorUid == request.auth.uid && request.resource.data.targetUid is string && request.resource.data.faceId is string && request.resource.data.createdAt == request.time;\nallow update, delete: if false;\n}\nmatch /adminAuditLog/{logId} {
+match /faceGrantAudit/{logId} {\nallow read: if isAdmin();\nallow create: if isAdmin() && request.resource.data.actorUid == request.auth.uid && request.resource.data.targetUid is string && request.resource.data.faceId is string && request.resource.data.createdAt == request.time;\nallow update: if isAdmin() && resource.data.revoked == false && request.resource.data.revoked == true && request.resource.data.revokedBy == request.auth.uid && request.resource.data.revokedAt == request.time && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked','revokedBy','revokedAt']);\nallow delete: if false;\n}\nmatch /adminAuditLog/{logId} {
 allow read: if isOwner();
 allow create: if isOwner() && request.resource.data.actorUid == request.auth.uid && request.resource.data.action is string && request.resource.data.createdAt == request.time;
 allow update, delete: if false;
