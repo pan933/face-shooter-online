@@ -180,7 +180,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 #pointsBalance{display:inline-block;max-width:100%;overflow-wrap:anywhere}
 .modeDetails button{flex:0 1 auto;max-width:100%;white-space:normal}
 @media(max-width:600px){.modeDetails{align-items:stretch}.modeDetails>span{flex:1 1 100%}.modeDetails button{width:100%;flex:1 1 100%}}
-</style>
+.facePickerOpen{width:100%;margin-top:6px;font-weight:850;min-height:40px}.facePickerDialog{max-height:min(88vh,720px);overflow:auto}.facePickerGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.facePickerCard{border:1px solid #465773;border-radius:14px;background:#101827;color:var(--text);padding:9px 5px;display:flex;flex-direction:column;align-items:center;gap:5px}.facePickerCard.selected{border:2px solid #e4c76b;background:linear-gradient(145deg,#364764,#172338)}.facePickerCard img{width:72px;height:72px;object-fit:cover;border-radius:50%;background:#0b1321}.facePickerCard strong{font-size:12px;text-align:center;overflow-wrap:anywhere}.facePickerCard small{color:var(--muted);font-size:10px}@media(max-width:420px){.facePickerGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.facePickerCard img{width:64px;height:64px}}</style>
 </head>
 <body>
 <main class="shell">
@@ -190,7 +190,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   <div class="modeHeading"><span>今回出現する顔</span><strong id="faceMode">5種類</strong></div>
   <div class="modeDetails"><span>所持ポイント <strong id="pointsBalance">0</strong></span><button id="buyFour" class="secondary" type="button" aria-pressed="false" disabled>4種類モード OFF（5,000pt/試合）</button></div>
  </div>
- <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><label><select id="faceSelect" aria-label="使用する顔" disabled></select></label></div></div>
+ <div class="profile"><div class="portrait"><img id="leaderFace" alt="選択中の顔"><span id="leaderFallback" hidden>🙂</span></div><div class="profileInfo"><strong id="leaderName">データ読み込み中…</strong><small id="leaderSkill">所持顔を読み込んでいます</small><button id="facePickerOpen" class="secondary facePickerOpen" type="button" disabled>🎭 顔選択</button></div></div>
  <div class="stats" aria-label="ゲーム情報">
   <div class="hudMain"><div class="stat scoreStat"><span>スコア</span><strong id="score">0</strong></div><div class="stat timeStat"><span>残り時間</span><strong><span id="time">60</span><small>秒</small></strong></div></div>
   <div class="hudSub"><div class="stat"><span>COMBO</span><strong id="combo">0</strong></div><div class="stat chainStat"><span>CHAIN</span><strong id="chainCount">0</strong></div></div>
@@ -220,6 +220,6 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 </section>
 <p class="help">アカウント・所持顔・ポイントはシューティング版と共通です。</p>
 </main>
-<div id="result" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="dialog"><h2 id="resultTitle">🎉 結果発表</h2><p id="resultText"></p><button id="again" class="primary" type="button">もう一度遊ぶ</button><button id="readyBack" class="secondary resultBack" type="button">↩ ゲーム開始前に戻る</button><button id="back" class="secondary resultBack" type="button">シューティングへ戻る</button></section></div>
+<div id="facePicker" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="facePickerTitle"><section class="dialog facePickerDialog"><h2 id="facePickerTitle">🎭 顔選択</h2><p>使用するマイツムを選んでください</p><div id="facePickerGrid" class="facePickerGrid"></div><button id="facePickerClose" class="secondary resultBack" type="button">閉じる</button></section></div><div id="result" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="dialog"><h2 id="resultTitle">🎉 結果発表</h2><p id="resultText"></p><button id="again" class="primary" type="button">もう一度遊ぶ</button><button id="readyBack" class="secondary resultBack" type="button">↩ ゲーム開始前に戻る</button><button id="back" class="secondary resultBack" type="button">シューティングへ戻る</button></section></div>
 <script type="module" src="./js/puzzle.js"></script>
 </body></html>

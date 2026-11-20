@@ -17,7 +17,7 @@ const PUZZLE_SKILL_TYPES = {
 
 const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
-let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
+let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;\nlet facePickerFaces = [];
 let score = 0, timeLeft = ROUND_SECONDS, combo = 0;
 let running = false, paused = false, roundEnded = false, roundStarting = false, timer = null;
 let lastClearAt = 0, shuffleReadyAt = 0, pointerDown = false, previousPointer = null;
@@ -487,7 +487,7 @@ async function startRound() {
   physics.seed(gameFaces, physics.width < 480 ? 42 : 70, activeFace);
   $("result").classList.add("hidden");
   $("start").disabled = true; $("start").textContent = "プレイ中";
-  $("faceSelect").disabled = true;
+  $("facePickerOpen").disabled = true;
   updateFaceModeUI();
   updateSkillUI();
   $("pause").disabled = false; $("pause").textContent = "⏸ 一時停止";
@@ -521,7 +521,7 @@ function showResult() {
   playSfx("end");
   clearInterval(timer); timer = null;
   $("start").disabled = false; $("start").textContent = "▶ もう一度";
-  $("faceSelect").disabled = false;
+  $("facePickerOpen").disabled = false;
   updateFaceModeUI();
   $("pause").disabled = true; $("shuffle").disabled = true;
   const earned = Math.floor(score / 1000);
@@ -546,7 +546,7 @@ function returnToReady() {
   $("chainCount").textContent = "0";
   $("chainPopup").classList.remove("show");
   $("result").classList.add("hidden");
-  $("faceSelect").disabled = false;
+  $("facePickerOpen").disabled = false;
   $("start").disabled = false; $("start").textContent = "▶ ゲーム開始";
   $("pause").disabled = true; $("pause").textContent = "⏸ 一時停止";
   $("shuffle").disabled = true;
@@ -584,13 +584,17 @@ async function selectFace(id) {
   }
 }
 function populateFaces(faces) {
-  const select = $("faceSelect");
-  select.replaceChildren();
+  facePickerFaces = [...faces];
+  const grid = $("facePickerGrid"); grid.replaceChildren();
   for (const face of faces) {
-    const option = document.createElement("option");
-    option.value = face.id; option.textContent = safeName(face); select.append(option);
+    const card = document.createElement("button"); card.type = "button"; card.dataset.faceId = String(face.id);
+    card.className = "facePickerCard" + (String(face.id) === String(activeFace?.id) ? " selected" : "");
+    const img = document.createElement("img"); img.src = imageFor(face); img.alt = safeName(face); img.onerror = () => { img.style.visibility = "hidden"; };
+    const name = document.createElement("strong"); name.textContent = safeName(face);
+    const level = document.createElement("small"); level.textContent = "スキル Lv." + Math.max(1, Number(face.skill?.level) || 1);
+    card.append(img,name,level); if(String(face.id)===String(activeFace?.id)){const mark=document.createElement("small");mark.textContent="✓ 選択中";card.append(mark);} grid.append(card);
   }
-  select.disabled = faces.length === 0;
+  $("facePickerOpen").disabled = !faces.length || running;
 }
 async function initialize() {
   if (!firebaseReady || !auth || !db) throw new Error("Firebase is not configured");
@@ -622,7 +626,7 @@ async function initialize() {
   const selectedId = String(data.selectedFace || ownedFaces[0].id);
   activeFace = ownedFaces.find(face => face.id === selectedId) || ownedFaces[0];
   populateFaces(actual.length ? actual : ownedFaces.slice(0, 1));
-  $("faceSelect").value = activeFace.id;
+  
   $("leaderName").textContent = safeName(activeFace);
   $("leaderSkill").textContent = "マイツム：" + profileName + " / スキル Lv." + Math.max(1, Number(activeFace.skill?.level) || 1);
   const img = $("leaderFace");
@@ -689,7 +693,10 @@ $("pause").addEventListener("click", () => {
   if (!paused) playSfx("start");
   say(paused ? "一時停止中" : "再開！");
 });
-$("faceSelect").addEventListener("change", event => void selectFace(event.target.value));
+$("facePickerOpen").addEventListener("click", () => { if (!running) $("facePicker").classList.remove("hidden"); });
+$("facePickerClose").addEventListener("click", () => $("facePicker").classList.add("hidden"));
+$("facePicker").addEventListener("click", event => { if(event.target === $("facePicker")) $("facePicker").classList.add("hidden"); });
+$("facePickerGrid").addEventListener("click", event => { const card=event.target.closest("[data-face-id]"); if(!card||running)return; $("facePicker").classList.add("hidden"); void selectFace(card.dataset.faceId); });
 $("again").addEventListener("click", () => { $("result").classList.add("hidden"); startRound(); });
 $("readyBack").addEventListener("click", returnToReady);
 $("back").addEventListener("click", () => { window.location.href = "./game.html"; });
