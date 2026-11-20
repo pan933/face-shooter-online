@@ -231,6 +231,98 @@ async function loadAudit() {
   }
   if (!parent.children.length) parent.textContent = "操作ログはまだありません。";
 }
+
+
+// ===== 管理者限定：完凸入手・ユーザー配布 =====
+async function initFaceGrantPanel() {
+  const parent = $("accountsPanel");
+  if (!parent || $("faceGrantPanel")) return;
+  const panel = document.createElement("section");
+  panel.className = "panel";
+  panel.id = "faceGrantPanel";
+  panel.innerHTML = `
+    <div class="panel-heading"><div><p class="eyebrow">FACE GRANT</p><h2>🎭 完凸顔入手・ユーザー配布</h2></div></div>
+    <p class="muted">管理者専用。登録済みのガチャ顔を選び、スキルLv6で自分または指定UIDに追加します。</p>
+    <label>顔<select id="grantFaceSelect"></select></label>
+    <label>配布先UID（自分に入手する場合は空欄）<input id="grantTargetUid" type="text" placeholder="Firebase UID"></label>
+    <label>配布理由（任意）<input id="grantReason" type="text" maxlength="120" placeholder="イベント報酬など"></label>
+    <div class="form-actions"><button id="grantFaceBtn" class="primary" type="button">完凸顔を入手／配布</button><button id="grantHistoryBtn" class="secondary" type="button">配布履歴更新</button></div>
+    <div id="grantHistory" class="audit-list"></div>
+  `;
+  parent.after(panel);
+  $("grantFaceBtn").addEventListener("click", grantSelectedFace);
+  $("grantHistoryBtn").addEventListener("click", loadFaceGrantHistory);
+  await loadGrantFaces();
+  await loadFaceGrantHistory();
+}
+async function loadGrantFaces() {
+  const select = $("grantFaceSelect");
+  if (!select) return;
+  const snap = await getDoc(doc(db, "adminSettings", "gameplay"));
+  const faces = snap.exists() && Array.isArray(snap.data().gachaFaces) ? snap.data().gachaFaces : [];
+  select.replaceChildren();
+  for (const face of faces) {
+    const option = document.createElement("option");
+    option.value = face.id;
+    option.textContent = `${face.name || face.id} (${face.rarity || "N"})`;
+    select.appendChild(option);
+  }
+  if (!faces.length) select.add(new Option("登録顔がありません", ""));
+}
+async function grantSelectedFace() {
+  const btn = $("grantFaceBtn");
+  const faceId = $("grantFaceSelect").value;
+  if (!faceId) { toast("配布する顔を選択してください。", true); return; }
+  btn.disabled = true;
+  try {
+    const settingsSnap = await getDoc(doc(db, "adminSettings", "gameplay"));
+    const managedFaces = settingsSnap.exists() && Array.isArray(settingsSnap.data().gachaFaces) ? settingsSnap.data().gachaFaces : [];
+    const selected = managedFaces.find(f => f.id === faceId);
+    if (!selected) throw new Error("選択した顔が見つかりません。");
+    const targetUid = $("grantTargetUid").value.trim() || currentUser.uid;
+    if (!targetUid) throw new Error("配布先UIDが必要です。");
+    if (!confirm(`${selected.name || selected.id}をUID: ${targetUid}にスキルLv6で追加しますか？`)) return;
+    const targetRef = doc(db, "users", targetUid);
+    const targetSnap = await getDoc(targetRef);
+    const data = targetSnap.exists() ? targetSnap.data() : {};
+    const faces = Array.isArray(data.faces) ? [...data.faces] : [];
+    const existing = faces.find(f => f.id === selected.id);
+    const maxSkill = { level: 6, progress: 0, duplicateProgress: 0, totalKills: 0, tickets: 0 };
+    if (existing) existing.skill = maxSkill;
+    else faces.push({ ...selected, obtainedAt: Date.now(), skill: maxSkill, skillId: selected.skillId || selected.id });
+    await setDoc(targetRef, { faces, updatedAt: serverTimestamp() }, { merge: true });
+    await addDoc(collection(db, "faceGrantAudit"), {
+      actorUid: currentUser.uid, targetUid, faceId: selected.id, faceName: selected.name || selected.id,
+      reason: $("grantReason").value.trim().slice(0,120), createdAt: serverTimestamp()
+    });
+    toast(targetUid === currentUser.uid ? "完凸顔を自分の所持一覧に追加しました。" : "ユーザーへ完凸顔を配布しました。");
+    $("grantTargetUid").value = "";
+    $("grantReason").value = "";
+    await loadFaceGrantHistory();
+  } catch (error) {
+    console.error(error);
+    toast(`配布に失敗しました: ${error.code || error.message}`, true);
+  } finally { btn.disabled = false; }
+}
+async function loadFaceGrantHistory() {
+  const container = $("grantHistory");
+  if (!container) return;
+  container.textContent = "履歴を読み込み中…";
+  try {
+    const q = query(collection(db, "faceGrantAudit"), orderBy("createdAt", "desc"), limit(30));
+    const snap = await getDocs(q);
+    container.replaceChildren();
+    if (!snap.size) { container.textContent = "配布履歴はありません。"; return; }
+    for (const entry of snap.docs) {
+      const d = entry.data();
+      const row = document.createElement("article"); row.className = "account-card";
+      const textEl = document.createElement("div");
+      textEl.textContent = `${d.faceName || d.faceId} / 実行者: ${d.actorUid} / 配布先: ${d.targetUid} / ${d.reason || "理由なし"} / ${d.createdAt?.toDate?.().toLocaleString("ja-JP") || "日時取得中"}`;
+      row.appendChild(textEl); container.appendChild(row);
+    }
+  } catch (error) { container.textContent = `履歴読み込み失敗: ${error.code || error.message}`; }
+}
+
 async function start() {
   setupGimmicks();
   if (!firebaseReady || !auth || !db) {
@@ -251,6 +343,7 @@ async function start() {
     if (isOwner) { show("adminsPanel"); show("auditPanel"); }
     hide("checkingPanel"); show("adminPanel");
     await Promise.all([loadConfig(), loadAccounts()]);
+    await initFaceGrantPanel();
     if (isOwner) await loadAudit();
   } catch (error) {
     console.error(error);
