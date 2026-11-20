@@ -47,7 +47,10 @@ const TEMPLATES = [
     { id: "skill_mirror", name: "ミラーリフレクト", description: "敵弾を消して強烈な反撃を放つ。", type: "bullet_counter", damagePerBullet: 28, radius: 360, maxBullets: 24 },
     { id: "skill_overdrive", name: "限界突破", description: "一定時間、攻撃力と連射速度が大幅上昇。", type: "power_up", damageMultiplier: 1.75, fireRateMultiplier: 1.55, duration: 7 },
     { id: "skill_warp", name: "次元跳躍", description: "瞬間移動して敵弾を消し周囲を攻撃。", type: "teleport", damage: 145 },
-    { id: "skill_final", name: "ファイナルインパクト", description: "画面全体を揺るがす必殺の大爆発。", type: "screen_clear", damage: 185 }
+    { id: "skill_final", name: "ファイナルインパクト", description: "画面全体を揺るがす必殺の大爆発。", type: "screen_clear", damage: 185 },
+    { id: "skill_maleficent", name: "マレフィセント・魔法の時間", description: "一定時間、違う顔のツムもつなげて消せる闇の魔法。", type: "power_up", damageMultiplier: 1.22, duration: 3.2 },
+    { id: "skill_dark_magic", name: "マレフィセント・闇の波動", description: "闇の波動で盤面を強化し、異なる顔もつなげられる時間を作る。", type: "power_up", damageMultiplier: 1.32, duration: 3.8 },
+    { id: "skill_shadow_chain", name: "マレフィセント・影の連鎖", description: "影の魔法で異なる顔をつなげる。時間とチェーン上限が強化される。", type: "power_up", damageMultiplier: 1.4, duration: 4.2 }
 ];
 
 // 追加スキル群
