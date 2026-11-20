@@ -477,7 +477,8 @@ function normalizeFace(
                 ""
             ),
 
-        skillId: String(face?.skillId || face?.id || "face2"),\n        puzzleSkillId: String(face?.puzzleSkillId || "puzzle_skill_burst"),
+        skillId: String(face?.skillId || face?.id || "face2"),
+        puzzleSkillId: String(face?.puzzleSkillId || "puzzle_skill_burst"),
 
         rarity:
             RARITIES.includes(
