@@ -103,11 +103,19 @@ async function loadCollection(uid) {
     try {
         const faceData = await loadFaceData(uid);
 
-        const faces = Array.isArray(faceData?.faces)
+        const ownedFaces = Array.isArray(faceData?.faces)
             ? faceData.faces
             : [];
 
-        await renderCollection(faces, faceData.selectedFace || "face2", uid);
+        // 管理画面から削除された顔は、ユーザーの所持一覧にも表示しない。
+        // 所持データ自体は保持し、他の顔のスキル情報などを損なわない。
+        const activeFaceIds = new Set(gachaFaces.map(face => face.id));
+        const faces = ownedFaces.filter(face => activeFaceIds.has(String(face.id)));
+        const selectedFaceId = activeFaceIds.has(String(faceData.selectedFace || "face2"))
+            ? String(faceData.selectedFace || "face2")
+            : (faces[0]?.id || "face2");
+
+        await renderCollection(faces, selectedFaceId, uid);
 
     } catch (error) {
         console.error("[GACHA] 所持顔読み込み失敗:", error);
@@ -374,8 +382,9 @@ async function loadSettings() {
         // 確率確認
         // ------------------------------
 
-        // ガチャ顔が未登録の場合は初期顔セットを使用
-if (gachaFaces.length === 0) {
+        // 設定自体が未保存の場合にのみ初期顔セットを使用する。
+// 管理者が全顔を削除して空配列を保存した場合、初期顔を復活させない。
+if (!Array.isArray(data.gachaFaces)) {
     gachaFaces = [
         {
             id: "face2",
