@@ -6,6 +6,15 @@ import { TsumPhysicsBoard } from "./puzzle-physics.js";
 import { loadSkill, getRequiredKills } from "./skill-system.js";
 
 const $ = id => document.getElementById(id);
+const PUZZLE_SKILL_TYPES = {
+  puzzle_skill_maleficent:"power_up", puzzle_skill_cinderella:"power_up", puzzle_skill_time:"time_stop",
+  puzzle_skill_burst:"explosion", puzzle_skill_blackhole:"black_hole", puzzle_skill_vertical:"laser",
+  puzzle_skill_horizontal:"line_clear", puzzle_skill_sweep:"screen_clear", puzzle_skill_random:"explosion",
+  puzzle_skill_face:"homing_volley", puzzle_skill_score:"score_boost", puzzle_skill_shuffle:"teleport",
+  puzzle_skill_guard:"defense", puzzle_skill_orbit:"orbit_guard", puzzle_skill_counter:"bullet_counter",
+  puzzle_skill_trace:"slash", puzzle_skill_meteor:"screen_clear", puzzle_skill_laser:"laser", puzzle_skill_chain:"power_up"
+};
+
 const ROUND_SECONDS = 60;
 let physics, uid = "", ownedFaces = [], gameFaces = [], activeFace = null, chain = [];
 let points = 0, faceTypeCount = 5, skillModule = null, skillCharge = 0, skillRequired = 20, skillBusy = false;
@@ -178,7 +187,7 @@ async function activateMyTsumSkill() {
   }
 
   const balls = [...physics.balls];
-  const type = result.type || "explosion";
+  const type = PUZZLE_SKILL_TYPES[String(activeFace?.puzzleSkillId || "")] || result.type || "explosion";\n  result.type = type;
   const levelStep = Math.max(0, Math.min(5, level - 1));
   const centerX = Number.isFinite(Number(result.x)) ? Number(result.x) : physics.width / 2;
   const centerY = Number.isFinite(Number(result.y)) ? Number(result.y) : physics.height * 0.56;
