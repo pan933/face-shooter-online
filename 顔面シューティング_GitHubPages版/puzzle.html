@@ -173,6 +173,13 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
  .actionDock #start{grid-column:1/-1}
 }
 
+
+/* 所持ポイントが極端に大きくてもモードボタンのクリック領域を確保 */
+.modeDetails{min-width:0;flex-wrap:wrap}
+.modeDetails>span{min-width:0;flex:1 1 auto;overflow-wrap:anywhere}
+#pointsBalance{display:inline-block;max-width:100%;overflow-wrap:anywhere}
+.modeDetails button{flex:0 1 auto;max-width:100%;white-space:normal}
+@media(max-width:600px){.modeDetails{align-items:stretch}.modeDetails>span{flex:1 1 100%}.modeDetails button{width:100%;flex:1 1 100%}}
 </style>
 </head>
 <body>
