@@ -17,6 +17,32 @@ import {
 // 初期設定
 // ==================================================
 
+const PUZZLE_SKILLS = [
+ {id:"puzzle_skill_maleficent",name:"闇の連鎖",desc:"短時間、異なる顔もつなげられる。長いチェーンほど消去数が増える。",type:"power_up"},
+ {id:"puzzle_skill_cinderella",name:"ガラスの連鎖",desc:"一定時間、異なる顔を最大12個までつなげる。",type:"power_up"},
+ {id:"puzzle_skill_time",name:"時の魔法",desc:"盤面を停止し、停止中に複数チェーンを仕込んで一括消去。",type:"time_stop"},
+ {id:"puzzle_skill_burst",name:"中央バースト",desc:"中央周辺の顔をまとめて消す。",type:"explosion"},
+ {id:"puzzle_skill_blackhole",name:"吸引フィールド",desc:"広範囲の顔を集めて消す。",type:"black_hole"},
+ {id:"puzzle_skill_vertical",name:"縦ライン",desc:"縦一列を消去する。",type:"laser"},
+ {id:"puzzle_skill_horizontal",name:"横ライン",desc:"横一列を消去する。",type:"line_clear"},
+ {id:"puzzle_skill_sweep",name:"全体掃除",desc:"盤面から一定数をまとめて消去。",type:"screen_clear"},
+ {id:"puzzle_skill_random",name:"ランダムボム",desc:"ランダムな位置を中心に爆発を起こす。",type:"explosion"},
+ {id:"puzzle_skill_face",name:"顔集中",desc:"盤面で最も多い顔を優先して消す。",type:"homing_volley"},
+ {id:"puzzle_skill_score",name:"スコアブースト",desc:"顔を消し、追加スコアを獲得する。",type:"score_boost"},
+ {id:"puzzle_skill_shuffle",name:"シャッフル",desc:"盤面を混ぜて、さらに周囲を消去する。",type:"teleport"},
+ {id:"puzzle_skill_guard",name:"リカバリー",desc:"時間を回復し、周囲の顔を消す。",type:"defense"},
+ {id:"puzzle_skill_orbit",name:"光輪",desc:"自分の周囲を円状に消去する。",type:"orbit_guard"},
+ {id:"puzzle_skill_counter",name:"カウンター",desc:"周囲を消去し、時間を少し回復する。",type:"bullet_counter"},
+ {id:"puzzle_skill_trace",name:"なぞり斬り",desc:"発動中、指でなぞった顔を直接消去する。",type:"slash"},
+ {id:"puzzle_skill_meteor",name:"流星落とし",desc:"盤面の上から大きな範囲消去。",type:"screen_clear"},
+ {id:"puzzle_skill_laser",name:"極太光線",desc:"幅広い縦ラインを消去。",type:"laser"},
+ {id:"puzzle_skill_chain",name:"チェーン延長",desc:"異なる顔をつなげられる時間と上限を強化。",type:"power_up"}
+];
+function puzzleSkillOptions(face) {
+ const selected=face.puzzleSkillId || "puzzle_skill_burst";
+ return PUZZLE_SKILLS.map(s=>`<option value="${escapeHtml(s.id)}" ${selected===s.id?"selected":""} data-desc="${escapeHtml(s.desc)}">${escapeHtml(s.name)}</option>`).join("");
+}
+
 const RARITIES = ["N", "R", "SR", "SSR", "UR"];
 const RARITY_WEIGHTS = { N: 50, R: 20, SR: 15, SSR: 12, UR: 3 };
 
@@ -451,7 +477,7 @@ function normalizeFace(
                 ""
             ),
 
-        skillId: String(face?.skillId || face?.id || "face2"),
+        skillId: String(face?.skillId || face?.id || "face2"),\n        puzzleSkillId: String(face?.puzzleSkillId || "puzzle_skill_burst"),
 
         rarity:
             RARITIES.includes(
@@ -629,6 +655,8 @@ function renderFaces() {
                         ".gacha-face-boosted"
                     );
 
+
+                card.querySelector(".gacha-face-puzzle-skill")?.addEventListener("change", event => { face.puzzleSkillId = event.target.value; const opt=event.target.selectedOptions[0]; const preview=card.querySelector(".gacha-face-puzzle-skill-description"); if(preview) preview.textContent=opt?.dataset.desc || ""; });
 
                 nameInput?.addEventListener(
                     "input",
@@ -917,6 +945,15 @@ function createFaceCard(
 
                 </label>
 
+
+                <label>
+                    顔つむ専用スキル
+                    <select class="gacha-face-puzzle-skill" aria-label="顔つむ専用スキル">
+                        ${puzzleSkillOptions(face)}
+                    </select>
+                    <small class="muted">顔つむゲームで使う専用スキルです。シューティング側のスキル設定とは独立しています。</small>
+                    <p class="gacha-face-puzzle-skill-description">${escapeHtml(PUZZLE_SKILLS.find(skill => skill.id === (face.puzzleSkillId || "puzzle_skill_burst"))?.desc || "")}</p>
+                </label>
 
                 <label>
 
