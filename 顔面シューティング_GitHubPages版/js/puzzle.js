@@ -610,15 +610,20 @@ async function initialize() {
     : "プレイヤー";
   const data = await loadFaceData(uid);
   const catalog = await loadGachaFaces();
-  const catalogMap = new Map((catalog || []).map(face => [String(face.id), face]));
-  // 管理画面のカタログから削除された顔は、所持データが残っていてもゲーム候補から除外する。
-  // カタログ未登録の古い顔が盤面へ復活しないよう、IDを照合して絞り込む。
+  const catalogMap = new Map((catalog || []).filter(face => face?.id != null).map(face => [String(face.id), face]));
+  // カタログ取得結果が空の場合は通信失敗等の可能性があるため所持データを保持する。
+  // カタログが正常に存在する場合のみ削除済み顔を除外し、カタログ情報と所持情報を統合する。
+  const hasCatalog = catalogMap.size > 0;
   const actual = (data.faces || [])
-    .filter(face => catalogMap.has(String(face.id)))
-    .map(face => ({
-      ...catalogMap.get(String(face.id)), ...face, id: String(face.id),
-      skill: face.skill || { level: 1 }
-    }));
+    .filter(face => face?.id != null && (!hasCatalog || catalogMap.has(String(face.id))))
+    .map(face => {
+      const configured = catalogMap.get(String(face.id)) || {};
+      return {
+        ...configured, ...face, id: String(face.id),
+        imageUrl: face.imageUrl || configured.imageUrl || CLOUDINARY_FACE_URLS[String(face.id)] || CLOUDINARY_FACE_URLS.face2,
+        skill: face.skill || { level: 1 }
+      };
+    });
   ownedFaces = actual.length ? actual : [{
     id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
   }];
