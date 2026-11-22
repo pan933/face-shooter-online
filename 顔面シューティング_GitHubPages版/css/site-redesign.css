@@ -1,0 +1,17 @@
+/* Unified arcade shell for FACE SHOOTER pages; puzzle intentionally gets its own pop palette. */
+:root{--arcade-bg:#080a0e;--arcade-panel:#141820;--arcade-line:#343c48;--arcade-red:#ef3b46;--arcade-white:#f4f5f7;--arcade-muted:#9ba4b1}
+html:not([data-game-theme="puzzle"]) body{background:#080a0e!important;color:#f4f5f7!important;font-family:Arial,"Noto Sans JP",sans-serif!important}
+html:not([data-game-theme="puzzle"]) body :is(section,article,.panel,.card,.auth-card,.pointPanel,.gachaPanel,.lineupPanel,.resultPanel){background:#141820!important;border:1px solid #343c48!important;border-radius:5px!important;box-shadow:0 4px 0 #000!important}
+html:not([data-game-theme="puzzle"]) body :is(button,a.mainButton,a.primary,.backButton,.subButton){border-radius:4px!important;box-shadow:none!important;transition:transform .12s,filter .12s}
+html:not([data-game-theme="puzzle"]) body :is(button,.mainButton,.primary):hover{filter:brightness(1.12);transform:translateY(-1px)}
+html:not([data-game-theme="puzzle"]) body :is(button,.mainButton,.primary){background:#ef3b46!important;color:#fff!important;border:1px solid #ef3b46!important;font-weight:800;letter-spacing:.02em}
+html:not([data-game-theme="puzzle"]) body :is(input,select,textarea){background:#0d1117!important;color:#f4f5f7!important;border:1px solid #454d59!important;border-radius:4px!important}
+html:not([data-game-theme="puzzle"]) body h1,html:not([data-game-theme="puzzle"]) body h2,html:not([data-game-theme="puzzle"]) body h3{letter-spacing:.04em;text-transform:uppercase}
+html:not([data-game-theme="puzzle"]) body :is(.title,.brand,.brand-mark){color:#ef3b46}
+html[data-game-theme="puzzle"] body{background:linear-gradient(180deg,#fff4d9,#ffdfb0)!important;color:#52342b!important;font-family:"Trebuchet MS",system-ui,sans-serif!important}
+html[data-game-theme="puzzle"] body :is(.panel,.stat,.boardWrap,.modeBar,.skillPanel){background:#fff8e9!important;border:2px solid #f1b85f!important;border-radius:18px!important;box-shadow:0 5px 0 #e5a34c!important}
+html[data-game-theme="puzzle"] body :is(button,a){border-radius:14px!important;font-weight:800}
+html[data-game-theme="puzzle"] body button{background:#ff8d9f!important;color:#532e3b!important;border:2px solid #ef6884!important}
+html[data-game-theme="puzzle"] body :is(.scoreStat,.timeStat){background:#ffe9a8!important;border-color:#e8b751!important;color:#593a25!important}
+html[data-game-theme="puzzle"] body :is(.brand,.sub){color:#c95c73!important}
+@media(max-width:600px){html:not([data-game-theme="puzzle"]) body{padding-left:8px;padding-right:8px}html[data-game-theme="puzzle"] body{padding:5px}}
