@@ -1666,3 +1666,23 @@ body.touch-mode #controls .keyboard-only { opacity: .45; }
 #game {
     cursor: auto !important;
 }
+
+/* Launch screen action buttons: consistent size and placement */
+#start .panel .startFaceSelectLink,
+#start .panel a.mainButton,
+#start .panel #startBtn,
+#start .panel #adminBtn {
+  display:flex!important; align-items:center!important; justify-content:center!important;
+  width:min(100%,420px)!important; min-height:48px!important; box-sizing:border-box!important;
+  margin:10px auto!important; padding:12px 18px!important; border-radius:12px!important;
+  font-size:16px!important; font-weight:850!important; line-height:1.25!important;
+  text-decoration:none!important; text-align:center!important; transform:none!important;
+}
+#start .panel .startFaceSelectLink {
+  color:#e8f8f3!important; background:linear-gradient(135deg,#263d48,#182832)!important;
+  border:1px solid #72c9ae!important; box-shadow:0 3px 0 #0c171d!important;
+}
+#start .panel #startBtn { background:linear-gradient(135deg,#d2f5e6,#65c6a2)!important; color:#123329!important; border:1px solid #a5e8d0!important; box-shadow:0 4px 0 #267b60!important; }
+#start .panel #adminBtn { background:#222d36!important; border:1px solid #52616b!important; color:#e5edf2!important; }
+#start .panel .startFaceSelectLink:active,#start .panel #startBtn:active { transform:translateY(2px)!important; }
+#startSkillPreview { margin:12px auto!important; }
