@@ -1685,8 +1685,6 @@ async function drawSingle() {
                 user.uid,
                 [face]
             );
-        await loadCollection(user.uid);
-
         const duplicateInfo =
             collectionUpdate.duplicateInfos[0];
 
@@ -1714,9 +1712,8 @@ async function drawSingle() {
         showMessage([resultMessage, coinMessage].filter(Boolean).join(" ／ "));
 
 
-        await updatePointDisplay(
-            user.uid
-        );
+        void updatePointDisplay(user.uid);
+        void loadCollection(user.uid);
 
 
     } catch (error) {
@@ -1899,7 +1896,6 @@ async function drawTen() {
                 user.uid,
                 results
             );
-        await loadCollection(user.uid);
         const duplicateInfos = collectionUpdate.duplicateInfos;
 
 
