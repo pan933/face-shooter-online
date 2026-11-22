@@ -1937,9 +1937,8 @@ async function drawTen() {
         showMessage([resultMessage, coinMessage].filter(Boolean).join(" ／ "));
 
 
-        await updatePointDisplay(
-            user.uid
-        );
+        void updatePointDisplay(user.uid);
+        void loadCollection(user.uid);
 
 
     } catch (error) {
@@ -1956,9 +1955,7 @@ async function drawTen() {
         );
 
 
-        await updatePointDisplay(
-            user.uid
-        );
+        void updatePointDisplay(user.uid);
 
 
     } finally {
