@@ -611,11 +611,10 @@ async function initialize() {
   const data = await loadFaceData(uid);
   const catalog = await loadGachaFaces();
   const catalogMap = new Map((catalog || []).filter(face => face?.id != null).map(face => [String(face.id), face]));
-  // カタログ取得結果が空の場合は通信失敗等の可能性があるため所持データを保持する。
-  // カタログが正常に存在する場合のみ削除済み顔を除外し、カタログ情報と所持情報を統合する。
-  const hasCatalog = catalogMap.size > 0;
+  // 管理画面のカタログに存在しないIDは選択画面・ゲーム内候補から除外。
+  // カタログが空の場合も削除済みキャラを復活させず、初期顔のみを保険として扱う。
   const actual = (data.faces || [])
-    .filter(face => face?.id != null && (!hasCatalog || catalogMap.has(String(face.id))))
+    .filter(face => face?.id != null && catalogMap.has(String(face.id)))
     .map(face => {
       const configured = catalogMap.get(String(face.id)) || {};
       return {
@@ -624,15 +623,15 @@ async function initialize() {
         skill: face.skill || { level: 1 }
       };
     });
-  ownedFaces = actual.length ? actual : [{
+  ownedFaces = actual.length ? actual : (catalogMap.has("face2") ? [{
     id: "face2", name: "初期顔", imageUrl: CLOUDINARY_FACE_URLS.face2, skill: { level: 1 }
-  }];
+  }] : []);
   points = Math.max(0, Number(data.points) || 0);
   faceTypeCount = 5;
   updateFaceModeUI();
-  const selectedId = String(data.selectedFace || ownedFaces[0].id);
-  activeFace = ownedFaces.find(face => face.id === selectedId) || ownedFaces[0];
-  populateFaces(actual.length ? actual : ownedFaces.slice(0, 1));
+  const selectedId = String(data.selectedFace || ownedFaces[0]?.id || "");
+  activeFace = ownedFaces.find(face => face.id === selectedId) || ownedFaces[0] || null;
+  populateFaces(actual);
   
   $("leaderName").textContent = safeName(activeFace);
   $("leaderSkill").textContent = "マイツム：" + profileName + " / スキル Lv." + Math.max(1, Number(activeFace.skill?.level) || 1);
