@@ -1,24 +1,18 @@
 import {
   firebaseReady,
   firebaseConfigError,
-  app,
   auth,
   db
 } from "./firebase-config.js";
 
 import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithCustomToken,
   updateProfile,
   signOut,
   signInWithPopup,
   TwitterAuthProvider
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-
-import {
-  getFunctions,
-  httpsCallable
-} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-functions.js";
 
 import {
   doc,
@@ -29,11 +23,8 @@ import {
 
 const $ = id => document.getElementById(id);
 
+const REGISTRATION_CODE = "komakikouka";
 const msgEl = $("globalMessage");
-const functions = app ? getFunctions(app, "asia-northeast1") : null;
-const registerAccountCall = functions ? httpsCallable(functions, "registerAccount") : null;
-const activateExistingAccountCall = functions ? httpsCallable(functions, "activateExistingAccount") : null;
-const finalizeXRegistrationCall = functions ? httpsCallable(functions, "finalizeXRegistration") : null;
 
 let pendingXUser = null;
 
@@ -126,14 +117,6 @@ function humanizeError(error) {
 
     "auth/operation-not-allowed":
       "Firebase ConsoleでEmail/Password認証を有効にしてください。",
-    "auth/account-not-registered":
-      "このアカウントの登録情報を確認できません。管理者に問い合わせてください。",
-    "functions/permission-denied":
-      "新規登録用パスワードが違うか、登録が許可されていません。",
-    "functions/resource-exhausted":
-      "入力回数が多すぎます。10分ほど待ってから再度お試しください。",
-    "functions/already-exists":
-      "このIDはすでに使われています。別のIDにしてください。",
 
     "auth/unauthorized-domain":
       "Firebase Authenticationの承認済みドメインに pan933.github.io を追加してください。"
@@ -278,15 +261,6 @@ $("loginForm").addEventListener("submit", async event => {
       password
     );
 
-    const activation = await activateExistingAccountCall();
-    if (activation.data?.registered !== true) {
-      await signOut(auth);
-      const error = new Error("このアカウントの登録情報を確認できません。管理者に問い合わせてください。");
-      error.code = "auth/account-not-registered";
-      throw error;
-    }
-
-    await credential.user.getIdToken(true);
     await finishLogin(credential.user, username);
 
   } catch (error) {
@@ -335,21 +309,25 @@ $("registerForm").addEventListener("submit", async event => {
     return;
   }
 
+  if (registrationCode !== REGISTRATION_CODE) {
+    setMessage("新規登録用パスワードが違います。", true);
+    return;
+  }
+
   setBusy(form, true);
-  setMessage("安全なサーバーで登録コードを確認しています…");
+  setMessage("共有アカウントを作成しています…");
 
   try {
-    const result = await registerAccountCall({
-      username,
-      password,
-      registrationCode
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      usernameToAuthEmail(username),
+      password
+    );
+
+    await updateProfile(credential.user, {
+      displayName: username
     });
 
-    if (!result.data?.token) {
-      throw new Error("登録サーバーから認証情報を取得できませんでした。");
-    }
-
-    const credential = await signInWithCustomToken(auth, result.data.token);
     await finishLogin(credential.user, username);
 
   } catch (error) {
@@ -383,11 +361,10 @@ if (xLoginBtn) {
         new TwitterAuthProvider()
       );
 
-      const activation = await activateExistingAccountCall();
+      const profile = await getProfile(result.user);
 
-      if (activation.data?.registered === true) {
-        await result.user.getIdToken(true);
-        await ensureProfile(result.user);
+      if (profile) {
+        // 既存のXアカウントにゲームデータがまだない場合も初期化してからゲームへ進む。
         await ensureGameUserData(result.user);
         redirectAfterLogin();
         return;
@@ -460,14 +437,15 @@ if (xCompleteForm) {
       return;
     }
 
+    if ($("xRegistrationCode").value !== REGISTRATION_CODE) {
+      setMessage("新規登録コードが違います。", true);
+      return;
+    }
+
     setBusy(xCompleteForm, true);
-    setMessage("サーバーで登録コードを確認しています…");
+    setMessage("Xアカウントを登録しています…");
 
     try {
-      await finalizeXRegistrationCall({
-        registrationCode: $("xRegistrationCode").value
-      });
-      await pendingXUser.getIdToken(true);
       await finishLogin(pendingXUser);
 
     } catch (error) {
@@ -505,11 +483,10 @@ async function initializeLoginPage() {
 
     if (!user) return;
 
-    const activation = await activateExistingAccountCall();
+    const profile = await getProfile(user);
 
-    if (activation.data?.registered === true) {
-      await user.getIdToken(true);
-      await finishLogin(user);
+    if (profile) {
+      redirectAfterLogin();
       return;
     }
 
@@ -533,7 +510,6 @@ async function initializeLoginPage() {
     // Auth登録後、プロフィール作成に失敗した場合は
     // 通常ログインをやり直せるようにサインアウトする。
     await signOut(auth);
-    setMessage("このアカウントの登録情報が未完了です。通常登録は管理者に問い合わせてください。", true);
 
   } catch (error) {
     console.error("ログインページ初期化エラー:", error);
