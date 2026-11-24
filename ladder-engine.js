@@ -1,0 +1,3 @@
+export function evaluateDevice(d,state){if(!d)return false;let n=Number(d.number)||0;switch(d.type){case'X':return !!state.X[n];case'M':return !!state.M[n];case'Y':return !!state.Y[n];case'T':return !!state.T[n];case'C':return !!state.C[n];default:return false}}
+export function evaluatePath(path,state){let ok=true;for(const c of path.cells){if(!c)continue;let v=evaluateDevice(c,state);if(c.kind==='NC')v=!v;if(c.kind==='NOP')continue;if(c.kind==='TON')v=!!state.T[Number(c.number)];if(c.kind==='CTU')v=!!state.C[Number(c.number)];ok=ok&&v}return ok}
+export function evaluateRung(r,state){return r.paths.some(p=>evaluatePath(p,state))}
