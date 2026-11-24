@@ -1,0 +1,12 @@
+{
+  "functions": [
+    {
+      "source": "顔面シューティング_GitHubPages版/functions",
+      "codebase": "default",
+      "runtime": "nodejs22"
+    }
+  ],
+  "firestore": {
+    "rules": "顔面シューティング_GitHubPages版/firestore.rules"
+  }
+}
