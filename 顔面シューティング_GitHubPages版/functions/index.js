@@ -5,6 +5,8 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2/options");
+const { defineSecret } = require("firebase-functions/params");
+const { createHash, timingSafeEqual } = require("node:crypto");
 
 initializeApp();
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
@@ -261,3 +263,154 @@ exports.adminReadAuditLog = onCall(async request => {
     })
   };
 });
+
+
+// ============================================================
+// Secure public registration (shared code stays in Secret Manager)
+// ============================================================
+
+const registrationCodeSecret = defineSecret("REGISTRATION_CODE");
+const USERNAME_PATTERN = /^[A-Za-z0-9_-]{2,24}$/;
+
+function registrationCodeMatches(submittedCode) {
+  const expected = registrationCodeSecret.value();
+  if (typeof submittedCode !== "string" || !submittedCode || !expected) return false;
+  const submitted = Buffer.from(submittedCode, "utf8");
+  const actual = Buffer.from(expected, "utf8");
+  return submitted.length === actual.length && timingSafeEqual(submitted, actual);
+}
+
+async function enforceRegistrationRateLimit(request) {
+  const ip = request.rawRequest?.ip || "unknown";
+  const key = createHash("sha256").update(ip).digest("hex");
+  const ref = db.collection("_security").doc("registration-" + key);
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    let windowStart = Number(snapshot.data()?.windowStart || 0);
+    let attempts = Number(snapshot.data()?.attempts || 0);
+    if (!windowStart || now - windowStart >= windowMs) {
+      windowStart = now;
+      attempts = 0;
+    }
+    if (attempts >= 5) {
+      throw new HttpsError("resource-exhausted", "入力回数が多すぎます。10分ほど待ってから再度お試しください。");
+    }
+    transaction.set(ref, {
+      windowStart,
+      attempts: attempts + 1,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+  });
+}
+
+async function createInitialRegisteredUserData(uid, username) {
+  const profileRef = db.doc("profiles/" + uid);
+  const userRef = db.doc("users/" + uid);
+  await db.runTransaction(async transaction => {
+    const profileSnapshot = await transaction.get(profileRef);
+    const userSnapshot = await transaction.get(userRef);
+    if (!profileSnapshot.exists) {
+      transaction.set(profileRef, {
+        uid,
+        username,
+        displayName: username,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+    if (!userSnapshot.exists) {
+      transaction.set(userRef, {
+        points: 0,
+        faces: [],
+        selectedFace: "face2",
+        skillTickets: 0,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+  });
+}
+
+async function setRegisteredClaim(uid) {
+  const user = await auth.getUser(uid);
+  await auth.setCustomUserClaims(uid, {
+    ...(user.customClaims || {}),
+    registered: true
+  });
+}
+
+exports.registerAccount = onCall(
+  { secrets: [registrationCodeSecret] },
+  async request => {
+    const data = request.data || {};
+    const username = typeof data.username === "string" ? data.username.trim() : "";
+    const password = data.password;
+
+    if (!USERNAME_PATTERN.test(username)) {
+      throw new HttpsError("invalid-argument", "IDは英字・数字・_・-の2〜24文字で入力してください。");
+    }
+    if (typeof password !== "string" || password.length < 8 || password.length > 100) {
+      throw new HttpsError("invalid-argument", "パスワードは8〜100文字にしてください。");
+    }
+
+    await enforceRegistrationRateLimit(request);
+    if (!registrationCodeMatches(data.registrationCode)) {
+      throw new HttpsError("permission-denied", "新規登録用パスワードが違います。");
+    }
+
+    const email = username.toLowerCase() + "@face-shooter.invalid";
+    let createdUser = null;
+    try {
+      createdUser = await auth.createUser({ email, password, displayName: username });
+      await createInitialRegisteredUserData(createdUser.uid, username);
+      await setRegisteredClaim(createdUser.uid);
+      return { token: await auth.createCustomToken(createdUser.uid) };
+    } catch (error) {
+      if (createdUser) {
+        try {
+          await auth.deleteUser(createdUser.uid);
+          await db.doc("profiles/" + createdUser.uid).delete();
+          await db.doc("users/" + createdUser.uid).delete();
+        } catch (cleanupError) {
+          console.error("Registration cleanup failed:", cleanupError.code || cleanupError.message);
+        }
+      }
+      if (error instanceof HttpsError) throw error;
+      if (error.code === "auth/email-already-exists") {
+        throw new HttpsError("already-exists", "このIDはすでに使われています。別のIDにしてください。");
+      }
+      console.error("registerAccount failed:", error.code || error.message);
+      throw new HttpsError("internal", "アカウント作成に失敗しました。時間をおいて再度お試しください。");
+    }
+  }
+);
+
+exports.activateExistingAccount = onCall(async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "ログインしてください。");
+  const profile = await db.doc("profiles/" + request.auth.uid).get();
+  if (!profile.exists) return { registered: false };
+  await setRegisteredClaim(request.auth.uid);
+  return { registered: true };
+});
+
+exports.finalizeXRegistration = onCall(
+  { secrets: [registrationCodeSecret] },
+  async request => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "先にXで認証してください。");
+    await enforceRegistrationRateLimit(request);
+    if (!registrationCodeMatches(request.data?.registrationCode)) {
+      throw new HttpsError("permission-denied", "新規登録用パスワードが違います。");
+    }
+
+    const user = await auth.getUser(request.auth.uid);
+    const isXAccount = (user.providerData || []).some(provider => provider.providerId === "twitter.com");
+    if (!isXAccount) throw new HttpsError("permission-denied", "Xアカウントとして認証されていません。");
+
+    const profile = await db.doc("profiles/" + user.uid).get();
+    const username = profile.exists ? profile.data().username : "x_" + user.uid.slice(0, 10);
+    await createInitialRegisteredUserData(user.uid, username);
+    await setRegisteredClaim(user.uid);
+    return { registered: true };
+  }
+);
