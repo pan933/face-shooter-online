@@ -286,6 +286,7 @@ $("loginForm").addEventListener("submit", async event => {
       throw error;
     }
 
+    await credential.user.getIdToken(true);
     await finishLogin(credential.user, username);
 
   } catch (error) {
@@ -385,6 +386,7 @@ if (xLoginBtn) {
       const activation = await activateExistingAccountCall();
 
       if (activation.data?.registered === true) {
+        await result.user.getIdToken(true);
         await ensureProfile(result.user);
         await ensureGameUserData(result.user);
         redirectAfterLogin();
@@ -465,6 +467,7 @@ if (xCompleteForm) {
       await finalizeXRegistrationCall({
         registrationCode: $("xRegistrationCode").value
       });
+      await pendingXUser.getIdToken(true);
       await finishLogin(pendingXUser);
 
     } catch (error) {
@@ -505,6 +508,7 @@ async function initializeLoginPage() {
     const activation = await activateExistingAccountCall();
 
     if (activation.data?.registered === true) {
+      await user.getIdToken(true);
       await finishLogin(user);
       return;
     }
