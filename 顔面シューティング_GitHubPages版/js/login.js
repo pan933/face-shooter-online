@@ -218,7 +218,9 @@ async function ensureGameUserData(user) {
 // ========================================
 
 async function finishLogin(user, preferredUsername = "") {
+  setMessage("プロフィールを確認しています…");
   await ensureProfile(user, preferredUsername);
+  setMessage("ゲームデータを確認しています…");
   await ensureGameUserData(user);
   redirectAfterLogin();
 }
@@ -272,6 +274,7 @@ $("loginForm").addEventListener("submit", async event => {
   setMessage("ログインしています…");
 
   try {
+    setMessage("認証情報を確認しています…");
     const credential = await signInWithEmailAndPassword(
       auth,
       usernameToAuthEmail(username),
@@ -283,6 +286,7 @@ $("loginForm").addEventListener("submit", async event => {
     // with functions/internal and block an otherwise valid sign-in.
     const tokenResult = await credential.user.getIdTokenResult();
     if (tokenResult.claims.registered !== true) {
+      setMessage("アカウント登録状態を確認しています…");
       const activation = await activateExistingAccountCall();
       if (activation.data?.registered !== true) {
         await signOut(auth);
@@ -297,7 +301,9 @@ $("loginForm").addEventListener("submit", async event => {
 
   } catch (error) {
     console.error("ログインエラー:", error);
-    setMessage(humanizeError(error), true);
+    const code = error?.code || "unknown";
+    const detail = error?.message || "";
+    setMessage(`ログイン失敗 [${code}]: ${humanizeError(error)}${detail && !detail.includes(humanizeError(error)) ? " (" + detail + ")" : ""}`, true);
 
   } finally {
     setBusy(form, false);
