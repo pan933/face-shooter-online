@@ -278,15 +278,21 @@ $("loginForm").addEventListener("submit", async event => {
       password
     );
 
-    const activation = await activateExistingAccountCall();
-    if (activation.data?.registered !== true) {
-      await signOut(auth);
-      const error = new Error("このアカウントの登録情報を確認できません。管理者に問い合わせてください。");
-      error.code = "auth/account-not-registered";
-      throw error;
+    // Registered users already have this claim from account creation.
+    // Avoid a needless callable request on every normal login, which can fail
+    // with functions/internal and block an otherwise valid sign-in.
+    const tokenResult = await credential.user.getIdTokenResult();
+    if (tokenResult.claims.registered !== true) {
+      const activation = await activateExistingAccountCall();
+      if (activation.data?.registered !== true) {
+        await signOut(auth);
+        const error = new Error("このアカウントの登録情報を確認できません。管理者に問い合わせてください。");
+        error.code = "auth/account-not-registered";
+        throw error;
+      }
+      await credential.user.getIdToken(true);
     }
 
-    await credential.user.getIdToken(true);
     await finishLogin(credential.user, username);
 
   } catch (error) {
