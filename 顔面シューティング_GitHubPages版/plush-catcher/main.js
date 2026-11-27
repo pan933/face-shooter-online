@@ -1,8 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
-import {getFirestore,doc,getDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
+import {app,db,firebaseConfigError} from '../js/firebase-config.js';
 import {getStorage,ref,getDownloadURL} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-storage.js';
-const cfg={apiKey:"AIzaSyDHJ3y-FPSztLkj3VXIPWyKK7sFSW4rqgc",authDomain:"face-61ed1.firebaseapp.com",projectId:"face-61ed1",appId:"1:152576028995:web:f268b370966ff4a714fff6"};
+import {doc,getDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
+
 const view=document.querySelector('#view'),status=document.querySelector('#status');
 const scene=new THREE.Scene();scene.background=new THREE.Color('#d2e2ec');
 const camera=new THREE.PerspectiveCamera(42,view.clientWidth/view.clientHeight,.1,100);camera.position.set(0,8,18);camera.lookAt(0,3,0);
@@ -23,11 +23,11 @@ mesh(new THREE.BoxGeometry(1.2,.5,1.1),mat('#a9bdca'),0,0,0,carriage);mesh(new T
 const cable=mesh(new THREE.CylinderGeometry(.035,.035,1,10),mat('#283b48'),0,0,0,carriage);
 const claw=new THREE.Group();carriage.add(claw);mesh(new THREE.SphereGeometry(.28,20,16),mat('#cddbe4'),0,0,0,claw);let fingers=[];
 for(let i=0;i<3;i++){let pivot=new THREE.Group();pivot.position.set(Math.cos(i*2*Math.PI/3)*.2,-.1,Math.sin(i*2*Math.PI/3)*.2);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.07,.65,6,10),mat('#758b9a'),0,-.34,0,pivot);fingers.push(pivot)}
-let faces=[];let storage;try{const app=initializeApp(cfg);const db=getFirestore(app);storage=getStorage(app);const snap=await getDoc(doc(db,'adminSettings','gameplay'));faces=snap.data()?.gachaFaces||[]}catch(e){console.error(e);status.textContent='Firebaseから景品情報を取得できませんでした';}
+let faces=[];let storage=null;try{if(firebaseConfigError)throw firebaseConfigError;if(!app||!db)throw new Error('Firebase共通設定が初期化されていません');storage=getStorage(app);const snap=await getDoc(doc(db,'adminSettings','gameplay'));if(!snap.exists())throw new Error('adminSettings/gameplay ドキュメントがありません');const data=snap.data();if(!Array.isArray(data.gachaFaces))throw new Error('gachaFaces が配列ではありません');faces=data.gachaFaces.filter(f=>f&&typeof f==='object'&&!f.excludeFromGacha&&!f.exchangeOnly);if(!faces.length)throw new Error('取得した gachaFaces が0件です');msg('ガチャFace '+faces.length+'件読み込み中…')}catch(e){console.error('[UFO catcher] gachaFaces取得エラー',e);status.textContent='景品読み込み失敗: '+(e?.message||e?.code||String(e));}
 const colors=['#d5a27e','#95b9da','#c2a1d5','#d9c278','#8fc6b2','#df9db5'];
 function nameOf(f){return f?.name||f?.title||f?.faceName||f?.displayName||'景品'}
 function urlOf(f){for(const k of ['imageUrl','imageURL','photoURL','photoUrl','faceUrl','image','url','img','iconUrl','thumbnail','picture','imagePath','photo','src']){const v=f?.[k];if(typeof v==='string'&&v.trim())return v.trim()}return ''}
-async function resolveUrl(f){let u=urlOf(f);if(!u)return '';if(u.startsWith('gs://')){try{return await getDownloadURL(ref(storage,u))}catch(e){console.warn(e);return ''}}if(!/^https?:|^data:image/i.test(u)){try{return await getDownloadURL(ref(storage,u))}catch(e){return ''}}return u}
+async function resolveUrl(f){let u=urlOf(f);if(!u)return '';if(/^https?:|^data:image/i.test(u))return u;if(!storage)return '';try{return await getDownloadURL(ref(storage,u))}catch(e){console.warn('[UFO catcher] Storage URL変換失敗:',u,e);return ''}}
 function fallbackTexture(label){const c=document.createElement('canvas');c.width=c.height=512;let ctx=c.getContext('2d');ctx.fillStyle='#f7e0c9';ctx.fillRect(0,0,512,512);ctx.fillStyle='#394b5a';ctx.font='bold 54px sans-serif';ctx.textAlign='center';ctx.fillText(label.slice(0,10),256,275);return new THREE.CanvasTexture(c)}
 function plush(f,i){const g=new THREE.Group(),col=colors[i%colors.length];mesh(new THREE.SphereGeometry(.62,28,20),mat(col),0,0,0,g).scale.set(1,1,.86);for(const side of [-1,1])mesh(new THREE.SphereGeometry(.2,16,12),mat(col),side*.4,.42,0,g);const disk=mesh(new THREE.CircleGeometry(.43,36),new THREE.MeshBasicMaterial({map:fallbackTexture(nameOf(f)),side:THREE.DoubleSide}),0,.04,.54,g);resolveUrl(f).then(u=>{if(!u)return;new THREE.TextureLoader().load(u,t=>{t.colorSpace=THREE.SRGBColorSpace;disk.material.map=t;disk.material.needsUpdate=true},undefined,e=>console.warn('face image failed',u,e))});g.userData.face=f;g.userData.label=nameOf(f);g.position.set((i%5-2)*1.72,1.85,Math.floor(i/5)*1.5-2.5);scene.add(g);return g}
 const prizes=faces.slice(0,25).map(plush);if(!prizes.length)status.textContent='景品データが空です。管理設定の gachaFaces を確認してください。';
