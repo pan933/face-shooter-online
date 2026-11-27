@@ -19,12 +19,15 @@ const glass=mat('#b5e3f2',{transparent:true,opacity:.15});mesh(new THREE.BoxGeom
 box(10,.18,8,'#657e90',0,1.05,0);box(10,.12,8,'#d5e1e8',0,1.2,0);
 for(let i=0;i<6;i++)box(9.8,.035,.035,'#edf7fc',0,1.35+i*.75,-3.8);
 const rail=box(10,.3,.55,'#253c4d',0,6.85,-1.5);
-const carriage=new THREE.Group();scene.add(carriage);carriage.position.y=6.85;
-mesh(new THREE.BoxGeometry(1.2,.5,1.1),mat('#a9bdca'),0,0,0,carriage);mesh(new THREE.BoxGeometry(.8,.16,.8),mat('#dce8ef'),0,-.3,0,carriage);
+const trolley=new THREE.Group();scene.add(trolley);
+mesh(new THREE.BoxGeometry(1.35,.45,1.1),mat('#a9bdca'),0,0,0,trolley);mesh(new THREE.BoxGeometry(.9,.15,.8),mat('#dce8ef'),0,-.27,0,trolley);
 const dropRig=new THREE.Group();scene.add(dropRig);
 const cable=mesh(new THREE.CylinderGeometry(.035,.035,1,10),mat('#283b48'),0,0,0,dropRig);
-const claw=new THREE.Group();dropRig.add(claw);mesh(new THREE.SphereGeometry(.28,20,16),mat('#cddbe4'),0,0,0,claw);let fingers=[];
-for(let i=0;i<3;i++){let pivot=new THREE.Group();pivot.position.set(Math.cos(i*2*Math.PI/3)*.2,-.1,Math.sin(i*2*Math.PI/3)*.2);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.07,.65,6,10),mat('#758b9a'),0,-.34,0,pivot);fingers.push(pivot)}
+const claw=new THREE.Group();dropRig.add(claw);
+// visible claw body and three independently articulated metal prongs
+mesh(new THREE.SphereGeometry(.22,20,16),mat('#cddbe4'),0,0,0,claw);
+let fingers=[];
+for(let i=0;i<3;i++){const angle=i*2*Math.PI/3;const pivot=new THREE.Group();pivot.position.set(Math.cos(angle)*.16,-.05,Math.sin(angle)*.16);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.055,.55,6,10),mat('#758b9a'),0,-.31,0,pivot);fingers.push(pivot)}
 let faces=[];let storage=null;try{if(firebaseConfigError)throw firebaseConfigError;if(!app||!db)throw new Error('Firebase共通設定が初期化されていません');storage=getStorage(app);const snap=await getDoc(doc(db,'adminSettings','gameplay'));if(!snap.exists())throw new Error('adminSettings/gameplay ドキュメントがありません');const data=snap.data();if(!Array.isArray(data.gachaFaces))throw new Error('gachaFaces が配列ではありません');faces=data.gachaFaces.filter(f=>f&&typeof f==='object'&&!f.excludeFromGacha&&!f.exchangeOnly);if(!faces.length)throw new Error('取得した gachaFaces が0件です（交換専用・排出停止を除いた結果）');msg('Firestore取得成功：'+faces.length+'件。景品を配置しています…');console.info('[UFO catcher] raw faces',data.gachaFaces);}catch(e){console.error('[UFO catcher] gachaFaces取得エラー',e);status.textContent='景品読み込み失敗: '+(e?.message||e?.code||String(e));}
 const colors=['#d5a27e','#95b9da','#c2a1d5','#d9c278','#8fc6b2','#df9db5'];
 function nameOf(f){return f?.name||f?.title||f?.faceName||f?.displayName||'景品'}
@@ -36,14 +39,14 @@ const prizes=faces.slice(0,6).map(plush);if(!prizes.length)status.textContent='�
 // chute at rear-right corner
 box(2,.25,1.5,'#1c2d3a',3.7,.7,3.1);box(1.9,.08,1.35,'#9bb2c0',3.7,.85,3.1);box(2,.5,.12,'#283d4c',3.7,1.05,2.4);
 let x=0,z=-1.4,y=5.6,coins=100,won=0,busy=false,phase='x',held=null;const minX=-4.1,maxX=4.1,minZ=-3.25,maxZ=2.1;
-function pose(){carriage.position.set(x,6.85,z);dropRig.position.set(x,0,z);cable.position.set(0,(6.15+y)/2,0);cable.scale.y=Math.max(.15,6.15-y);claw.position.set(0,y,0)}
+function pose(){trolley.position.set(x,6.85,z);dropRig.position.set(x,0,z);const cableTop=6.55,cableBottom=y+.25;const length=Math.max(.1,cableTop-cableBottom);cable.position.set(0,(cableTop+cableBottom)/2,0);cable.scale.y=length;claw.position.set(0,y,0)}
 pose();function msg(s){status.textContent=s}function coinsUI(){document.querySelector('#coins').textContent=coins}
 function move(dx,dz){if(busy)return;x=Math.max(minX,Math.min(maxX,x+dx));z=Math.max(minZ,Math.min(maxZ,z+dz));pose()}
 function controls(id,dx,dz){const el=document.getElementById(id);let repeat=null,active=false;function stop(){if(!active)return;active=false;if(repeat){clearInterval(repeat);repeat=null}if(phase==='x'&&dx){phase='z';msg('横位置をロック！ 奥・手前を調整して離してください')}else if(phase==='z'&&dz){phase='ready';msg('奥行きをロック！「つかむ」を押してプレイ')} }el.addEventListener('pointerdown',e=>{e.preventDefault();if(busy||phase==='ready'||phase==='grab'||(phase==='x'&&dz)||(phase==='z'&&dx))return;active=true;try{el.setPointerCapture(e.pointerId)}catch{}move(dx,dz);repeat=setInterval(()=>move(dx,dz),75)});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>el.addEventListener(ev,stop))}
 controls('left',-.16,0);controls('right',.16,0);controls('forward',0,-.16);controls('backward',0,.16);
 function cam(a){camera.position.set(Math.sin(a)*18,8.3,Math.cos(a)*18);camera.lookAt(0,3.2,0)}[['front',0],['rightview',Math.PI/2],['backview',Math.PI],['leftview',-Math.PI/2]].forEach(([id,a])=>document.getElementById(id).onclick=()=>cam(a));
 function tween(target,duration,done){const start={x,y,z},t0=performance.now();function f(t){let q=Math.min(1,(t-t0)/duration),e=q*q*(3-2*q);x=start.x+(target.x-start.x)*e;y=start.y+(target.y-start.y)*e;z=start.z+(target.z-start.z)*e;pose();if(q<1)requestAnimationFrame(f);else done()}requestAnimationFrame(f)}
-function close(v){fingers.forEach((p,i)=>{p.rotation.z=v?(i===0?-.7:.7):0;p.rotation.x=v?(i===1?.65:-.25):0})}
+function close(v){fingers.forEach((p,i)=>{p.rotation.z=v?(i===0?-.55:.55):0;p.rotation.x=v?(i===1?.5:-.2):0})}
 function nearest(){return prizes.filter(p=>!p.userData.caught).sort((a,b)=>Math.hypot(a.position.x-x,a.position.z-z)-Math.hypot(b.position.x-x,b.position.z-z))[0]}
 function finish(){held=null;busy=false;phase='x';x=0;z=-1.4;pose();msg('次のプレイ：横位置から調整')}
 document.getElementById('grab').onclick=()=>{if(busy)return;if(phase!=='ready'){msg(phase==='x'?'横方向を調整して離してください':'奥・手前を調整して離してください');return}if(coins<10){msg('コイン不足');return}busy=true;phase='grab';coins-=10;coinsUI();let prize=nearest(),hit=prize&&Math.hypot(prize.position.x-x,prize.position.z-z)<1.05;msg('下降中…');close(false);tween({x,y:1.45,z},950,()=>{close(true);msg('つかみ動作…');setTimeout(()=>{if(hit){held=prize;prize.userData.caught=true;scene.remove(prize);claw.add(prize);prize.position.set(0,-.55,0);prize.scale.setScalar(.58);msg('景品をつかんだ！')}else msg('惜しい！');tween({x,y:5.35,z},900,()=>{msg(held?'排出口へ移動…':'空のアームで排出口へ移動…');const startX=x,startZ=z;let t=0;function route(){t=Math.min(1,t+.015);const e=t*t*(3-2*t);x=startX+(3.7-startX)*e;z=startZ+(3.1-startZ)*e;pose();if(t<1)requestAnimationFrame(route);else{if(held){claw.remove(held);scene.add(held);held.position.set(3.7,.9,3.1);held.scale.setScalar(.65);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=held.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+held.userData.label)}else{msg('つかめませんでした。排出口まで移動しました');}close(false);finish()}}route()})},420)})};
