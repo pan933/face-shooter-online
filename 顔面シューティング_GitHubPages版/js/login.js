@@ -281,22 +281,8 @@ $("loginForm").addEventListener("submit", async event => {
       password
     );
 
-    // Registered users already have this claim from account creation.
-    // Avoid a needless callable request on every normal login, which can fail
-    // with functions/internal and block an otherwise valid sign-in.
-    const tokenResult = await credential.user.getIdTokenResult();
-    if (tokenResult.claims.registered !== true) {
-      setMessage("アカウント登録状態を確認しています…");
-      const activation = await activateExistingAccountCall();
-      if (activation.data?.registered !== true) {
-        await signOut(auth);
-        const error = new Error("このアカウントの登録情報を確認できません。管理者に問い合わせてください。");
-        error.code = "auth/account-not-registered";
-        throw error;
-      }
-      await credential.user.getIdToken(true);
-    }
-
+    // Normal username/password login does not require a Cloud Function call.
+    // Once Firebase Auth validates the credentials, continue using Firestore profile/data checks.
     await finishLogin(credential.user, username);
 
   } catch (error) {
@@ -517,13 +503,8 @@ async function initializeLoginPage() {
 
     if (!user) return;
 
-    const activation = await activateExistingAccountCall();
-
-    if (activation.data?.registered === true) {
-      await user.getIdToken(true);
-      await finishLogin(user);
-      return;
-    }
+    // Avoid calling activateExistingAccount during page initialization.
+    // Existing authenticated users can proceed without the callable.
 
     const isTwitterUser = user.providerData?.some(
       item => item.providerId === "twitter.com"
@@ -542,10 +523,8 @@ async function initializeLoginPage() {
       return;
     }
 
-    // Auth登録後、プロフィール作成に失敗した場合は
-    // 通常ログインをやり直せるようにサインアウトする。
-    await signOut(auth);
-    setMessage("このアカウントの登録情報が未完了です。通常登録は管理者に問い合わせてください。", true);
+    // Existing accounts proceed to profile/data initialization without callable activation.
+    await finishLogin(user);
 
   } catch (error) {
     console.error("ログインページ初期化エラー:", error);
