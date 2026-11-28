@@ -38,6 +38,9 @@ jobs:
         with:
           # Upload entire repository
           path: '.'
+          name: pages-site-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: pages-site-${{ github.run_id }}-${{ github.run_attempt }}
