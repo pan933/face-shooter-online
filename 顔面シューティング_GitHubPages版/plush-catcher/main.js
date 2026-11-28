@@ -83,10 +83,12 @@ document.getElementById('grab').onclick=()=>{
    msg(success?'掴み成功！上昇中…':'掴めませんでした…上昇中');
    const liftFrom=y,t0=performance.now(),duration=1300;
    function lift(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);y=liftFrom+(5.6-liftFrom)*e;claw.rotation.z=Math.sin(q*Math.PI*2)*.045;pose();if(q<1)requestAnimationFrame(lift);else{
-    claw.rotation.z=0;let t=0,sx=x,sz=z;msg('排出口へ移動中…');
-    function route(){t=Math.min(1,t+.035);const e=t*t*(3-2*t);x=sx+(3.7-sx)*e;z=sz+(3.1-sz)*e;claw.rotation.z=Math.sin(t*Math.PI*5)*.04;pose();if(t<1)requestAnimationFrame(route);else{
+    claw.rotation.z=0;msg('排出口へ移動中…');
+    // Axis-aligned route: move to the near/front edge first, then across, then back to the chute. Slow, sequential motion.
+    function moveAxis(target,duration,done){const start={x,y,z},t0=performance.now();function step(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);x=start.x+(target.x-start.x)*e;y=start.y+(target.y-start.y)*e;z=start.z+(target.z-start.z)*e;claw.rotation.z=Math.sin(q*Math.PI*4)*.025;pose();if(q<1)requestAnimationFrame(step);else{claw.rotation.z=0;done()}}requestAnimationFrame(step)}
+    moveAxis({x,z:3.65,y},1500,()=>moveAxis({x:3.7,z:3.65,y},1700,()=>moveAxis({x:3.7,z:3.1,y},1500,()=>{
      claw.rotation.z=0;if(physicsHeld){const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,1.5,3.1);p.userData.v.set((Math.random()-.5)*.3,-.3,(Math.random()-.5)*.3);p.scale.setScalar(.65);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label)}else msg('獲得失敗');close(false);finish();
-    }}route();}}
+    })));}}
    requestAnimationFrame(lift);
   },550);
  });
