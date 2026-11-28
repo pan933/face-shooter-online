@@ -100,3 +100,10 @@ let awaitingOutletStart=false;
 const previousFinish=finish;
 finish=function(){held=null;busy=false;phase='outlet';x=3.7;z=3.1;pose();awaitingOutletStart=true;outletStart.disabled=false;msg('排出口に到着！景品を取り出して「次のプレイを開始」を押してください');};
 outletStart.addEventListener('click',()=>{if(!awaitingOutletStart)return;awaitingOutletStart=false;outletStart.disabled=true;phase='x';x=4.1;z=2.1;y=5.6;pose();msg('次のプレイ開始！左→奥の順に長押し');});
+
+// Rendering loop and responsive canvas sizing (required for visible Three.js scene).
+function renderLoop(){renderer.render(scene,camera);requestAnimationFrame(renderLoop)}
+renderLoop();
+function resizeView(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}
+window.addEventListener('resize',resizeView);
+resizeView();
