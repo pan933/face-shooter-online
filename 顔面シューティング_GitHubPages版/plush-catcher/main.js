@@ -83,11 +83,12 @@ document.getElementById('grab').onclick=()=>{
    msg(success?'掴み成功！上昇中…':'掴めませんでした…上昇中');
    const liftFrom=y,t0=performance.now(),duration=1300;
    function lift(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);y=liftFrom+(5.6-liftFrom)*e;claw.rotation.z=Math.sin(q*Math.PI*2)*.045;pose();if(q<1)requestAnimationFrame(lift);else{
-    claw.rotation.z=0;let t=0,sx=x,sz=z;msg('排出口へ移動中…');
-    function route(){t=Math.min(1,t+.035);const e=t*t*(3-2*t);x=sx+(3.7-sx)*e;z=sz+(3.1-sz)*e;claw.rotation.z=Math.sin(t*Math.PI*5)*.04;pose();if(t<1)requestAnimationFrame(route);else{
-     claw.rotation.z=0;if(physicsHeld){const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,1.5,3.1);p.userData.v.set((Math.random()-.5)*.3,-.3,(Math.random()-.5)*.3);p.scale.setScalar(.65);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label)}else msg('獲得失敗');close(false);finish();
-    }}route();}}
-   requestAnimationFrame(lift);
+    claw.rotation.z=0;msg('手前へ移動中…');
+    const frontZ=3.65;
+    function moveAxis(target,axis,duration,done){const start=axis==='x'?x:z,t0=performance.now();function step(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);if(axis==='x')x=start+(target-start)*e;else z=start+(target-start)*e;pose();if(q<1)requestAnimationFrame(step);else done()}requestAnimationFrame(step)}
+    moveAxis(frontZ,'z',1400,()=>{msg('排出口へ横移動中…');moveAxis(3.7,'x',1500,()=>{msg('排出口へ戻っています…');moveAxis(3.1,'z',1300,()=>{claw.rotation.z=0;if(physicsHeld){const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,1.5,3.1);p.userData.v.set((Math.random()-.5)*.3,-.3,(Math.random()-.5)*.3);p.scale.setScalar(.65);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label)}else msg('獲得失敗');close(false);finish();});});});
+   });
+requestAnimationFrame(lift);
   },550);
  });
 };
