@@ -23,6 +23,19 @@ mesh(new THREE.BoxGeometry(.04,6.4,8),glass,5,3.8,0);
 mesh(new THREE.BoxGeometry(.04,6.4,8),glass,-5,3.8,0);
 box(10,.18,8,'#657e90',0,1.05,0);box(10,.12,8,'#d5e1e8',0,1.2,0);
 for(let i=0;i<6;i++)box(9.8,.035,.035,'#edf7fc',0,1.35+i*.75,-3.8);
+
+// Restore crane rail, trolley, cable, and claw rig (these declarations are required by pose/close).
+const rail=box(10,.42,.72,'#253c4d',0,6.85,-1.5);box(10,.08,.16,'#718b9b',0,7.08,-1.5);
+const trolley=new THREE.Group();scene.add(trolley);
+mesh(new THREE.BoxGeometry(1.8,.65,1.5),mat('#a9bdca'),0,0,0,trolley);
+mesh(new THREE.BoxGeometry(1.35,.22,1.15),mat('#dce8ef'),0,-.32,0,trolley);
+const dropRig=new THREE.Group();scene.add(dropRig);
+const cable=mesh(new THREE.CylinderGeometry(.035,.035,1,10),mat('#283b48'),0,0,0,dropRig);
+const claw=new THREE.Group();dropRig.add(claw);
+mesh(new THREE.SphereGeometry(.22,20,16),mat('#cddbe4'),0,0,0,claw);
+let fingers=[];
+for(let i=0;i<3;i++){const angle=i*2*Math.PI/3;const pivot=new THREE.Group();pivot.position.set(Math.cos(angle)*.25,-.08,Math.sin(angle)*.25);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.09,.8,8,12),mat('#758b9a'),0,-.42,0,pivot);fingers.push(pivot)}
+
 let faces=[];let storage=null;try{if(firebaseConfigError)throw firebaseConfigError;if(!app||!db)throw new Error('Firebase共通設定が初期化されていません');storage=getStorage(app);const snap=await getDoc(doc(db,'adminSettings','gameplay'));if(!snap.exists())throw new Error('adminSettings/gameplay ドキュメントがありません');const data=snap.data();if(!Array.isArray(data.gachaFaces))throw new Error('gachaFaces が配列ではありません');faces=data.gachaFaces.filter(f=>f&&typeof f==='object'&&!f.excludeFromGacha&&!f.exchangeOnly);if(!faces.length)throw new Error('取得した gachaFaces が0件です（交換専用・排出停止を除いた結果）');msg('Firestore取得成功：'+faces.length+'件。景品を配置しています…');console.info('[UFO catcher] raw faces',data.gachaFaces);}catch(e){console.error('[UFO catcher] gachaFaces取得エラー',e);status.textContent='景品読み込み失敗: '+(e?.message||e?.code||String(e));}
 const colors=['#d5a27e','#95b9da','#c2a1d5','#d9c278','#8fc6b2','#df9db5'];
 function nameOf(f){return f?.name||f?.title||f?.faceName||f?.displayName||'景品'}
