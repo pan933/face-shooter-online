@@ -20,7 +20,8 @@ const glass=mat('#b5e3f2',{transparent:true,opacity:.10,depthWrite:false,roughne
 mesh(new THREE.BoxGeometry(10.4,6.4,.04),glass,0,3.8,4.0);
 mesh(new THREE.BoxGeometry(10.4,6.4,.04),glass,0,3.8,-4.0);
 mesh(new THREE.BoxGeometry(.04,6.4,8),glass,5,3.8,0);
-mesh(new THREE.BoxGeometry(.04,6.4,8),glass,-5,3.8,0);\nfor(const sx of [-5.25,5.25]){box(.18,6.9,.18,'#344c5c',sx,3.8,-4.15);box(.18,6.9,.18,'#344c5c',sx,3.8,4.15);box(.18,.18,8.3,'#344c5c',sx,.55,0);}
+mesh(new THREE.BoxGeometry(.04,6.4,8),glass,-5,3.8,0);
+for(const sx of [-5.25,5.25]){box(.18,6.9,.18,'#344c5c',sx,3.8,-4.15);box(.18,6.9,.18,'#344c5c',sx,3.8,4.15);box(.18,.18,8.3,'#344c5c',sx,.55,0);}
 box(10,.18,8,'#657e90',0,1.05,0);box(10,.12,8,'#d5e1e8',0,1.2,0);
 for(let i=0;i<6;i++)box(9.8,.035,.035,'#edf7fc',0,1.35+i*.75,-3.8);
 
