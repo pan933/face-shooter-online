@@ -18,7 +18,7 @@ box(.5,7.3,9,'#344c5c',-5.25,3.8,0);box(.5,7.3,9,'#344c5c',5.25,3.8,0);
 const glass=mat('#b5e3f2',{transparent:true,opacity:.15});mesh(new THREE.BoxGeometry(10.4,6.4,.04),glass,0,3.8,4.0);mesh(new THREE.BoxGeometry(10.4,6.4,.04),glass,0,3.8,-4.0);mesh(new THREE.BoxGeometry(.04,6.4,8),glass,5,3.8,0);mesh(new THREE.BoxGeometry(.04,6.4,8),glass,-5,3.8,0);
 box(10,.18,8,'#657e90',0,1.05,0);box(10,.12,8,'#d5e1e8',0,1.2,0);
 for(let i=0;i<6;i++)box(9.8,.035,.035,'#edf7fc',0,1.35+i*.75,-3.8);
-const rail=box(10,.3,.55,'#253c4d',0,6.85,-1.5);
+const rail=box(10,.42,.72,'#253c4d',0,6.85,-1.5);box(10,.08,.16,'#718b9b',0,7.08,-1.5);
 const trolley=new THREE.Group();scene.add(trolley);
 mesh(new THREE.BoxGeometry(1.8,.65,1.5),mat('#a9bdca'),0,0,0,trolley);mesh(new THREE.BoxGeometry(1.35,.22,1.15),mat('#dce8ef'),0,-.32,0,trolley);
 const dropRig=new THREE.Group();scene.add(dropRig);
@@ -54,8 +54,66 @@ function resize(){camera.aspect=view.clientWidth/view.clientHeight;camera.update
 // Realistic lightweight physics: inertia, collisions, bounce and slip
 const physicsPrizes=prizes.map(p=>{p.userData.caught=false;p.userData.v=new THREE.Vector3();p.userData.grip=.25+Math.random()*.75;p.userData.mass=.8+Math.random()*1.4;return p});let physLast=performance.now(),physicsHeld=null,heldOffset=new THREE.Vector3(),slipTimer=0;
 function physTick(){const dt=Math.min(.035,(performance.now()-physLast)/1000);physLast=performance.now();for(let i=0;i<physicsPrizes.length;i++){const a=physicsPrizes[i];if(a.userData.caught||a===physicsHeld)continue;const v=a.userData.v;v.y-=9.2*dt;a.position.addScaledVector(v,dt);if(a.position.y<1.72){a.position.y=1.72;if(v.y<0)v.y=-v.y*(.12+Math.random()*.16);v.x*=.91;v.z*=.91;}const bnd=4.35;if(Math.abs(a.position.x)>bnd){a.position.x=Math.sign(a.position.x)*bnd;v.x*=-.35}if(Math.abs(a.position.z)>3.65){a.position.z=Math.sign(a.position.z)*3.65;v.z*=-.35}a.rotation.x+=v.z*dt*.8;a.rotation.z+=v.x*dt*.8;for(let j=i+1;j<physicsPrizes.length;j++){const b=physicsPrizes[j];if(b.userData.caught||b===physicsHeld)continue;let dx=b.position.x-a.position.x,dz=b.position.z-a.position.z,d=Math.hypot(dx,dz);if(d>0&&d<1.02){let q=(1.02-d)/2,nx=dx/d,nz=dz/d;a.position.x-=nx*q;b.position.x+=nx*q;a.userData.v.x-=nx*.6;b.userData.v.x+=nx*.6;a.userData.v.z-=nz*.6;b.userData.v.z+=nz*.6}}}if(physicsHeld){physicsHeld.position.copy(claw.getWorldPosition(new THREE.Vector3())).add(heldOffset);slipTimer+=dt;let load=physicsHeld.userData.mass*(1+Math.abs(Math.sin(performance.now()/240))*.28),grip=physicsHeld.userData.grip;if(slipTimer>1&&Math.random()<Math.max(.01,(load-grip*2.2)*.1)){let p=physicsHeld;physicsHeld=null;held=null;p.userData.caught=false;p.userData.v.set((Math.random()-.5)*2,-1.4,(Math.random()-.5)*2);claw.remove(p);scene.add(p);p.scale.setScalar(1);msg('掴みが滑った！ 景品が落下…')}}requestAnimationFrame(physTick)}requestAnimationFrame(physTick);
-document.getElementById('grab').onclick=()=>{if(busy)return;if(phase!=='ready'){msg(phase==='x'?'横方向を調整して離してください':'奥・手前を調整して離してください');return}if(coins<10){msg('コイン不足');return}busy=true;phase='grab';coins-=10;coinsUI();let p=nearest(),candidate=p&&Math.hypot(p.position.x-x,p.position.z-z)<1.15&&p.position.y<2.8;tween({x,y:1.35,z},850,()=>{close(true);msg('爪を閉じています…');setTimeout(()=>{msg('持ち上げています…');if(candidate&&!candidate.userData.caught){let score=Math.max(0,1-Math.hypot(candidate.position.x-x,candidate.position.z-z)/1.35)*(.55+candidate.userData.grip*.45);if(Math.random()<score*.82){physicsHeld=candidate;held=candidate;candidate.userData.caught=true;claw.add(candidate);candidate.scale.setScalar(.58);heldOffset.set((candidate.position.x-x)*.2,-.58,(candidate.position.z-z)*.2);slipTimer=0;msg('景品を引っ掛けました！')}else{candidate.userData.v.x+=(Math.random()-.5)*1.6;candidate.userData.v.z+=(Math.random()-.5)*1.6;candidate.userData.v.y=.8;candidate.rotation.x+=.3;msg('爪が当たり、景品が転がった…')}}tween({x,y:5.35,z},900,()=>{let t=0,sx=x,sz=z;msg(physicsHeld?'揺れながら移動…':'景品を掴めず移動…');function route(){t=Math.min(1,t+.012);let e=t*t*(3-2*t);x=sx+(3.7-sx)*e;z=sz+(3.1-sz)*e;pose();if(t<1)requestAnimationFrame(route);else{if(physicsHeld){let p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,1.5,3.1);p.userData.v.set((Math.random()-.5)*.4,-.4,(Math.random()-.5)*.4);p.scale.setScalar(.65);let badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label)}else msg('獲得失敗');close(false);finish()}}route()});},450)});};
-
+document.getElementById('grab').onclick=()=>{
+ if(busy)return;
+ if(phase!=='ready'){msg(phase==='x'?'横方向を調整して離してください':'奥・手前を調整して離してください');return}
+ if(coins<10){msg('コイン不足');return}
+ busy=true;phase='grab';coins-=10;coinsUI();
+ const candidate=nearest();
+ const valid=candidate&&Math.hypot(candidate.position.x-x,candidate.position.z-z)<1.15&&candidate.position.y<2.8;
+ const sx=x,sz=z;
+ close(false);msg('下降中…');
+ tween({x:sx,y:1.35,z:sz},1050,()=>{
+   close(true);msg('爪を閉じています…');
+   setTimeout(()=>{
+     let success=false;
+     if(valid&&!candidate.userData.caught){
+       const dist=Math.hypot(candidate.position.x-x,candidate.position.z-z);
+       const score=Math.max(0,1-dist/1.35)*(.55+candidate.userData.grip*.45);
+       if(Math.random()<score*.82){
+         physicsHeld=candidate;held=candidate;candidate.userData.caught=true;
+         claw.add(candidate);candidate.position.set(0,-.55,0);candidate.scale.setScalar(.58);
+         heldOffset.set(0,-.55,0);slipTimer=0;success=true;
+         msg('掴み成功！ゆっくり上昇…');
+       }else{
+         candidate.userData.v.x+=(Math.random()-.5)*1.2;
+         candidate.userData.v.z+=(Math.random()-.5)*1.2;
+         candidate.userData.v.y=.65;msg('掴めませんでした…上昇中');
+       }
+     }else msg('掴めませんでした…上昇中');
+     // Explicit lift phase with a guarded callback; do not wait on a status-only step.
+     const liftStartY=y,liftEndY=5.35,liftStart=performance.now(),liftDuration=1400;
+     function liftFrame(now){
+       const q=Math.min(1,(now-liftStart)/liftDuration),e=q*q*(3-2*q);
+       y=liftStartY+(liftEndY-liftStartY)*e;
+       claw.rotation.y=Math.sin(q*Math.PI*2)*.12;
+       pose();
+       if(q<1)requestAnimationFrame(liftFrame);
+       else{
+         claw.rotation.y=0;msg(success?'景品を揺らしながら排出口へ運びます…':'排出口へ移動中…');
+         let t=0,routeX=x,routeZ=z;
+         function route(){
+           t=Math.min(1,t+.012);const ee=t*t*(3-2*t);
+           x=routeX+(3.7-routeX)*ee;z=routeZ+(3.1-routeZ)*ee;
+           pose();claw.rotation.y=Math.sin(t*Math.PI*5)*.09;
+           if(t<1)requestAnimationFrame(route);
+           else{
+             claw.rotation.y=0;
+             if(physicsHeld){
+               const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);
+               p.userData.caught=true;p.position.set(3.7,1.5,3.1);
+               p.userData.v.set((Math.random()-.5)*.3,-.3,(Math.random()-.5)*.3);p.scale.setScalar(.65);
+               const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;
+               document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label);
+             }else msg('獲得失敗');
+             close(false);finish();
+           }
+         }route();
+       }
+     }requestAnimationFrame(liftFrame);
+   },650);
+ });
+};
 
 // Outlet flow: after each attempt, wait for the player to start the next round at the prize chute.
 const outletStart=document.createElement('button');
