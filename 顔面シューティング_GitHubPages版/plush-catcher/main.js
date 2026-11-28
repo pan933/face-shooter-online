@@ -46,7 +46,7 @@ function plush(f,i){const g=new THREE.Group(),col=colors[i%colors.length];mesh(n
 const prizes=faces.slice(0,6).map(plush);if(!prizes.length)status.textContent='景品データが空です。管理設定の gachaFaces を確認してください。';else{status.textContent='景品 '+prizes.length+'個を配置しました。横位置から調整';console.info('[UFO catcher] prizes placed',prizes.length);}
 // chute at rear-right corner
 box(2,.25,1.5,'#1c2d3a',3.7,.7,3.1);box(1.9,.08,1.35,'#9bb2c0',3.7,.85,3.1);box(2,.5,.12,'#283d4c',3.7,1.05,2.4);
-let x=4.1,z=2.1,y=5.6,coins=100,won=0,busy=false,phase='x',held=null;const minX=-4.1,maxX=4.1,minZ=-3.25,maxZ=2.1;
+let x=3.7,z=3.1,y=5.6,coins=100,won=0,busy=false,phase='x',held=null;const minX=-4.1,maxX=4.1,minZ=-3.25,maxZ=2.1;
 function pose(){trolley.position.set(x,6.85,z);dropRig.position.set(x,0,z);const cableTop=6.55,cableBottom=y+.25;const length=Math.max(.1,cableTop-cableBottom);cable.position.set(0,(cableTop+cableBottom)/2,0);cable.scale.y=length;claw.position.set(0,y,0)}
 pose();function msg(s){status.textContent=s}function coinsUI(){document.querySelector('#coins').textContent=coins}
 function move(dx,dz){if(busy)return;x=Math.max(minX,Math.min(maxX,x+dx));z=Math.max(minZ,Math.min(maxZ,z+dz));pose()}
@@ -84,7 +84,7 @@ document.getElementById('grab').onclick=()=>{
    const liftFrom=y,t0=performance.now(),duration=1300;
    function lift(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);y=liftFrom+(5.6-liftFrom)*e;claw.rotation.z=Math.sin(q*Math.PI*2)*.045;pose();if(q<1)requestAnimationFrame(lift);else{
     claw.rotation.z=0;let t=0,sx=x,sz=z;msg('排出口へ移動中…');
-    function route(){t=Math.min(1,t+.012);const e=t*t*(3-2*t);x=sx+(3.7-sx)*e;z=sz+(3.1-sz)*e;claw.rotation.z=Math.sin(t*Math.PI*5)*.04;pose();if(t<1)requestAnimationFrame(route);else{
+    function route(){t=Math.min(1,t+.035);const e=t*t*(3-2*t);x=sx+(3.7-sx)*e;z=sz+(3.1-sz)*e;claw.rotation.z=Math.sin(t*Math.PI*5)*.04;pose();if(t<1)requestAnimationFrame(route);else{
      claw.rotation.z=0;if(physicsHeld){const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,1.5,3.1);p.userData.v.set((Math.random()-.5)*.3,-.3,(Math.random()-.5)*.3);p.scale.setScalar(.65);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label)}else msg('獲得失敗');close(false);finish();
     }}route();}}
    requestAnimationFrame(lift);
@@ -94,12 +94,12 @@ document.getElementById('grab').onclick=()=>{
 
 // Outlet flow: after each attempt, wait for the player to start the next round at the prize chute.
 const outletStart=document.createElement('button');
-outletStart.id='outletStart';outletStart.type='button';outletStart.textContent='排出口：次のプレイを開始';outletStart.style.cssText='display:block;width:100%;margin:12px auto;padding:14px;border-radius:14px;border:2px solid #79d5ff;background:linear-gradient(135deg,#174e70,#277fa5);color:white;font-weight:800;font-size:1.05rem;';
+outletStart.id='outletStart';outletStart.type='button';outletStart.textContent='1 PLAY';outletStart.style.cssText='display:block;width:100%;margin:12px auto;padding:18px;border-radius:14px;border:3px solid #ffe18a;background:linear-gradient(135deg,#ff9b18,#f04b21);color:white;font-weight:900;font-size:1.4rem;letter-spacing:.08em;box-shadow:0 4px 0 #a43b12;';
 outletStart.disabled=true;document.querySelector('.machine').insertBefore(outletStart,document.querySelector('.collection'));
 let awaitingOutletStart=false;
 const previousFinish=finish;
 finish=function(){held=null;busy=false;phase='outlet';x=3.7;z=3.1;pose();awaitingOutletStart=true;outletStart.disabled=false;msg('排出口に到着！景品を取り出して「次のプレイを開始」を押してください');};
-outletStart.addEventListener('click',()=>{if(!awaitingOutletStart)return;awaitingOutletStart=false;outletStart.disabled=true;phase='x';x=0;z=0;y=5.6;pose();msg('次のプレイ開始！左へ長押し→ロック→奥へ長押し→ロック');});
+outletStart.addEventListener('click',()=>{if(!awaitingOutletStart)return;awaitingOutletStart=false;outletStart.disabled=true;phase='x';x=3.7;z=3.1;y=5.6;pose();msg('次のプレイ開始！排出口上から左へ調整');});
 
 // Rendering loop and responsive canvas sizing (required for visible Three.js scene).
 function renderLoop(){renderer.render(scene,camera);requestAnimationFrame(renderLoop)}
