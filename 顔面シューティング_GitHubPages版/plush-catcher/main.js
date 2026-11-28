@@ -47,9 +47,9 @@ function plush(f,i){const g=new THREE.Group(),col=colors[i%colors.length];mesh(n
 const prizes=faces.slice(0,6).map(plush);if(!prizes.length)status.textContent='景品データが空です。管理設定の gachaFaces を確認してください。';else{status.textContent='景品 '+prizes.length+'個を配置しました。横位置から調整';console.info('[UFO catcher] prizes placed',prizes.length);}
 // chute at rear-right corner
 box(2,.25,1.5,'#1c2d3a',3.7,.7,3.1);box(1.9,.08,1.35,'#9bb2c0',3.7,.85,3.1);box(2,.5,.12,'#283d4c',3.7,1.05,2.4);
-let x=3.7,z=3.1,y=5.6,coins=100,won=0,busy=false,phase='x',held=null;const minX=-4.1,maxX=4.1,minZ=-3.25,maxZ=2.1;
+let x=3.7,z=3.1,y=5.6,won=0,busy=false,phase='x',held=null;const minX=-4.1,maxX=4.1,minZ=-3.25,maxZ=2.1;
 function pose(){trolley.position.set(x,6.85,z);dropRig.position.set(x,0,z);const cableTop=6.55,cableBottom=y+.25;const length=Math.max(.1,cableTop-cableBottom);cable.position.set(0,(cableTop+cableBottom)/2,0);cable.scale.y=length;claw.position.set(0,y,0)}
-pose();function msg(s){status.textContent=s}function coinsUI(){document.querySelector('#coins').textContent=coins}
+pose();function msg(s){status.textContent=s}
 function move(dx,dz){if(busy)return;x=Math.max(minX,Math.min(maxX,x+dx));z=Math.max(minZ,Math.min(maxZ,z+dz));pose()}
 function controls(id,dx,dz){const el=document.getElementById(id);let repeat=null,active=false,pointer=null;function stop(e){if(!active)return;active=false;if(repeat){clearInterval(repeat);repeat=null}pointer=null;if(phase==='x'&&dx){phase='z';msg('横位置をロック！次は奥行きを調整')}else if(phase==='z'&&dz){phase='ready';msg('奥行きをロック！「つかむ」でプレイ')} }el.addEventListener('pointerdown',e=>{e.preventDefault();if(busy||phase==='ready'||phase==='grab'||phase==='outlet'||(phase==='x'&&dz)||(phase==='z'&&dx)||active)return;active=true;pointer=e.pointerId;try{el.setPointerCapture(pointer)}catch{}move(dx,dz);repeat=setInterval(()=>move(dx,dz),75)});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>el.addEventListener(ev,stop))}
 controls('left',-.16,0);controls('forward',0,-.16);
@@ -65,8 +65,8 @@ function physTick(){const dt=Math.min(.035,(performance.now()-physLast)/1000);ph
 document.getElementById('grab').onclick=()=>{
  if(busy)return;
  if(phase!=='ready'){msg(phase==='x'?'左方向の調整を長押ししてロック':'奥方向の調整を長押ししてロック');return}
- if(coins<10){msg('コイン不足');return}
- busy=true;phase='grab';coins-=10;coinsUI();
+ if(coins<10){msg('無料プレイ');return}
+ busy=true;phase='grab';
  const candidate=nearest(),distAtStart=candidate?Math.hypot(candidate.position.x-x,candidate.position.z-z):Infinity,valid=candidate&&distAtStart<.9&&candidate.position.y<2.8;
  close(false);msg('下降中…');
  tween({x,y:1.95,z},1000,()=>{
