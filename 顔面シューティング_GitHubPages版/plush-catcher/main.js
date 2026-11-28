@@ -65,7 +65,6 @@ function physTick(){const dt=Math.min(.035,(performance.now()-physLast)/1000);ph
 document.getElementById('grab').onclick=()=>{
  if(busy)return;
  if(phase!=='ready'){msg(phase==='x'?'左方向の調整を長押ししてロック':'奥方向の調整を長押ししてロック');return}
- if(coins<10){msg('無料プレイ');return}
  busy=true;phase='grab';
  const candidate=nearest(),distAtStart=candidate?Math.hypot(candidate.position.x-x,candidate.position.z-z):Infinity,valid=candidate&&distAtStart<.9&&candidate.position.y<2.8;
  close(false);msg('下降中…');
@@ -76,7 +75,9 @@ document.getElementById('grab').onclick=()=>{
    if(valid&&!candidate.userData.caught){
     const dist=Math.hypot(candidate.position.x-x,candidate.position.z-z);
     const score=Math.max(0,1-dist/.95)*(.65+candidate.userData.grip*.35);
-    if(Math.random()<score*.95){
+    // Slightly easier: a small baseline chance plus a modest boost when well positioned.
+    const catchChance=Math.min(.42,1/15+score*.22);
+    if(Math.random()<catchChance){
      physicsHeld=candidate;held=candidate;candidate.userData.caught=true;claw.add(candidate);
      candidate.position.set(0,-.55,0);candidate.scale.setScalar(.58);heldOffset.set(0,-.55,0);slipTimer=0;success=true;
     }else{candidate.userData.v.x+=(Math.random()-.5)*1.2;candidate.userData.v.z+=(Math.random()-.5)*1.2;candidate.userData.v.y=.65}
