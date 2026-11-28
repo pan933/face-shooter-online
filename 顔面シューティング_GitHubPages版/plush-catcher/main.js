@@ -110,3 +110,22 @@ renderLoop();
 function resizeView(){const w=view.clientWidth,h=view.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}
 window.addEventListener('resize',resizeView);
 resizeView();
+
+// Original arcade-style synthesized BGM. Start only after a user gesture (mobile autoplay policy).
+const bgmButton=document.getElementById('bgmToggle');
+let bgmCtx=null,bgmTimer=null,bgmOn=false,noteIndex=0;
+const melody=[659,784,988,784,587,659,880,659,523,659,784,659,494,587,784,587];
+function playBgmNote(){
+ if(!bgmOn||!bgmCtx)return;
+ const now=bgmCtx.currentTime,osc=bgmCtx.createOscillator(),gain=bgmCtx.createGain();
+ osc.type='square';osc.frequency.value=melody[noteIndex%melody.length];noteIndex++;
+ gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.035,now+.015);gain.gain.exponentialRampToValueAtTime(.0001,now+.16);
+ osc.connect(gain);gain.connect(bgmCtx.destination);osc.start(now);osc.stop(now+.18);
+}
+function setBgm(on){
+ bgmOn=on;
+ if(on){if(!bgmCtx)bgmCtx=new (window.AudioContext||window.webkitAudioContext)();bgmCtx.resume();playBgmNote();bgmTimer=setInterval(playBgmNote,190);}
+ else{if(bgmTimer){clearInterval(bgmTimer);bgmTimer=null;}if(bgmCtx)bgmCtx.suspend();}
+ bgmButton.textContent=on?'♫ BGM ON':'♫ BGM OFF';bgmButton.setAttribute('aria-pressed',String(on));
+}
+bgmButton.addEventListener('click',()=>setBgm(!bgmOn));
