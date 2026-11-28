@@ -5,7 +5,7 @@ import {doc,getDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-fir
 
 const view=document.querySelector('#view'),status=document.querySelector('#status');
 const scene=new THREE.Scene();scene.background=new THREE.Color('#d2e2ec');
-const camera=new THREE.PerspectiveCamera(42,view.clientWidth/view.clientHeight,.1,100);camera.position.set(0,8,18);camera.lookAt(0,3,0);
+const camera=new THREE.PerspectiveCamera(42,view.clientWidth/view.clientHeight,.1,100);camera.position.set(0,7.6,15.2);camera.lookAt(0,3.2,0);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(view.clientWidth,view.clientHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;view.append(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff,0x607080,2));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(-6,12,10);light.castShadow=true;scene.add(light);
 const mat=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.65,...o});
@@ -34,7 +34,7 @@ const cable=mesh(new THREE.CylinderGeometry(.035,.035,1,10),mat('#283b48'),0,0,0
 const claw=new THREE.Group();dropRig.add(claw);
 mesh(new THREE.SphereGeometry(.22,20,16),mat('#cddbe4'),0,0,0,claw);
 let fingers=[];
-for(let i=0;i<3;i++){const angle=i*2*Math.PI/3;const pivot=new THREE.Group();pivot.position.set(Math.cos(angle)*.25,-.08,Math.sin(angle)*.25);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.09,.8,8,12),mat('#758b9a'),0,-.42,0,pivot);fingers.push(pivot)}
+for(let i=0;i<3;i++){const angle=i*2*Math.PI/3;const pivot=new THREE.Group();pivot.position.set(Math.cos(angle)*.25,-.08,Math.sin(angle)*.25);claw.add(pivot);mesh(new THREE.CapsuleGeometry(.085,.72,8,12),mat('#657f90',{metalness:.7}),0,-.42,0,pivot);mesh(new THREE.SphereGeometry(.11,12,10),mat('#d4e2ea',{metalness:.65}),0,-.78,0,pivot);fingers.push(pivot)}
 
 let faces=[];let storage=null;try{if(firebaseConfigError)throw firebaseConfigError;if(!app||!db)throw new Error('Firebase共通設定が初期化されていません');storage=getStorage(app);const snap=await getDoc(doc(db,'adminSettings','gameplay'));if(!snap.exists())throw new Error('adminSettings/gameplay ドキュメントがありません');const data=snap.data();if(!Array.isArray(data.gachaFaces))throw new Error('gachaFaces が配列ではありません');faces=data.gachaFaces.filter(f=>f&&typeof f==='object'&&!f.excludeFromGacha&&!f.exchangeOnly);if(!faces.length)throw new Error('取得した gachaFaces が0件です（交換専用・排出停止を除いた結果）');msg('Firestore取得成功：'+faces.length+'件。景品を配置しています…');console.info('[UFO catcher] raw faces',data.gachaFaces);}catch(e){console.error('[UFO catcher] gachaFaces取得エラー',e);status.textContent='景品読み込み失敗: '+(e?.message||e?.code||String(e));}
 const colors=['#d5a27e','#95b9da','#c2a1d5','#d9c278','#8fc6b2','#df9db5'];
