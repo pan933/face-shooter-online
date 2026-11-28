@@ -83,15 +83,14 @@ document.getElementById('grab').onclick=()=>{
     }else{candidate.userData.v.x+=(Math.random()-.5)*1.2;candidate.userData.v.z+=(Math.random()-.5)*1.2;candidate.userData.v.y=.65}
    }
    msg(success?'掴み成功！上昇中…':'掴めませんでした…上昇中');
-   const liftFrom=y,t0=performance.now(),duration=1300;
-   function lift(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);y=liftFrom+(5.6-liftFrom)*e;claw.rotation.z=Math.sin(q*Math.PI*2)*.045;pose();if(q<1)requestAnimationFrame(lift);else{
-    claw.rotation.z=0;msg('排出口へ移動中…');
+   // Use the shared tween routine for the lift, avoiding a separate mobile-sensitive RAF loop.
+   tween({x,y:5.6,z},1600,()=>{
+    claw.rotation.z=0;msg('上昇完了！排出口へ移動中…');
     // Axis-aligned route: move to the near/front edge first, then across, then back to the chute. Slow, sequential motion.
     function moveAxis(target,duration,done){const start={x,y,z},t0=performance.now();function step(now){const q=Math.min(1,(now-t0)/duration),e=q*q*(3-2*q);x=start.x+(target.x-start.x)*e;y=start.y+(target.y-start.y)*e;z=start.z+(target.z-start.z)*e;claw.rotation.z=Math.sin(q*Math.PI*4)*.025;pose();if(q<1)requestAnimationFrame(step);else{claw.rotation.z=0;done()}}requestAnimationFrame(step)}
     moveAxis({x,z:3.65,y},1500,()=>moveAxis({x:3.7,z:3.65,y},1700,()=>moveAxis({x:3.7,z:3.1,y},1500,()=>{
      claw.rotation.z=0;if(physicsHeld){const p=physicsHeld;physicsHeld=null;held=null;claw.remove(p);scene.add(p);p.userData.caught=true;p.position.set(3.7,5.25,3.1);p.scale.setScalar(.65);msg('景品が排出口へ落下！');const dropStart=performance.now(),dropDuration=950;function dropAnim(now){const q=Math.min(1,(now-dropStart)/dropDuration);const e=q*q; p.position.y=5.25+(0.62-5.25)*e;p.rotation.z+=.045;p.rotation.x+=.025;if(q<1)requestAnimationFrame(dropAnim);else{p.position.y=.62;p.rotation.set(0,0,0);p.scale.setScalar(.45);const badge=document.createElement('div');badge.className='mini';badge.textContent='🎁';badge.title=p.userData.label;document.getElementById('owned').append(badge);document.querySelector('#count').textContent=++won;msg('GET！ '+p.userData.label+'（排出口へ落下）');close(false);finish()}}requestAnimationFrame(dropAnim)}else{msg('獲得失敗');close(false);finish()}
-    })));}}
-   requestAnimationFrame(lift);
+    })));}
   },550);
  });
 };
